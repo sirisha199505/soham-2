@@ -1,0 +1,166 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+/* ─── Brand token palette (Tailwind v4 @theme) ───────────────── */
+@theme {
+  --color-brand-50:  #edfaff;
+  --color-brand-100: #d6f3fd;
+  --color-brand-200: #b5eafb;
+  --color-brand-300: #83def8;
+  --color-brand-400: #3BC0EF;
+  --color-brand-500: #1aaad8;
+  --color-brand-600: #1589b5;
+  --color-brand-700: #186d92;
+
+  --color-amber-brand-50:  #fff8ec;
+  --color-amber-brand-100: #feefd3;
+  --color-amber-brand-400: #FAAB34;
+  --color-amber-brand-500: #f78b0f;
+
+  --color-navy-700: #1E3A8A;
+  --color-navy-800: #172d6e;
+  --color-navy-900: #0f1e4a;
+}
+
+/* ─── Base ────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+button, [role="button"], a { cursor: pointer; }
+
+body {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #F0F4F8;
+  color: #0F172A;
+}
+
+h1,h2,h3,h4,h5,h6 {
+  font-family: 'Space Grotesk', 'DM Sans', system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+/* ─── Scrollbar ───────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #EFF6FF; }
+::-webkit-scrollbar-thumb { background: #3BC0EF55; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #3BC0EFaa; }
+
+/* ─── Skeleton shimmer ────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #e8f4fd 25%, #d0ebf9 50%, #e8f4fd 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+/* ─── Floating animation ──────────────────────────────────────── */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-8px); }
+}
+.float { animation: float 3s ease-in-out infinite; }
+
+/* ─── Timer warning pulse ─────────────────────────────────────── */
+@keyframes pulse-ring {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+.timer-warning { animation: pulse-ring 1s ease-in-out infinite; }
+
+/* ─── Fade in up ──────────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in-up { animation: fadeInUp 0.5s ease forwards; }
+
+/* ─── Stagger children ────────────────────────────────────────── */
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 80ms; }
+.stagger > *:nth-child(3) { animation-delay: 160ms; }
+.stagger > *:nth-child(4) { animation-delay: 240ms; }
+
+/* ─── Toast slide-in ──────────────────────────────────────────── */
+@keyframes slideInRight {
+  from { transform: translateX(110%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.toast-in  { animation: slideInRight 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+.toast-out { animation: fadeOut 0.25s ease forwards; }
+
+/* ─── Gradient text ───────────────────────────────────────────── */
+.gradient-text-brand {
+  background: linear-gradient(135deg, #3BC0EF 0%, #1E3A8A 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.gradient-text-warm {
+  background: linear-gradient(135deg, #FAAB34 0%, #ef4444 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Card hover lift ─────────────────────────────────────────── */
+.card-hover {
+  transition: transform 0.22s cubic-bezier(.34,1.56,.64,1), box-shadow 0.22s ease;
+}
+.card-hover:hover {
+  transform: translateY(-4px) scale(1.005);
+  box-shadow: 0 24px 48px -12px rgba(59, 192, 239, 0.22);
+}
+
+/* ─── Glass morphism ──────────────────────────────────────────── */
+.glass {
+  background: rgba(255,255,255,0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.7);
+}
+.glass-dark {
+  background: rgba(30,58,138,0.7);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(59,192,239,0.2);
+}
+
+/* ─── Gradient backgrounds ────────────────────────────────────── */
+.bg-brand-gradient { background: linear-gradient(135deg, #3BC0EF 0%, #1E3A8A 100%); }
+.bg-warm-gradient  { background: linear-gradient(135deg, #FAAB34 0%, #ef6c00 100%); }
+.bg-navy-gradient  { background: linear-gradient(135deg, #1E3A8A 0%, #0f1e4a 100%); }
+.bg-success-gradient { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+
+/* ─── Glow effects ────────────────────────────────────────────── */
+.glow-brand  { box-shadow: 0 0 24px rgba(59,192,239,0.4); }
+.glow-amber  { box-shadow: 0 0 24px rgba(250,171,52,0.4); }
+.glow-navy   { box-shadow: 0 0 24px rgba(30,58,138,0.4); }
+
+/* ─── Sidebar transition ──────────────────────────────────────── */
+.sidebar-transition { transition: width 0.28s cubic-bezier(0.4,0,0.2,1); }
+
+/* ─── Quiz option active ─────────────────────────────────────── */
+.quiz-option:hover { transform: translateX(4px); }
+.quiz-option { transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease; }
+
+/* ─── Progress bar animated fill ─────────────────────────────── */
+.progress-fill {
+  transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* ─── Role badge colors ───────────────────────────────────────── */
+.role-student       { background: linear-gradient(135deg,#3BC0EF22,#3BC0EF11); border-color: #3BC0EF44; color: #1589b5; }
+.role-teacher       { background: linear-gradient(135deg,#FAAB3422,#FAAB3411); border-color: #FAAB3444; color: #b97308; }
+.role-school_admin  { background: linear-gradient(135deg,#1E3A8A22,#1E3A8A11); border-color: #1E3A8A44; color: #1E3A8A; }
+.role-district_admin{ background: linear-gradient(135deg,#8B5CF622,#8B5CF611); border-color: #8B5CF644; color: #7c3aed; }
+.role-super_admin   { background: linear-gradient(135deg,#10B98122,#10B98111); border-color: #10B98144; color: #059669; }
