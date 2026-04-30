@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   Plus, ChevronDown, ChevronUp, Edit2, Trash2, BookOpen,
   CheckCircle, X, Save, Eye, EyeOff, AlertTriangle, Image,
@@ -16,10 +16,23 @@ const STORAGE_KEY = 'roboquiz_qbank_multi_v1';
 const NAME_TO_CAT = Object.fromEntries(
   CATEGORIES.map(cat => [CATEGORY_META[cat].label.toLowerCase(), cat])
 );
-CATEGORIES.forEach(cat => { NAME_TO_CAT[cat] = cat; }); // also accept 'robotics' etc directly
+CATEGORIES.forEach(cat => { NAME_TO_CAT[cat] = cat; });
 
 function getCatFromLevelName(name = '') {
   return NAME_TO_CAT[name.toLowerCase()] || CATEGORIES[0];
+}
+
+// ─── Data normalizers (backward-compat) ───────────────────────────────────
+function normalizeOpt(opt) {
+  return typeof opt === 'string' ? { text: opt, imageUrl: '' } : (opt || { text: '', imageUrl: '' });
+}
+function normalizePair(pair) {
+  return {
+    left: pair.left || '',
+    leftImage: pair.leftImage || '',
+    right: pair.right || '',
+    rightImage: pair.rightImage || '',
+  };
 }
 
 // Convert flat rqa_question_bank → hierarchical bank format used by this UI
@@ -39,12 +52,12 @@ function fromFlat(flat) {
             id: q.id || uid('q'),
             type: q.type || 'mcq',
             text: q.text || '',
-            difficulty: q.difficulty || 'easy',
-            options: q.options,
-            correct: q.correct,
-            pairs: q.pairs,
-            explanation: q.explanation || '',
             imageUrl: q.imageUrl || '',
+            difficulty: q.difficulty || 'easy',
+            options: q.options ? q.options.map(normalizeOpt) : undefined,
+            correct: q.correct,
+            pairs: q.pairs ? q.pairs.map(normalizePair) : undefined,
+            explanation: q.explanation || '',
           })),
         }],
       })),
@@ -69,7 +82,6 @@ function toFlat(storage) {
 }
 
 function loadStorage() {
-  // Try the admin-specific multi-bank format first
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
@@ -77,7 +89,6 @@ function loadStorage() {
       if (parsed?.banks?.length > 0) return parsed;
     }
   } catch {}
-  // No banks yet — seed from rqa_question_bank (the quiz question source)
   try {
     const seeded = fromFlat(loadQuestionBank());
     persist(seeded);
@@ -89,7 +100,6 @@ function loadStorage() {
 function persist(data) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    // Keep rqa_question_bank in sync so the student quiz always reflects admin changes
     saveQuestionBank(toFlat(data));
   } catch {}
 }
@@ -120,9 +130,9 @@ const levelPal = (idx) => LEVEL_PALETTE[idx % LEVEL_PALETTE.length];
 
 // ─── Question-type config ──────────────────────────────────────────────────
 const Q_TYPES = [
-  { value:'mcq',   label:'MCQ',                icon:List,      sub:'4 options · 1 correct answer'  },
-  { value:'match', label:'Match the Following', icon:AlignLeft, sub:'Pair matching · left ↔ right'   },
-  { value:'image', label:'Image-Based',         icon:Image,     sub:'Image + 4 options · 1 correct' },
+  { value:'mcq',   label:'MCQ',                icon:List,      sub:'4 options · text or image'     },
+  { value:'match', label:'Match the Following', icon:AlignLeft, sub:'Pair matching · text or image'  },
+  { value:'image', label:'Image-Based',         icon:Image,     sub:'Question image + options'       },
 ];
 const DIFF_CFG = {
   easy:   { label:'Easy',   cls:'bg-green-100 text-green-700' },
@@ -131,9 +141,11 @@ const DIFF_CFG = {
 };
 
 // ─── Blank question factories ─────────────────────────────────────────────
-const blankMcq   = () => ({ type:'mcq',   text:'', difficulty:'easy', options:['','','',''], correct:0, explanation:'' });
-const blankMatch = () => ({ type:'match', text:'', difficulty:'easy', pairs:[{left:'',right:''},{left:'',right:''},{left:'',right:''},{left:'',right:''}], explanation:'' });
-const blankImage = () => ({ type:'image', text:'', difficulty:'easy', options:['','','',''], correct:0, imageUrl:'', explanation:'' });
+const blankOpt  = () => ({ text: '', imageUrl: '' });
+const blankPair = () => ({ left: '', leftImage: '', right: '', rightImage: '' });
+const blankMcq   = () => ({ type:'mcq',   text:'', imageUrl:'', difficulty:'easy', options:[blankOpt(),blankOpt(),blankOpt(),blankOpt()], correct:0, explanation:'' });
+const blankMatch = () => ({ type:'match', text:'', imageUrl:'', difficulty:'easy', pairs:[blankPair(),blankPair(),blankPair(),blankPair()], explanation:'' });
+const blankImage = () => ({ type:'image', text:'', imageUrl:'', difficulty:'easy', options:[blankOpt(),blankOpt(),blankOpt(),blankOpt()], correct:0, explanation:'' });
 const blankForType = (t) => t==='match'?blankMatch():t==='image'?blankImage():blankMcq();
 
 // ─── CSV parser ───────────────────────────────────────────────────────────
@@ -155,9 +167,9 @@ function parseCSV(text) {
     const text = clean(cols[1]);
     if (!text) continue;
     const diff = ['easy','medium','hard'].includes(clean(cols[2])) ? clean(cols[2]) : 'easy';
-    if (type==='mcq')   questions.push({ id:uid('q'), type:'mcq', text, difficulty:diff, options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])], correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
-    else if (type==='match') questions.push({ id:uid('q'), type:'match', text, difficulty:diff, pairs:[{left:clean(cols[10]),right:clean(cols[11])},{left:clean(cols[12]),right:clean(cols[13])},{left:clean(cols[14]),right:clean(cols[15])},{left:clean(cols[16]),right:clean(cols[17])}], explanation:'' });
-    else if (type==='image') questions.push({ id:uid('q'), type:'image', text, difficulty:diff, imageUrl:clean(cols[9])||'', options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])], correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
+    if (type==='mcq')   questions.push({ id:uid('q'), type:'mcq', text, difficulty:diff, options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
+    else if (type==='match') questions.push({ id:uid('q'), type:'match', text, difficulty:diff, pairs:[{left:clean(cols[10]),leftImage:'',right:clean(cols[11]),rightImage:''},{left:clean(cols[12]),leftImage:'',right:clean(cols[13]),rightImage:''},{left:clean(cols[14]),leftImage:'',right:clean(cols[15]),rightImage:''},{left:clean(cols[16]),leftImage:'',right:clean(cols[17]),rightImage:''}], explanation:'' });
+    else if (type==='image') questions.push({ id:uid('q'), type:'image', text, difficulty:diff, imageUrl:clean(cols[9])||'', options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
   }
   return questions;
 }
@@ -203,6 +215,49 @@ function InlineInput({ placeholder, onSave, onCancel, initial='' }) {
       <button onClick={()=>val.trim()&&onSave(val.trim())} className="p-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"><Check size={14}/></button>
       <button onClick={onCancel} className="p-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors"><X size={14}/></button>
     </div>
+  );
+}
+
+// ─── Image Upload helper ──────────────────────────────────────────────────
+function ImageUpload({ value, onChange, compact = false, label = 'Image' }) {
+  const ref = useRef(null);
+  const [drag, setDrag] = useState(false);
+
+  const process = (file) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = e => onChange(e.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  if (value) {
+    return (
+      <div className="relative rounded-xl overflow-hidden border border-slate-200 group">
+        <img src={value} alt={label}
+          className={`w-full object-cover ${compact ? 'h-16' : 'h-28'}`} />
+        <button onClick={() => onChange('')}
+          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors shadow-sm opacity-0 group-hover:opacity-100">
+          <X size={9} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <label
+      onDragOver={e => { e.preventDefault(); setDrag(true); }}
+      onDragLeave={() => setDrag(false)}
+      onDrop={e => { e.preventDefault(); setDrag(false); process(e.dataTransfer.files[0]); }}
+      className={`flex flex-col items-center justify-center gap-1 border-2 border-dashed rounded-xl cursor-pointer transition-all ${
+        drag ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
+      } ${compact ? 'h-14' : 'h-24'}`}>
+      <Upload size={compact ? 13 : 18} className={drag ? 'text-indigo-500' : 'text-slate-300'} />
+      <p className={`font-semibold text-slate-400 ${compact ? 'text-[9px]' : 'text-[10px]'}`}>
+        {compact ? 'Add Image' : 'Upload Image'}
+      </p>
+      <input ref={ref} type="file" accept="image/*" className="hidden"
+        onChange={e => process(e.target.files[0])} />
+    </label>
   );
 }
 
@@ -346,156 +401,252 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Question Form Modal
+// Question Form Modal  (supports text + image for all fields)
 // ═══════════════════════════════════════════════════════════════════════════
 function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catName }) {
-  const [form, setForm]     = useState(()=>initial?{...initial}:blankMcq());
+  const [form, setForm]     = useState(() => initial ? { ...initial, options: initial.options?.map(normalizeOpt), pairs: initial.pairs?.map(normalizePair) } : blankMcq());
   const [errors, setErrors] = useState({});
   const [preview, setPreview] = useState(false);
 
-  const set     = (k,v) => setForm(p=>({...p,[k]:v}));
-  const setOpt  = (i,v) => setForm(p=>{const o=[...p.options];o[i]=v;return{...p,options:o};});
-  const setPair = (i,side,v) => setForm(p=>{const pairs=[...(p.pairs||[])];pairs[i]={...pairs[i],[side]:v};return{...p,pairs};});
+  const set     = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  const handleTypeChange = (t) => { setForm(p=>({...blankForType(t),id:p.id,difficulty:p.difficulty,text:p.text})); setErrors({}); };
+  const setOpt = (i, field, val) => setForm(p => {
+    const opts = p.options.map(normalizeOpt);
+    opts[i] = { ...opts[i], [field]: val };
+    return { ...p, options: opts };
+  });
 
-  const validate = () => {
-    const e={};
-    if(!form.text.trim()) e.text='Question text required';
-    if(form.type==='match') form.pairs.forEach((p,i)=>{if(!p.left.trim()||!p.right.trim()) e[`pair${i}`]='Both sides required';});
-    else (form.options||[]).forEach((o,i)=>{if(!o.trim()) e[`opt${i}`]='Fill all options';});
-    setErrors(e); return !Object.keys(e).length;
+  const setPair = (i, side, val) => setForm(p => {
+    const pairs = (p.pairs || []).map(normalizePair);
+    pairs[i] = { ...pairs[i], [side]: val };
+    return { ...p, pairs };
+  });
+
+  const handleTypeChange = (t) => {
+    setForm(p => ({ ...blankForType(t), id: p.id, difficulty: p.difficulty, text: p.text, imageUrl: p.imageUrl || '' }));
+    setErrors({});
   };
 
-  const handleSave = () => { if(!validate()) return; onSave({...form,id:form.id||uid('q'),text:form.text.trim()}); };
+  const validate = () => {
+    const e = {};
+    if (!form.text.trim() && !form.imageUrl) e.text = 'Question text or image required';
+    if (form.type === 'match') {
+      (form.pairs || []).forEach((p, i) => {
+        const pr = normalizePair(p);
+        if ((!pr.left.trim() && !pr.leftImage) || (!pr.right.trim() && !pr.rightImage))
+          e[`pair${i}`] = 'Both sides need text or image';
+      });
+    } else {
+      (form.options || []).forEach((o, i) => {
+        const opt = normalizeOpt(o);
+        if (!opt.text.trim() && !opt.imageUrl) e[`opt${i}`] = 'Fill all options';
+      });
+    }
+    setErrors(e);
+    return !Object.keys(e).length;
+  };
+
+  const handleSave = () => {
+    if (!validate()) return;
+    onSave({ ...form, id: form.id || uid('q'), text: form.text.trim() });
+  };
 
   const inp = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 transition-all';
   const lbl = 'text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5';
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={form.id?'Edit Question':'Add New Question'} size="lg"
+    <Modal isOpen={isOpen} onClose={onClose} title={form.id ? 'Edit Question' : 'Add New Question'} size="lg"
       footer={
         <div className="flex items-center justify-between w-full">
-          <button onClick={()=>setPreview(p=>!p)} className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${preview?'bg-indigo-100 text-indigo-700':'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-            {preview?<EyeOff size={13}/>:<Eye size={13}/>} {preview?'Hide Preview':'Preview'}
+          <button onClick={() => setPreview(p => !p)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${preview ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+            {preview ? <EyeOff size={13}/> : <Eye size={13}/>} {preview ? 'Hide Preview' : 'Preview'}
           </button>
           <div className="flex gap-3">
             <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
             <button onClick={handleSave} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-colors">
-              <Save size={14}/>{form.id?'Save Changes':'Add Question'}
+              <Save size={14}/>{form.id ? 'Save Changes' : 'Add Question'}
             </button>
           </div>
         </div>
       }>
       <div className="space-y-5">
-        {(levelName||catName) && (
+        {(levelName || catName) && (
           <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-50 rounded-xl px-3 py-2">
-            <Layers size={12}/>{levelName&&<span className="font-semibold text-slate-600">{levelName}</span>}{levelName&&catName&&<ChevronRight size={10}/>}{catName&&<span className="font-semibold text-slate-600">{catName}</span>}
+            <Layers size={12}/>{levelName && <span className="font-semibold text-slate-600">{levelName}</span>}
+            {levelName && catName && <ChevronRight size={10}/>}
+            {catName && <span className="font-semibold text-slate-600">{catName}</span>}
           </div>
         )}
-        {/* Type */}
+
+        {/* ── Question Type ── */}
         <div>
           <label className={lbl}>Question Type</label>
           <div className="grid grid-cols-3 gap-2">
-            {Q_TYPES.map(qt=>{const Icon=qt.icon;return(
-              <button key={qt.value} type="button" onClick={()=>handleTypeChange(qt.value)}
-                className={`p-3 rounded-xl border-2 text-left transition-all ${form.type===qt.value?'border-indigo-500 bg-indigo-50':'border-slate-200 hover:border-indigo-200 hover:bg-slate-50'}`}>
-                <Icon size={16} className={`mb-1.5 ${form.type===qt.value?'text-indigo-600':'text-slate-400'}`}/>
-                <p className={`text-xs font-bold ${form.type===qt.value?'text-indigo-700':'text-slate-700'}`}>{qt.label}</p>
+            {Q_TYPES.map(qt => { const Icon = qt.icon; return (
+              <button key={qt.value} type="button" onClick={() => handleTypeChange(qt.value)}
+                className={`p-3 rounded-xl border-2 text-left transition-all ${form.type === qt.value ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-indigo-200 hover:bg-slate-50'}`}>
+                <Icon size={16} className={`mb-1.5 ${form.type === qt.value ? 'text-indigo-600' : 'text-slate-400'}`}/>
+                <p className={`text-xs font-bold ${form.type === qt.value ? 'text-indigo-700' : 'text-slate-700'}`}>{qt.label}</p>
                 <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{qt.sub}</p>
               </button>
             );})}
           </div>
         </div>
-        {/* Text */}
-        <div>
-          <label className={lbl}>Question Text <span className="text-red-400">*</span></label>
-          <textarea rows={3} value={form.text} onChange={e=>set('text',e.target.value)} placeholder="Type your question here…"
-            className={`${inp} resize-none ${errors.text?'border-red-400':''}`}/>
-          {errors.text && <p className="text-xs text-red-500 mt-1">{errors.text}</p>}
+
+        {/* ── Question Text + Image ── */}
+        <div className="space-y-2">
+          <label className={lbl}>
+            Question Text <span className="text-slate-400 normal-case font-normal">(or image only)</span>
+          </label>
+          <textarea rows={3} value={form.text} onChange={e => set('text', e.target.value)}
+            placeholder="Type your question here… (leave blank if image only)"
+            className={`${inp} resize-none ${errors.text ? 'border-red-400' : ''}`}/>
+          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-semibold mb-1">
+            <Image size={11}/> Question Image <span className="font-normal">(optional — use with or instead of text)</span>
+          </div>
+          <ImageUpload value={form.imageUrl || ''} onChange={v => set('imageUrl', v)} />
+          {errors.text && <p className="text-xs text-red-500">{errors.text}</p>}
         </div>
-        {/* Image URL */}
-        {form.type==='image' && (
+
+        {/* ── MCQ / Image options ── */}
+        {(form.type === 'mcq' || form.type === 'image') && (
           <div>
-            <label className={lbl}>Image URL</label>
-            <input type="url" value={form.imageUrl||''} onChange={e=>set('imageUrl',e.target.value)} placeholder="https://…" className={inp}/>
-            {form.imageUrl && <img src={form.imageUrl} alt="preview" className="mt-2 w-full h-36 object-cover rounded-xl border border-slate-200"/>}
-          </div>
-        )}
-        {/* MCQ/Image options */}
-        {(form.type==='mcq'||form.type==='image') && (
-          <div>
-            <label className={lbl}>Answer Options <span className="text-red-400">*</span> <span className="normal-case font-normal text-slate-400 ml-1">Click letter to mark correct</span></label>
+            <label className={lbl}>
+              Answer Options <span className="text-red-400">*</span>
+              <span className="normal-case font-normal text-slate-400 ml-1">Click letter to mark correct · each option can be text, image, or both</span>
+            </label>
             <div className="space-y-2">
-              {(form.options||[]).map((opt,i)=>{const correct=form.correct===i;return(
-                <div key={i} className={`flex items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 transition-all ${correct?'border-green-300 bg-green-50':'border-slate-100 bg-slate-50/60'}`}>
-                  <button type="button" onClick={()=>set('correct',i)} className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 shrink-0 transition-all ${correct?'bg-green-500 border-green-500 text-white':'border-slate-300 text-slate-400 hover:border-green-400'}`}>{String.fromCharCode(65+i)}</button>
-                  <input value={opt} onChange={e=>setOpt(i,e.target.value)} placeholder={`Option ${String.fromCharCode(65+i)}`}
-                    className={`flex-1 bg-transparent outline-none text-sm placeholder-slate-300 ${correct?'text-green-800 font-semibold':'text-slate-700'}`}/>
-                  {correct && <span className="flex items-center gap-1 text-[10px] font-bold text-green-600 shrink-0"><Check size={10}/>Correct</span>}
-                </div>
-              );})}
+              {(form.options || []).map((opt, i) => {
+                const optObj = normalizeOpt(opt);
+                const correct = form.correct === i;
+                return (
+                  <div key={i} className={`rounded-xl border-2 p-3 transition-all ${correct ? 'border-green-300 bg-green-50' : errors[`opt${i}`] ? 'border-red-300' : 'border-slate-100 bg-slate-50/60'}`}>
+                    <div className="flex items-center gap-2.5 mb-2">
+                      <button type="button" onClick={() => set('correct', i)}
+                        className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 shrink-0 transition-all ${correct ? 'bg-green-500 border-green-500 text-white' : 'border-slate-300 text-slate-400 hover:border-green-400'}`}>
+                        {String.fromCharCode(65 + i)}
+                      </button>
+                      <input value={optObj.text} onChange={e => setOpt(i, 'text', e.target.value)}
+                        placeholder={`Option ${String.fromCharCode(65 + i)} text… (or image only)`}
+                        className={`flex-1 bg-transparent outline-none text-sm placeholder-slate-300 ${correct ? 'text-green-800 font-semibold' : 'text-slate-700'}`}/>
+                      {correct && <span className="flex items-center gap-1 text-[10px] font-bold text-green-600 shrink-0"><Check size={10}/>Correct</span>}
+                    </div>
+                    <ImageUpload value={optObj.imageUrl} onChange={v => setOpt(i, 'imageUrl', v)} compact />
+                    {errors[`opt${i}`] && <p className="text-[10px] text-red-500 mt-1">{errors[`opt${i}`]}</p>}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
-        {/* Match pairs */}
-        {form.type==='match' && (
+
+        {/* ── Match pairs ── */}
+        {form.type === 'match' && (
           <div>
-            <label className={lbl}>Match Pairs <span className="text-red-400">*</span></label>
-            <div className="space-y-2">
-              {(form.pairs||[]).map((pair,i)=>(
-                <div key={i} className="flex items-center gap-2">
-                  <span className="w-5 text-xs font-bold text-slate-400 shrink-0">{i+1}.</span>
-                  <input value={pair.left} onChange={e=>setPair(i,'left',e.target.value)} placeholder="Left item"
-                    className={`flex-1 px-3 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 ${errors[`pair${i}`]?'border-red-400':'border-slate-200'}`}/>
-                  <span className="text-slate-400 font-bold text-sm shrink-0">→</span>
-                  <input value={pair.right} onChange={e=>setPair(i,'right',e.target.value)} placeholder="Right item"
-                    className={`flex-1 px-3 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 ${errors[`pair${i}`]?'border-red-400':'border-slate-200'}`}/>
-                </div>
-              ))}
+            <label className={lbl}>
+              Match Pairs <span className="text-red-400">*</span>
+              <span className="normal-case font-normal text-slate-400 ml-1">Each side can have text, image, or both</span>
+            </label>
+            <div className="space-y-3">
+              {(form.pairs || []).map((pair, i) => {
+                const pr = normalizePair(pair);
+                return (
+                  <div key={i} className={`bg-slate-50 rounded-xl p-3 border-2 ${errors[`pair${i}`] ? 'border-red-300' : 'border-slate-100'}`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-bold text-slate-400 w-5">{i + 1}.</span>
+                      <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">Pair {i + 1}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Left Side</p>
+                        <input value={pr.left} onChange={e => setPair(i, 'left', e.target.value)}
+                          placeholder="Text…"
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
+                        <ImageUpload value={pr.leftImage} onChange={v => setPair(i, 'leftImage', v)} compact />
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Right Side</p>
+                        <input value={pr.right} onChange={e => setPair(i, 'right', e.target.value)}
+                          placeholder="Text…"
+                          className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
+                        <ImageUpload value={pr.rightImage} onChange={v => setPair(i, 'rightImage', v)} compact />
+                      </div>
+                    </div>
+                    {errors[`pair${i}`] && <p className="text-[10px] text-red-500 mt-1">{errors[`pair${i}`]}</p>}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
-        {/* Difficulty */}
+
+        {/* ── Difficulty ── */}
         <div>
           <label className={lbl}>Difficulty</label>
           <div className="flex gap-2">
-            {Object.entries(DIFF_CFG).map(([k,v])=>(
-              <button key={k} type="button" onClick={()=>set('difficulty',k)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all ${form.difficulty===k?`${v.cls} border-current`:'border-slate-200 text-slate-500 hover:border-slate-300'}`}>{v.label}</button>
+            {Object.entries(DIFF_CFG).map(([k, v]) => (
+              <button key={k} type="button" onClick={() => set('difficulty', k)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all ${form.difficulty === k ? `${v.cls} border-current` : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+                {v.label}
+              </button>
             ))}
           </div>
         </div>
-        {/* Explanation */}
+
+        {/* ── Explanation ── */}
         <div>
           <label className={lbl}>Explanation <span className="text-slate-400 normal-case font-normal">(optional)</span></label>
-          <textarea rows={2} value={form.explanation||''} onChange={e=>set('explanation',e.target.value)} placeholder="Explain why the answer is correct…" className={`${inp} resize-none`}/>
+          <textarea rows={2} value={form.explanation || ''} onChange={e => set('explanation', e.target.value)}
+            placeholder="Explain why the answer is correct…"
+            className={`${inp} resize-none`}/>
         </div>
-        {/* Preview */}
+
+        {/* ── Preview ── */}
         {preview && (
           <div className="border border-indigo-100 rounded-2xl overflow-hidden">
-            <div className="px-4 py-2 bg-indigo-50 border-b border-indigo-100"><p className="text-xs font-bold text-indigo-600">Student Preview</p></div>
+            <div className="px-4 py-2 bg-indigo-50 border-b border-indigo-100">
+              <p className="text-xs font-bold text-indigo-600">Student Preview</p>
+            </div>
             <div className="p-4 space-y-3">
-              {form.type==='image'&&form.imageUrl&&<img src={form.imageUrl} alt="preview" className="w-full h-32 object-cover rounded-xl border border-slate-200"/>}
-              <p className="text-sm font-semibold text-slate-800">{form.text||<span className="italic text-slate-400">No text yet…</span>}</p>
-              {form.type==='match'?(
-                <div className="space-y-1.5">{(form.pairs||[]).map((p,i)=>(
-                  <div key={i} className="flex items-center gap-2 text-xs">
-                    <span className="flex-1 bg-slate-50 rounded-lg px-3 py-1.5 font-medium text-slate-700">{p.left||'—'}</span>
-                    <span className="text-slate-400 font-bold">↔</span>
-                    <span className="flex-1 bg-green-50 rounded-lg px-3 py-1.5 font-medium text-green-700">{p.right||'—'}</span>
-                  </div>
-                ))}</div>
-              ):(
-                <div className="space-y-1.5">{(form.options||[]).map((opt,i)=>(
-                  <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs border ${i===form.correct?'bg-green-50 border-green-200 text-green-800 font-semibold':'bg-slate-50 border-slate-100 text-slate-600'}`}>
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${i===form.correct?'bg-green-500 text-white':'bg-slate-200 text-slate-500'}`}>{String.fromCharCode(65+i)}</span>
-                    {opt||'—'}
-                    {i===form.correct&&<CheckCircle size={10} className="ml-auto text-green-500"/>}
-                  </div>
-                ))}</div>
+              {form.imageUrl && <img src={form.imageUrl} alt="Question" className="w-full h-36 object-cover rounded-xl border border-slate-200"/>}
+              <p className="text-sm font-semibold text-slate-800">{form.text || <span className="italic text-slate-400">No text…</span>}</p>
+              {form.type === 'match' ? (
+                <div className="space-y-1.5">
+                  {(form.pairs || []).map((p, i) => {
+                    const pr = normalizePair(p);
+                    return (
+                      <div key={i} className="flex items-stretch gap-2 text-xs">
+                        <div className="flex-1 bg-slate-50 rounded-lg p-2 text-slate-700 font-medium">
+                          {pr.leftImage && <img src={pr.leftImage} alt="" className="w-full h-12 object-cover rounded-lg mb-1.5"/>}
+                          {pr.left && <span>{pr.left}</span>}
+                        </div>
+                        <span className="text-slate-400 font-bold self-center">↔</span>
+                        <div className="flex-1 bg-green-50 rounded-lg p-2 text-green-700 font-medium">
+                          {pr.rightImage && <img src={pr.rightImage} alt="" className="w-full h-12 object-cover rounded-lg mb-1.5"/>}
+                          {pr.right && <span>{pr.right}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {(form.options || []).map((opt, i) => {
+                    const o = normalizeOpt(opt);
+                    return (
+                      <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs border ${i === form.correct ? 'bg-green-50 border-green-200 text-green-800 font-semibold' : 'bg-slate-50 border-slate-100 text-slate-600'}`}>
+                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${i === form.correct ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-500'}`}>{String.fromCharCode(65 + i)}</span>
+                        {o.imageUrl && <img src={o.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0"/>}
+                        {o.text && <span>{o.text}</span>}
+                        {!o.text && !o.imageUrl && <span className="text-slate-400 italic">—</span>}
+                        {i === form.correct && <CheckCircle size={10} className="ml-auto text-green-500"/>}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
-              {form.explanation&&<div className="bg-blue-50 rounded-xl px-3 py-2 text-xs text-blue-700"><span className="font-bold">Explanation: </span>{form.explanation}</div>}
+              {form.explanation && <div className="bg-blue-50 rounded-xl px-3 py-2 text-xs text-blue-700"><span className="font-bold">Explanation: </span>{form.explanation}</div>}
             </div>
           </div>
         )}
@@ -509,45 +660,70 @@ function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catNam
 // ═══════════════════════════════════════════════════════════════════════════
 function QuestionRow({ q, index, onEdit, onDelete }) {
   const [expanded, setExpanded] = useState(false);
-  const typeLabel = Q_TYPES.find(t=>t.value===q.type)?.label||q.type;
+  const typeLabel = Q_TYPES.find(t => t.value === q.type)?.label || q.type;
+  const hasImg = !!q.imageUrl;
   return (
-    <div className={`bg-white rounded-xl border transition-all ${expanded?'border-slate-200 shadow-sm':'border-slate-100'}`}>
+    <div className={`bg-white rounded-xl border transition-all ${expanded ? 'border-slate-200 shadow-sm' : 'border-slate-100'}`}>
       <div className="flex items-center gap-3 px-4 py-3">
         <span className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">{index}</span>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-slate-800 truncate">{q.text||<span className="italic text-slate-400">Untitled</span>}</p>
+          <div className="flex items-center gap-2">
+            {hasImg && <Image size={12} className="text-indigo-400 shrink-0"/>}
+            <p className="text-sm font-semibold text-slate-800 truncate">{q.text || <span className="italic text-slate-400">{hasImg ? '[Image question]' : 'Untitled'}</span>}</p>
+          </div>
           <div className="flex items-center gap-1.5 mt-1">
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">{typeLabel}</span>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${DIFF_CFG[q.difficulty]?.cls||'bg-slate-100 text-slate-500'}`}>{DIFF_CFG[q.difficulty]?.label}</span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${DIFF_CFG[q.difficulty]?.cls || 'bg-slate-100 text-slate-500'}`}>{DIFF_CFG[q.difficulty]?.label}</span>
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={()=>setExpanded(p=>!p)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors">{expanded?<ChevronUp size={13}/>:<ChevronDown size={13}/>}</button>
+          <button onClick={() => setExpanded(p => !p)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors">{expanded ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}</button>
           <button onClick={onEdit} className="p-1.5 rounded-lg hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 transition-colors"><Edit2 size={13}/></button>
           <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={13}/></button>
         </div>
       </div>
       {expanded && (
         <div className="px-4 pb-4 border-t border-slate-100 pt-3 space-y-2">
-          {q.type==='image'&&q.imageUrl&&<img src={q.imageUrl} alt="" className="w-full h-32 object-cover rounded-xl border border-slate-200"/>}
-          {q.type==='match'?(
-            <div className="space-y-1.5">{(q.pairs||[]).map((p,i)=>(
-              <div key={i} className="flex items-center gap-2 text-xs">
-                <span className="flex-1 bg-slate-50 rounded-lg px-3 py-1.5 text-slate-700 font-medium">{p.left||'—'}</span>
-                <span className="text-slate-400 font-bold">→</span>
-                <span className="flex-1 bg-green-50 rounded-lg px-3 py-1.5 text-green-700 font-medium">{p.right||'—'}</span>
-              </div>
-            ))}</div>
-          ):(
-            <div className="space-y-1.5">{(q.options||[]).map((opt,i)=>(
-              <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs border ${i===q.correct?'bg-green-50 border-green-200 text-green-800 font-semibold':'bg-slate-50 border-slate-100 text-slate-600'}`}>
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${i===q.correct?'bg-green-500 text-white':'bg-slate-200 text-slate-500'}`}>{String.fromCharCode(65+i)}</span>
-                {opt||'—'}
-                {i===q.correct&&<CheckCircle size={10} className="ml-auto text-green-500"/>}
-              </div>
-            ))}</div>
+          {q.imageUrl && <img src={q.imageUrl} alt="Question" className="w-full h-32 object-cover rounded-xl border border-slate-200"/>}
+          {q.type === 'match' ? (
+            <div className="space-y-1.5">
+              {(q.pairs || []).map((p, i) => {
+                const pr = normalizePair(p);
+                return (
+                  <div key={i} className="flex items-stretch gap-2 text-xs">
+                    <div className="flex-1 bg-slate-50 rounded-lg p-2 text-slate-700 font-medium">
+                      {pr.leftImage && <img src={pr.leftImage} alt="" className="w-full h-10 object-cover rounded-lg mb-1"/>}
+                      {pr.left && <span>{pr.left}</span>}
+                      {!pr.left && !pr.leftImage && <span className="text-slate-400">—</span>}
+                    </div>
+                    <span className="text-slate-400 font-bold self-center shrink-0">→</span>
+                    <div className="flex-1 bg-green-50 rounded-lg p-2 text-green-700 font-medium">
+                      {pr.rightImage && <img src={pr.rightImage} alt="" className="w-full h-10 object-cover rounded-lg mb-1"/>}
+                      {pr.right && <span>{pr.right}</span>}
+                      {!pr.right && !pr.rightImage && <span className="text-green-400">—</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {(q.options || []).map((opt, i) => {
+                const o = normalizeOpt(opt);
+                return (
+                  <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs border ${i === q.correct ? 'bg-green-50 border-green-200 text-green-800 font-semibold' : 'bg-slate-50 border-slate-100 text-slate-600'}`}>
+                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${i === q.correct ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-500'}`}>{String.fromCharCode(65 + i)}</span>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      {o.imageUrl && <img src={o.imageUrl} alt="" className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"/>}
+                      <span className="truncate">{o.text || (o.imageUrl ? '[Image]' : '—')}</span>
+                    </div>
+                    {i === q.correct && <CheckCircle size={10} className="ml-auto text-green-500 shrink-0"/>}
+                  </div>
+                );
+              })}
+            </div>
           )}
-          {q.explanation&&<div className="bg-blue-50 rounded-xl px-3 py-2 text-xs text-blue-700"><span className="font-bold">Explanation: </span>{q.explanation}</div>}
+          {q.explanation && <div className="bg-blue-50 rounded-xl px-3 py-2 text-xs text-blue-700"><span className="font-bold">Explanation: </span>{q.explanation}</div>}
         </div>
       )}
     </div>
@@ -720,7 +896,7 @@ function LevelSection({ level, index, onUpdate, onDelete }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Bank Detail View  (single bank's hierarchy)
+// Bank Detail View
 // ═══════════════════════════════════════════════════════════════════════════
 function BankDetail({ bank, bankIndex, onBack, onUpdate }) {
   const [addingLevel, setAddingLevel] = useState(false);
@@ -747,15 +923,12 @@ function BankDetail({ bank, bankIndex, onBack, onUpdate }) {
 
   return (
     <div className="space-y-5">
-      {/* Breadcrumb + header */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
-          {/* Breadcrumb */}
           <button onClick={onBack} className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-indigo-600 transition-colors mb-2 group">
             <span className="text-base leading-none group-hover:-translate-x-0.5 transition-transform">←</span>
             <span className="font-semibold">All Question Banks</span>
           </button>
-          {/* Bank name */}
           {renamingBank ? (
             <div className="max-w-xs">
               <InlineInput initial={bank.name} placeholder="Bank name" onSave={v=>{onUpdate({...bank,name:v});setRenamingBank(false);}} onCancel={()=>setRenamingBank(false)}/>
@@ -781,7 +954,6 @@ function BankDetail({ bank, bankIndex, onBack, onUpdate }) {
         </button>
       </div>
 
-      {/* Add-level inline */}
       {addingLevel && (
         <div className="bg-white rounded-2xl border-2 border-indigo-200 p-5 shadow-sm">
           <p className="text-sm font-bold text-indigo-700 mb-3 flex items-center gap-2"><Layers size={15}/>New Level</p>
@@ -789,7 +961,6 @@ function BankDetail({ bank, bankIndex, onBack, onUpdate }) {
         </div>
       )}
 
-      {/* Level list */}
       {levels.length===0&&!addingLevel ? (
         <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-200">
           <Layers size={36} className="text-slate-300 mx-auto mb-3"/>
@@ -818,13 +989,13 @@ function BankDetail({ bank, bankIndex, onBack, onUpdate }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Banks Overview  (grid of all question banks)
+// Banks Overview
 // ═══════════════════════════════════════════════════════════════════════════
 function BanksOverview({ banks, onSelect, onCreate, onDelete, onRename }) {
   const [creatingName, setCreatingName]   = useState('');
   const [showCreate,   setShowCreate]     = useState(false);
   const [deleteTarget, setDeleteTarget]   = useState(null);
-  const [menuOpen,     setMenuOpen]       = useState(null); // bankId
+  const [menuOpen,     setMenuOpen]       = useState(null);
   const [renamingId,   setRenamingId]     = useState(null);
 
   const handleCreate = () => {
@@ -836,7 +1007,6 @@ function BanksOverview({ banks, onSelect, onCreate, onDelete, onRename }) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800" style={{fontFamily:'Space Grotesk'}}>Question Banks</h1>
@@ -852,7 +1022,6 @@ function BanksOverview({ banks, onSelect, onCreate, onDelete, onRename }) {
         </button>
       </div>
 
-      {/* Create modal */}
       <Modal isOpen={showCreate} onClose={()=>setShowCreate(false)} title="Create Question Bank" size="sm"
         footer={<>
           <button onClick={()=>setShowCreate(false)} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
@@ -875,7 +1044,6 @@ function BanksOverview({ banks, onSelect, onCreate, onDelete, onRename }) {
         </div>
       </Modal>
 
-      {/* Empty state */}
       {banks.length === 0 && (
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="w-full max-w-md text-center">
@@ -904,7 +1072,6 @@ function BanksOverview({ banks, onSelect, onCreate, onDelete, onRename }) {
         </div>
       )}
 
-      {/* Banks grid */}
       {banks.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {banks.map((bank, idx) => {
@@ -917,11 +1084,9 @@ function BanksOverview({ banks, onSelect, onCreate, onDelete, onRename }) {
                 className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-md hover:border-slate-200 transition-all group relative"
                 onMouseLeave={()=>{ if(menuOpen===bank.id) setMenuOpen(null); }}>
 
-                {/* Colour band */}
                 <div className={`h-2 bg-gradient-to-r ${pal.grad}`}/>
 
                 <div className="p-5">
-                  {/* Top row: icon + name + menu */}
                   <div className="flex items-start gap-3 mb-4">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br ${pal.grad}`}>
                       <Database size={18} className="text-white"/>
@@ -939,7 +1104,6 @@ function BanksOverview({ banks, onSelect, onCreate, onDelete, onRename }) {
                         <span>Created {fmtDate(bank.createdAt)}</span>
                       </div>
                     </div>
-                    {/* Kebab menu */}
                     {!isRenaming && (
                       <div className="relative shrink-0">
                         <button onClick={e=>{e.stopPropagation();setMenuOpen(menuOpen===bank.id?null:bank.id);}}
@@ -962,7 +1126,6 @@ function BanksOverview({ banks, onSelect, onCreate, onDelete, onRename }) {
                     )}
                   </div>
 
-                  {/* Stats row */}
                   <div className="grid grid-cols-3 gap-2 mb-4">
                     {[
                       { label:'Levels',     value:stats.levels,     pal },
@@ -976,7 +1139,6 @@ function BanksOverview({ banks, onSelect, onCreate, onDelete, onRename }) {
                     ))}
                   </div>
 
-                  {/* Open button */}
                   <button onClick={()=>onSelect(bank.id)}
                     className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 bg-gradient-to-r ${pal.grad}`}>
                     <BookOpen size={14}/>Open Bank
@@ -987,7 +1149,6 @@ function BanksOverview({ banks, onSelect, onCreate, onDelete, onRename }) {
             );
           })}
 
-          {/* Add new bank card */}
           <button onClick={()=>setShowCreate(true)}
             className="bg-white rounded-2xl border-2 border-dashed border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/20 transition-all p-5 flex flex-col items-center justify-center gap-3 min-h-[200px] group">
             <div className="w-12 h-12 rounded-2xl bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center transition-colors">
@@ -1001,7 +1162,6 @@ function BanksOverview({ banks, onSelect, onCreate, onDelete, onRename }) {
         </div>
       )}
 
-      {/* Delete confirm */}
       <DeleteModal
         isOpen={!!deleteTarget}
         onClose={()=>setDeleteTarget(null)}
@@ -1066,7 +1226,6 @@ export default function QuestionBankAdmin() {
   return (
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6">
 
-      {/* Toast */}
       {toast && (
         <div className={`fixed top-5 right-5 z-[9999] flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold shadow-xl border ${
           toast.color==='red'?'bg-red-50 border-red-200 text-red-700':'bg-green-50 border-green-200 text-green-800'

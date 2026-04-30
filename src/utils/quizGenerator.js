@@ -41,6 +41,21 @@ export function clearUsedQuestions(studentId) {
   } catch {}
 }
 
+// Shuffle MCQ/image options and update the correct-answer index accordingly
+function shuffleOptions(q) {
+  if ((q.type !== 'mcq' && q.type !== 'image') || !q.options?.length) return q;
+  const indices = q.options.map((_, i) => i);
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  return {
+    ...q,
+    options: indices.map(i => q.options[i]),
+    correct: indices.indexOf(q.correct),
+  };
+}
+
 // Generate 20 questions for a level: 5 per category, no repeats
 export function generateLevelQuiz(studentId) {
   const usedIds = new Set(getUsedQuestionIds(studentId));
@@ -53,10 +68,11 @@ export function generateLevelQuiz(studentId) {
     // If not enough fresh questions, fall back to all active (cycle resets per category)
     const source = available.length >= QUESTIONS_PER_CATEGORY ? available : pool;
     const picked = shuffle(source).slice(0, QUESTIONS_PER_CATEGORY);
-    selectedQuestions.push(...picked);
+    // Shuffle options so each student sees different option order
+    selectedQuestions.push(...picked.map(shuffleOptions));
   });
 
-  // Shuffle the combined 20 questions
+  // Shuffle the combined 20 questions so order differs per student
   return shuffle(selectedQuestions);
 }
 

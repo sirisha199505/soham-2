@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   FileText, Plus, Edit2, Trash2, X, Save, CheckCircle,
-  BookOpen, ChevronDown, ChevronUp, Info,
+  BookOpen, ChevronDown, ChevronUp, Info, Upload, Eye,
 } from 'lucide-react';
 import { LEVEL1_PAGES, LEVEL2_PAGES, LEVEL3_PAGES, LEVELS } from '../../utils/levelData';
 
@@ -82,8 +82,24 @@ function SectionEditor({ sections, onChange }) {
 /* ── Page Modal ── */
 function PageModal({ levelId, page, onSave, onClose }) {
   const [form, setForm] = useState(page
-    ? { title: page.title, sections: page.sections.map(s => ({ ...s })) }
-    : { title: '', sections: [{ heading: '', body: '' }] });
+    ? {
+        title:   page.title,
+        type:    page.type || 'text',
+        sections:(page.sections || []).map(s => ({ ...s })),
+        pdfData: page.pdfData || '',
+        pdfName: page.pdfName || '',
+      }
+    : { title: '', type: 'text', sections: [{ heading: '', body: '' }], pdfData: '', pdfName: '' });
+  const [pdfDrag, setPdfDrag] = useState(false);
+
+  const processPdf = (file) => {
+    if (!file || file.type !== 'application/pdf') return;
+    const reader = new FileReader();
+    reader.onload = e => setForm(p => ({ ...p, pdfData: e.target.result, pdfName: file.name }));
+    reader.readAsDataURL(file);
+  };
+
+  const canSave = form.title.trim() && (form.type === 'text' || form.pdfData);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -96,21 +112,77 @@ function PageModal({ levelId, page, onSave, onClose }) {
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={16} /></button>
         </div>
         <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+          {/* Title */}
           <div>
             <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Page Title <span className="text-red-400">*</span></label>
             <input value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
               placeholder="e.g. What is Robotics?"
               className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
           </div>
+
+          {/* Content type tab */}
           <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase block mb-2">Content Sections</label>
-            <SectionEditor sections={form.sections} onChange={secs => setForm(p => ({ ...p, sections: secs }))} />
+            <label className="text-xs font-semibold text-slate-500 uppercase block mb-2">Content Type</label>
+            <div className="flex rounded-xl border border-slate-200 overflow-hidden">
+              {[{ key: 'text', label: '📝 Text Content' }, { key: 'pdf', label: '📄 Upload PDF' }].map(tab => (
+                <button key={tab.key} onClick={() => setForm(p => ({ ...p, type: tab.key }))}
+                  className={`flex-1 py-2.5 text-sm font-semibold transition-all ${form.type === tab.key ? 'bg-indigo-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {/* Text content */}
+          {form.type === 'text' && (
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase block mb-2">Content Sections</label>
+              <SectionEditor sections={form.sections} onChange={secs => setForm(p => ({ ...p, sections: secs }))} />
+            </div>
+          )}
+
+          {/* PDF upload */}
+          {form.type === 'pdf' && (
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase block mb-2">PDF File <span className="text-red-400">*</span></label>
+              {form.pdfData ? (
+                <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+                  <FileText size={22} className="text-blue-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 truncate">{form.pdfName}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">PDF ready · click Preview to verify</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button onClick={() => window.open(form.pdfData, '_blank')}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 px-2 py-1 rounded-lg hover:bg-blue-100 transition-colors">
+                      <Eye size={12} /> Preview
+                    </button>
+                    <button onClick={() => setForm(p => ({ ...p, pdfData: '', pdfName: '' }))}
+                      className="text-xs font-semibold text-red-500 hover:text-red-700 px-2 py-1 rounded-lg hover:bg-red-50 transition-colors">
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <label
+                  onDragOver={e => { e.preventDefault(); setPdfDrag(true); }}
+                  onDragLeave={() => setPdfDrag(false)}
+                  onDrop={e => { e.preventDefault(); setPdfDrag(false); processPdf(e.dataTransfer.files[0]); }}
+                  className={`block border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all ${pdfDrag ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'}`}>
+                  <Upload size={30} className={`mx-auto mb-2 ${pdfDrag ? 'text-indigo-500' : 'text-slate-300'}`} />
+                  <p className="text-sm font-semibold text-slate-600">Drop your PDF here</p>
+                  <p className="text-xs text-slate-400 mt-1">or click to browse · PDF files only</p>
+                  <input type="file" accept=".pdf,application/pdf" className="hidden"
+                    onChange={e => processPdf(e.target.files[0])} />
+                </label>
+              )}
+            </div>
+          )}
         </div>
         <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button onClick={() => form.title.trim() && onSave(levelId, form, page)}
-            disabled={!form.title.trim()}
+          <button onClick={() => canSave && onSave(levelId, form, page)}
+            disabled={!canSave}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
             <Save size={14} /> Save Page
           </button>

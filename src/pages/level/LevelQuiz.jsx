@@ -26,23 +26,24 @@ function timerState(t) {
   return 'normal';
 }
 
+// ─── Backward-compat helpers for image-enriched options/pairs ────────────
+function getOptText(opt)  { return typeof opt === 'string' ? opt : (opt?.text || ''); }
+function getOptImage(opt) { return typeof opt === 'string' ? '' : (opt?.imageUrl || ''); }
+
 // ─── Match Question Renderer ──────────────────────────────────────────────
 function MatchQuestion({ q, answer, onChange, levelColor }) {
-  // answer = { [leftIndex]: rightIndex } or undefined
   const cur = answer || {};
-  // Shuffle right items once (stable per question render via useMemo)
   const [shuffledRight] = useState(() => {
     const indices = q.pairs.map((_, i) => i);
     for (let i = indices.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [indices[i], indices[j]] = [indices[j], indices[i]];
     }
-    return indices; // shuffled indices of pairs[x].right
+    return indices;
   });
 
   const handleSelect = (leftIdx, rightShuffledIdx) => {
     const newAns = { ...cur };
-    // Deselect if any other left already picked this right
     Object.keys(newAns).forEach(k => {
       if (newAns[k] === rightShuffledIdx) delete newAns[k];
     });
@@ -51,17 +52,21 @@ function MatchQuestion({ q, answer, onChange, levelColor }) {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {q.pairs.map((pair, leftIdx) => (
-        <div key={leftIdx} className="flex items-center gap-3">
+        <div key={leftIdx} className="flex items-start gap-3">
           {/* Left */}
-          <div className="flex-1 text-sm font-semibold text-slate-700 bg-slate-50 rounded-xl px-4 py-3 border border-slate-200">
-            {pair.left}
+          <div className="flex-1 text-sm font-semibold text-slate-700 bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 min-w-0">
+            {pair.leftImage && (
+              <img src={pair.leftImage} alt="" className="w-full h-20 object-cover rounded-lg mb-2 border border-slate-200"/>
+            )}
+            {pair.left && <span>{pair.left}</span>}
           </div>
-          <span className="text-slate-400 text-lg shrink-0">→</span>
+          <span className="text-slate-400 text-lg shrink-0 mt-3">→</span>
           {/* Right options */}
-          <div className="flex-1 flex flex-col gap-1.5">
+          <div className="flex-1 flex flex-col gap-1.5 min-w-0">
             {shuffledRight.map((rightOrigIdx) => {
+              const rp = q.pairs[rightOrigIdx];
               const selected = cur[leftIdx] === rightOrigIdx;
               const usedByOther = Object.entries(cur).some(
                 ([k, v]) => Number(k) !== leftIdx && v === rightOrigIdx
@@ -82,7 +87,10 @@ function MatchQuestion({ q, answer, onChange, levelColor }) {
                     background: `linear-gradient(135deg, ${levelColor.from}, ${levelColor.to})`,
                   } : {}}
                 >
-                  {q.pairs[rightOrigIdx].right}
+                  {rp.rightImage && (
+                    <img src={rp.rightImage} alt="" className="w-full h-16 object-cover rounded-lg mb-1.5"/>
+                  )}
+                  {rp.right}
                 </button>
               );
             })}
@@ -419,10 +427,10 @@ export default function LevelQuiz() {
                 </span>
               </div>
 
-              {/* Image */}
-              {q.type === 'image' && q.imageUrl && (
+              {/* Question image (all types) */}
+              {q.imageUrl && (
                 <div className="mb-4 rounded-xl overflow-hidden border border-slate-200">
-                  <img src={q.imageUrl} alt="Question visual" className="w-full h-48 object-cover" />
+                  <img src={q.imageUrl} alt="Question visual" className="w-full max-h-56 object-contain bg-slate-50" />
                 </div>
               )}
 
@@ -431,7 +439,7 @@ export default function LevelQuiz() {
                   style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}>
                   {current + 1}
                 </span>
-                <p className="text-slate-800 font-semibold leading-relaxed text-base">{q.text}</p>
+                {q.text && <p className="text-slate-800 font-semibold leading-relaxed text-base">{q.text}</p>}
               </div>
 
               {/* Match type */}
@@ -448,7 +456,10 @@ export default function LevelQuiz() {
               {(q.type === 'mcq' || q.type === 'image' || q.type === 'tf') && q.options && (
                 <div className={`grid gap-3 ${q.type === 'tf' ? 'grid-cols-2' : 'grid-cols-1'}`}>
                   {q.options.map((opt, i) => {
-                    const selected = answers[q.id] === i;
+                    const selected   = answers[q.id] === i;
+                    const optText    = getOptText(opt);
+                    const optImage   = getOptImage(opt);
+                    const hasImage   = !!optImage;
                     return (
                       <button key={i} onClick={() => handleAnswer(q.id, i)}
                         className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all ${
@@ -465,7 +476,14 @@ export default function LevelQuiz() {
                             {String.fromCharCode(65 + i)}
                           </span>
                         )}
-                        <span className={`text-sm font-semibold ${q.type === 'tf' ? 'text-base' : ''}`}>{opt}</span>
+                        <div className={`flex items-center gap-3 flex-1 min-w-0 ${hasImage && !optText ? 'justify-center' : ''}`}>
+                          {hasImage && (
+                            <img src={optImage} alt={`Option ${String.fromCharCode(65+i)}`}
+                              className={`object-cover rounded-lg border shrink-0 ${selected ? 'border-white/30' : 'border-slate-200'}`}
+                              style={{ width: optText ? 48 : 80, height: optText ? 48 : 80 }}/>
+                          )}
+                          {optText && <span className={`text-sm font-semibold ${q.type === 'tf' ? 'text-base' : ''}`}>{optText}</span>}
+                        </div>
                       </button>
                     );
                   })}

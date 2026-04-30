@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, BookOpen, CheckCircle, ArrowRight, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BookOpen, CheckCircle, ArrowRight, Clock, FileText, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -32,6 +32,7 @@ export default function LevelContent() {
 
   const [pageIndex, setPageIndex] = useState(0);
   const [read,      setRead]      = useState(new Set());
+  const [pdfOpened, setPdfOpened] = useState(false);
 
   const current = pages[pageIndex];
   const isLast  = pageIndex === total - 1;
@@ -124,39 +125,73 @@ export default function LevelContent() {
           </div>
         </div>
 
-        {/* Sections */}
-        {current.sections.map((sec, i) => (
-          <div key={i} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8 space-y-3">
-            <h2
-              className="text-lg font-bold text-slate-800 flex items-center gap-2"
-              style={{ fontFamily: 'Space Grotesk' }}
-            >
-              <span
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
-                style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}
-              >
-                {i + 1}
-              </span>
-              {sec.heading}
-            </h2>
-            <div className="border-t border-slate-100 pt-3">
-              {sec.body.split('\n').map((line, li) => {
-                if (!line.trim()) return <div key={li} className="h-2" />;
-                // Bold markdown-style **text**
-                const parts = line.split(/(\*\*[^*]+\*\*)/g);
-                return (
-                  <p key={li} className="text-slate-600 leading-relaxed text-sm md:text-base mb-1">
-                    {parts.map((part, pi) =>
-                      part.startsWith('**') && part.endsWith('**')
-                        ? <strong key={pi} className="text-slate-800 font-semibold">{part.slice(2, -2)}</strong>
-                        : part
-                    )}
-                  </p>
-                );
-              })}
+        {/* PDF content */}
+        {current.type === 'pdf' && current.pdfData ? (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+                  style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}>
+                  <FileText size={15} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-800">{current.pdfName || 'Study Material'}</p>
+                  <p className="text-xs text-slate-400">PDF document</p>
+                </div>
+              </div>
+              <a href={current.pdfData} target="_blank" rel="noopener noreferrer"
+                onClick={() => setPdfOpened(true)}
+                className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+                <ExternalLink size={12} /> Open in New Tab
+              </a>
             </div>
+            <embed
+              src={current.pdfData}
+              type="application/pdf"
+              className="w-full block"
+              style={{ height: '65vh' }}
+              onLoad={() => setPdfOpened(true)}
+            />
+            {!pdfOpened && (
+              <div className="px-5 py-3 bg-amber-50 border-t border-amber-100 text-xs text-amber-700 font-medium">
+                Scroll through the PDF to read the material, then click Next Page or Start Quiz.
+              </div>
+            )}
           </div>
-        ))}
+        ) : (
+          /* Text sections */
+          (current.sections || []).map((sec, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8 space-y-3">
+              <h2
+                className="text-lg font-bold text-slate-800 flex items-center gap-2"
+                style={{ fontFamily: 'Space Grotesk' }}
+              >
+                <span
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
+                  style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}
+                >
+                  {i + 1}
+                </span>
+                {sec.heading}
+              </h2>
+              <div className="border-t border-slate-100 pt-3">
+                {(sec.body || '').split('\n').map((line, li) => {
+                  if (!line.trim()) return <div key={li} className="h-2" />;
+                  const parts = line.split(/(\*\*[^*]+\*\*)/g);
+                  return (
+                    <p key={li} className="text-slate-600 leading-relaxed text-sm md:text-base mb-1">
+                      {parts.map((part, pi) =>
+                        part.startsWith('**') && part.endsWith('**')
+                          ? <strong key={pi} className="text-slate-800 font-semibold">{part.slice(2, -2)}</strong>
+                          : part
+                      )}
+                    </p>
+                  );
+                })}
+              </div>
+            </div>
+          ))
+        )}
 
         {/* Page dot indicators */}
         <div className="flex items-center justify-center gap-2 py-2">
