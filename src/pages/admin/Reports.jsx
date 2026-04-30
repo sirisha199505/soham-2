@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Filter, TrendingUp, Users, BookOpen, BarChart2, FileSpreadsheet } from 'lucide-react';
+import { TrendingUp, Users, BookOpen, BarChart2, FileSpreadsheet } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend

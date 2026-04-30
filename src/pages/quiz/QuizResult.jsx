@@ -1,5 +1,5 @@
 import { useLocation, useParams, useNavigate, Link } from 'react-router-dom';
-import { CheckCircle, XCircle, Minus, Trophy, RotateCcw, BarChart2, Home, Share2, Star } from 'lucide-react';
+import { BarChart2, Home, Share2 } from 'lucide-react';
 import { mockQuizzes } from '../../utils/mockData';
 import { formatDuration } from '../../utils/helpers';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';

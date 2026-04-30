@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Clock, HelpCircle, AlertTriangle, ChevronRight, ArrowLeft, BookOpen, CheckCircle } from 'lucide-react';
 import { mockQuizzes } from '../../utils/mockData';

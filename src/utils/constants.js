@@ -1,6 +1,8 @@
 export const ROLES = {
   STUDENT: 'student',
   TEACHER: 'teacher',
+  ADMIN: 'admin',
+  // Legacy (kept for data compatibility)
   SCHOOL_ADMIN: 'school_admin',
   DISTRICT_ADMIN: 'district_admin',
   SUPER_ADMIN: 'super_admin',
@@ -9,6 +11,7 @@ export const ROLES = {
 export const ROLE_LABELS = {
   student: 'Student',
   teacher: 'Teacher',
+  admin: 'Administrator',
   school_admin: 'School Admin',
   district_admin: 'District Admin',
   super_admin: 'Super Admin',

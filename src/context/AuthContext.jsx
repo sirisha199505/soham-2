@@ -8,23 +8,15 @@ const AuthContext = createContext(null);
 const STUDENTS_KEY = 'rqa_students';
 const USER_KEY     = 'rqa_user';
 
-// ── Demo staff accounts (hardcoded, no registration needed) ──────────────────
+// ── Staff accounts (hardcoded, no registration needed) ───────────────────────
 const DEMO_STAFF = {
+  'admin@roboquiz.in': {
+    id: 'admin@roboquiz.in', email: 'admin@roboquiz.in',
+    name: 'System Administrator', role: ROLES.ADMIN, password: 'admin123',
+  },
   'teacher@roboquiz.in': {
     id: 'teacher@roboquiz.in', email: 'teacher@roboquiz.in',
     name: 'Ms. Kavya Nair', role: ROLES.TEACHER, password: 'teacher123',
-  },
-  'admin@roboquiz.in': {
-    id: 'admin@roboquiz.in', email: 'admin@roboquiz.in',
-    name: 'Mr. Arjun Mehta', role: ROLES.SCHOOL_ADMIN, password: 'admin123',
-  },
-  'district@roboquiz.in': {
-    id: 'district@roboquiz.in', email: 'district@roboquiz.in',
-    name: 'Dr. Priya Sharma', role: ROLES.DISTRICT_ADMIN, password: 'district123',
-  },
-  'super@roboquiz.in': {
-    id: 'super@roboquiz.in', email: 'super@roboquiz.in',
-    name: 'Admin Superuser', role: ROLES.SUPER_ADMIN, password: 'super123',
   },
 };
 

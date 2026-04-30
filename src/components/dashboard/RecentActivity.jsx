@@ -1,9 +1,7 @@
-import { CheckCircle, Bell, Award, Play, FileText, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import Card, { CardHeader } from '../ui/Card';
 import { mockActivity } from '../../utils/mockData';
 import { useTheme } from '../../context/ThemeContext';
-
-const ICON_MAP = { CheckCircle, Bell, Award, Play, FileText };
 
 const ACTIVITY_STYLES = {
   quiz_completed: { bg: '#10B98118', color: '#059669', emoji: '✅' },

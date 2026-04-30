@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Bot, Home, ArrowLeft } from 'lucide-react';
+import { Bot, Home } from 'lucide-react';
 
 export default function NotFound() {
   return (

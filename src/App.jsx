@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { LevelProvider } from './context/LevelContext';
 import ProtectedRoute from './components/ProtectedRoute';
 
 import AuthLayout     from './layouts/AuthLayout';
@@ -18,20 +19,24 @@ import QuizAttempt    from './pages/quiz/QuizAttempt';
 import QuizResult     from './pages/quiz/QuizResult';
 import StudentProfile from './pages/student/StudentProfile';
 import QuizHistory    from './pages/student/QuizHistory';
-import TeacherMonitoring from './pages/teacher/TeacherMonitoring';
-import QuestionBank   from './pages/admin/QuestionBank';
-import QuizCreation   from './pages/admin/QuizCreation';
-import QuizAssignment from './pages/admin/QuizAssignment';
-import Reports        from './pages/admin/Reports';
-import AdminPanel     from './pages/admin/AdminPanel';
-import NotFound       from './pages/NotFound';
+import NotFound          from './pages/NotFound';
+import LevelContent      from './pages/level/LevelContent';
+import LevelQuiz         from './pages/level/LevelQuiz';
+import StudentManagement from './pages/admin/StudentManagement';
+import ExamLevels        from './pages/admin/ExamLevels';
+import QuestionBankAdmin from './pages/admin/QuestionBankAdmin';
+import ContentManagement from './pages/admin/ContentManagement';
+import LiveMonitoring    from './pages/admin/LiveMonitoring';
+import AdminReports      from './pages/admin/AdminReports';
+import ImportExport      from './pages/admin/ImportExport';
+import SystemSettings    from './pages/admin/SystemSettings';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 1000 * 60 * 5 } },
 });
 
 function RootRedirect() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return <Navigate to="/dashboard" replace />;
 }
@@ -41,6 +46,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
       <AuthProvider>
+        <LevelProvider>
         <ToastProvider>
           <BrowserRouter>
             <Routes>
@@ -59,6 +65,14 @@ export default function App() {
                 <ProtectedRoute><QuizAttempt /></ProtectedRoute>
               } />
 
+              {/* Level content & quiz (full screen, no sidebar) */}
+              <Route path="/level/:levelId/content" element={
+                <ProtectedRoute><LevelContent /></ProtectedRoute>
+              } />
+              <Route path="/level/:levelId/quiz" element={
+                <ProtectedRoute><LevelQuiz /></ProtectedRoute>
+              } />
+
               {/* Protected dashboard routes */}
               <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
                 {/* Dashboard - role-based */}
@@ -74,26 +88,30 @@ export default function App() {
                 <Route path="/quiz/:id/result"        element={<QuizResult />} />
 
                 {/* Student */}
-                <Route path="/profile"                element={<StudentProfile />} />
-                <Route path="/quiz-history"           element={<QuizHistory />} />
-                <Route path="/performance"            element={<QuizHistory />} />
-                <Route path="/monitoring"             element={<TeacherMonitoring />} />
+                <Route path="/profile"      element={<StudentProfile />} />
+                <Route path="/quiz-history" element={<QuizHistory />} />
+                <Route path="/performance"  element={<QuizHistory />} />
 
-                {/* Admin / Teacher */}
-                <Route path="/question-bank"   element={<ProtectedRoute requiredPermission="MANAGE_QUESTIONS"><QuestionBank /></ProtectedRoute>} />
-                <Route path="/quiz-create"     element={<ProtectedRoute requiredPermission="CREATE_QUIZ"><QuizCreation /></ProtectedRoute>} />
-                <Route path="/assignments"     element={<ProtectedRoute requiredPermission="ASSIGN_QUIZ"><QuizAssignment /></ProtectedRoute>} />
-                <Route path="/reports"         element={<ProtectedRoute requiredPermission="VIEW_REPORTS"><Reports /></ProtectedRoute>} />
-                <Route path="/admin/users"     element={<ProtectedRoute requiredPermission="MANAGE_USERS"><AdminPanel /></ProtectedRoute>} />
-                <Route path="/admin/schools"   element={<ProtectedRoute requiredPermission="MANAGE_SCHOOLS"><AdminPanel /></ProtectedRoute>} />
-                <Route path="/admin/districts" element={<ProtectedRoute requiredPermission="MANAGE_DISTRICTS"><AdminPanel /></ProtectedRoute>} />
-                <Route path="/admin/settings"  element={<ProtectedRoute requiredPermission="MANAGE_DISTRICTS"><AdminPanel /></ProtectedRoute>} />
+                {/* Centralized Admin routes */}
+                <Route path="/admin/students"      element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><StudentManagement /></ProtectedRoute>} />
+                <Route path="/admin/levels"        element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><ExamLevels /></ProtectedRoute>} />
+                <Route path="/admin/question-bank" element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><QuestionBankAdmin /></ProtectedRoute>} />
+                <Route path="/admin/content"       element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><ContentManagement /></ProtectedRoute>} />
+                <Route path="/admin/monitoring"    element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><LiveMonitoring /></ProtectedRoute>} />
+                <Route path="/admin/reports"       element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><AdminReports /></ProtectedRoute>} />
+                <Route path="/admin/import-export" element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><ImportExport /></ProtectedRoute>} />
+                <Route path="/admin/settings"      element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><SystemSettings /></ProtectedRoute>} />
+
+                {/* Legacy aliases */}
+                <Route path="/reports"    element={<AdminReports />} />
+                <Route path="/monitoring" element={<LiveMonitoring />} />
               </Route>
 
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
         </ToastProvider>
+        </LevelProvider>
       </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

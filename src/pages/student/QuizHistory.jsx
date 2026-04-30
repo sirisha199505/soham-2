@@ -1,257 +1,330 @@
-import { useState } from 'react';
-import { CheckCircle, XCircle, Minus, Clock, Trophy, ShieldAlert, BookOpen, ChevronDown, ChevronUp } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { useState, useMemo } from 'react';
+import { Clock, CheckCircle, XCircle, Minus, Trophy, ChevronDown, ChevronUp,
+  Calendar, Target, BookOpen, ArrowRight, Filter } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
-import { mockQuizzes, mockQuestions } from '../../utils/mockData';
+import { getStudentAttempts } from '../../utils/quizGenerator';
+import { CATEGORY_META, CATEGORIES } from '../../utils/questionBank';
 import { formatDuration } from '../../utils/helpers';
 
-export default function QuizHistory() {
-  const { hasAttemptedQuiz, getQuizResult } = useAuth();
-  const { colors } = useTheme();
-  const location = useLocation();
-  const [showReview, setShowReview] = useState(location.state?.openReview ?? false);
+const LEVEL_COLORS = {
+  1: { from: '#3BC0EF', to: '#1E3A8A' },
+  2: { from: '#8B5CF6', to: '#6d28d9' },
+  3: { from: '#10B981', to: '#047857' },
+};
 
-  const quiz      = mockQuizzes[0];
-  const completed = hasAttemptedQuiz(quiz.id);
-  const result    = getQuizResult(quiz.id);
+function ScoreBadge({ pct }) {
+  const color = pct >= 75 ? '#16a34a' : pct >= 50 ? '#F59E0B' : '#dc2626';
+  const bg    = pct >= 75 ? '#f0fdf4' : pct >= 50 ? '#fffbeb' : '#fef2f2';
+  return (
+    <span className="font-bold text-sm px-2.5 py-1 rounded-full" style={{ color, background: bg }}>
+      {pct}%
+    </span>
+  );
+}
 
-  // Reconstruct the 10 questions from stored IDs
-  const questions = result?.questionIds
-    ? result.questionIds.map(id => mockQuestions.find(q => q.id === id)).filter(Boolean)
-    : [];
-  const answers = result?.answers || {};
-
-  const submittedAt = result?.completedAt
-    ? new Date(result.completedAt).toLocaleString('en-IN', {
-        day: '2-digit', month: 'short', year: 'numeric',
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-      })
-    : '—';
-
-  const unanswered = questions.length > 0
-    ? questions.filter(q => answers[q.id] === undefined).length
-    : result
-      ? (result.total != null ? result.total / 2 : 0) - (result.correct ?? 0) - (result.wrong ?? 0)
-      : 0;
-
-  const scoreColor =
-    result?.pct >= 75 ? { text: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' } :
-    result?.pct >= 50 ? { text: '#d97706', bg: '#fffbeb', border: '#fde68a' } :
-                        { text: '#dc2626', bg: '#fef2f2', border: '#fecaca' };
-
-  // Per-question status
-  const qStatus = (q) => {
-    if (answers[q.id] === undefined) return 'unanswered';
-    return answers[q.id] === q.correct ? 'correct' : 'wrong';
-  };
-
-  const STATUS_STYLE = {
-    correct:    { border: '#bbf7d0', bg: '#f0fdf4', badge: 'bg-green-100 text-green-700',   icon: <CheckCircle size={15} className="text-green-500" />,  label: 'Correct'    },
-    wrong:      { border: '#fecaca', bg: '#fef2f2', badge: 'bg-red-100 text-red-600',       icon: <XCircle    size={15} className="text-red-400" />,    label: 'Wrong'      },
-    unanswered: { border: '#e2e8f0', bg: '#f8fafc', badge: 'bg-slate-100 text-slate-500',   icon: <Minus      size={15} className="text-slate-400" />,   label: 'Unanswered' },
-  };
+// ─── Single question review ───────────────────────────────────────────────
+function QuestionReview({ q, answer, index }) {
+  const catMeta  = CATEGORY_META[q.category] || { label: q.category, color: '#64748b', bg: '#f8fafc' };
+  const isSkipped = answer === undefined || answer === null;
+  let isCorrect = false;
+  if (!isSkipped) {
+    if (q.type === 'match') {
+      isCorrect = typeof answer === 'object' && q.pairs.every((_, i) => answer[i] === i);
+    } else {
+      isCorrect = answer === q.correct;
+    }
+  }
+  const statusColor = isSkipped ? '#94a3b8' : isCorrect ? '#16a34a' : '#dc2626';
+  const statusBg    = isSkipped ? '#f8fafc'  : isCorrect ? '#f0fdf4' : '#fef2f2';
 
   return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-5">
-
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Quiz History</h1>
-        <p className="text-slate-400 text-sm mt-0.5">Detailed analytics for your quiz attempt</p>
-      </div>
-
-      {/* ── Not attempted ── */}
-      {!completed && (
-        <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center shadow-sm">
-          <BookOpen size={44} className="mx-auto mb-4 text-slate-200" />
-          <p className="font-bold text-slate-600 text-lg mb-1">No result yet</p>
-          <p className="text-slate-400 text-sm">Complete the quiz to see your result here.</p>
+    <div className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: statusColor + '30' }}>
+      <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ background: statusBg, borderColor: statusColor + '20' }}>
+        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+          style={{ background: statusColor, color:'#fff' }}>
+          {index}
         </div>
-      )}
-
-      {/* ── Result card ── */}
-      {completed && result && (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-
-          {/* Header */}
-          <div className="px-5 py-4 flex items-center justify-between"
-            style={{ background: `linear-gradient(135deg, ${colors.primary}12, ${colors.accent}08)`, borderBottom: '1px solid #f1f5f9' }}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0"
-                style={{ background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})` }}>
-                <BookOpen size={18} />
-              </div>
-              <div>
-                <p className="font-bold text-slate-800 text-sm" style={{ fontFamily: 'Space Grotesk' }}>{quiz.title}</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Quiz Completed</p>
-              </div>
-            </div>
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-700 flex items-center gap-1">
-              <CheckCircle size={11} /> Completed
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap gap-1.5 mb-0.5">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: catMeta.bg, color: catMeta.color }}>
+              {catMeta.label}
             </span>
           </div>
+          <p className="text-sm font-semibold text-slate-800 line-clamp-2">{q.text}</p>
+        </div>
+        <div className="shrink-0">
+          {isSkipped
+            ? <span className="flex items-center gap-1 text-xs font-bold text-slate-400"><Minus size={12}/> Skipped</span>
+            : isCorrect
+              ? <span className="flex items-center gap-1 text-xs font-bold text-green-600"><CheckCircle size={13}/> Correct</span>
+              : <span className="flex items-center gap-1 text-xs font-bold text-red-600"><XCircle size={13}/> Wrong</span>}
+        </div>
+      </div>
 
-          <div className="p-5 space-y-4">
+      <div className="px-4 py-3 space-y-2">
+        {q.type === 'image' && q.imageUrl && (
+          <img src={q.imageUrl} alt="question" className="w-full h-32 object-cover rounded-xl border border-slate-100 mb-2"/>
+        )}
 
-            {/* Score banner */}
-            <div className="rounded-2xl p-5 text-center" style={{ background: scoreColor.bg, border: `1px solid ${scoreColor.border}` }}>
-              <Trophy size={26} className="mx-auto mb-2" style={{ color: scoreColor.text }} />
-              <p className="text-5xl font-bold" style={{ color: scoreColor.text, fontFamily: 'Space Grotesk' }}>
-                {result.pct ?? '—'}%
-              </p>
-              <p className="text-sm font-semibold mt-1" style={{ color: scoreColor.text }}>Final Score</p>
+        {(q.type === 'mcq' || q.type === 'image' || q.type === 'tf') && q.options && (
+          <div className="grid gap-1.5">
+            {q.options.map((opt, i) => {
+              const isSelected        = answer === i;
+              const isActuallyCorrect = i === q.correct;
+              let cls = 'border-slate-200 bg-slate-50 text-slate-500';
+              if (isActuallyCorrect) cls = 'border-green-300 bg-green-50 text-green-700 font-semibold';
+              if (isSelected && !isActuallyCorrect) cls = 'border-red-300 bg-red-50 text-red-700 font-semibold';
+              return (
+                <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs ${cls}`}>
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                    isActuallyCorrect ? 'bg-green-500 text-white' : isSelected ? 'bg-red-500 text-white' : 'bg-slate-200 text-slate-500'
+                  }`}>{String.fromCharCode(65 + i)}</span>
+                  <span className="flex-1">{opt}</span>
+                  {isSelected && !isActuallyCorrect && <span className="text-[10px] text-red-400 italic">(your answer)</span>}
+                  {isActuallyCorrect && <CheckCircle size={12} className="text-green-500 shrink-0"/>}
+                  {isSelected && !isActuallyCorrect && <XCircle size={12} className="text-red-500 shrink-0"/>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {q.type === 'match' && q.pairs && (
+          <div className="space-y-1.5">
+            {q.pairs.map((pair, i) => {
+              const selIdx        = answer ? answer[i] : undefined;
+              const isCorrectPair = selIdx === i;
+              const selRight      = selIdx !== undefined ? (q.pairs[selIdx]?.right || '?') : null;
+              return (
+                <div key={i} className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 border ${
+                  selIdx === undefined ? 'border-slate-200 bg-slate-50' :
+                  isCorrectPair ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+                }`}>
+                  <span className="flex-1 font-medium text-slate-700">{pair.left}</span>
+                  <span className="text-slate-400 shrink-0">→</span>
+                  <span className={`flex-1 font-semibold ${
+                    selIdx === undefined ? 'text-slate-400' : isCorrectPair ? 'text-green-700' : 'text-red-700'
+                  }`}>
+                    {selRight || <span className="text-slate-400 italic">Not answered</span>}
+                    {!isCorrectPair && selIdx !== undefined && (
+                      <span className="text-green-700 ml-1 font-normal">(correct: {pair.right})</span>
+                    )}
+                  </span>
+                  {selIdx !== undefined && (isCorrectPair
+                    ? <CheckCircle size={11} className="text-green-500 shrink-0"/>
+                    : <XCircle size={11} className="text-red-500 shrink-0"/>)}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {q.explanation && (
+          <div className="mt-2 bg-blue-50 rounded-xl px-3 py-2 text-xs text-blue-700 border border-blue-100">
+            <span className="font-bold">Explanation: </span>{q.explanation}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Attempt card ─────────────────────────────────────────────────────────
+function AttemptCard({ attempt }) {
+  const [open, setOpen] = useState(false);
+  const lvl    = LEVEL_COLORS[attempt.levelId] || { from:'#4F46E5', to:'#6d28d9' };
+  const passed = (attempt.score?.pct ?? 0) >= 50;
+  const date   = attempt.date ? new Date(attempt.date) : null;
+
+  const catBreakdown = useMemo(() => {
+    const qs  = attempt.questions || [];
+    const ans = attempt.answers   || {};
+    return CATEGORIES.map(cat => {
+      const catQs   = qs.filter(q => q.category === cat);
+      const correct = catQs.filter(q => {
+        const a = ans[q.id];
+        if (a == null) return false;
+        if (q.type === 'match') return typeof a === 'object' && q.pairs.every((_, i) => a[i] === i);
+        return a === q.correct;
+      }).length;
+      return { cat, meta: CATEGORY_META[cat] || { label: cat, color:'#64748b', bg:'#f8fafc' }, total: catQs.length, correct };
+    });
+  }, [attempt]);
+
+  return (
+    <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${open ? 'border-indigo-200' : 'border-slate-100'}`}>
+      <button onClick={() => setOpen(p => !p)} className="w-full text-left">
+        <div className="flex items-center gap-4 p-4">
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shrink-0"
+            style={{ background: `linear-gradient(135deg, ${lvl.from}, ${lvl.to})` }}>
+            L{attempt.levelId}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className="text-sm font-bold text-slate-800">{attempt.levelTitle || `Level ${attempt.levelId}`}</span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                {passed ? '✓ Passed' : '✗ Failed'}
+              </span>
             </div>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+              {date && (
+                <span className="flex items-center gap-1">
+                  <Calendar size={10}/> {date.toLocaleDateString()} {date.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
+                </span>
+              )}
+              <span className="flex items-center gap-1"><Clock size={10}/> {formatDuration(attempt.score?.timeTaken || 0)}</span>
+              <span className="flex items-center gap-1"><Target size={10}/> {attempt.score?.correct || 0}/{attempt.score?.total || 0}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <ScoreBadge pct={attempt.score?.pct ?? 0}/>
+            {open ? <ChevronUp size={16} className="text-slate-400"/> : <ChevronDown size={16} className="text-slate-400"/>}
+          </div>
+        </div>
+      </button>
 
-            {/* Breakdown */}
-            <div className="grid grid-cols-3 gap-3">
+      {open && (
+        <div className="border-t border-slate-100 p-4 space-y-4">
+          {/* Category breakdown */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {catBreakdown.map(({ cat, meta, total, correct }) => (
+              <div key={cat} className="rounded-xl p-3 text-center" style={{ background: meta.bg }}>
+                <p className="text-base font-bold" style={{ color: meta.color }}>{correct}/{total}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">{meta.label}</p>
+                <div className="mt-1.5 h-1.5 bg-white/60 rounded-full overflow-hidden">
+                  <div className="h-1.5 rounded-full" style={{ width: `${total ? (correct/total)*100 : 0}%`, background: meta.color }}/>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Score grid */}
+          <div className="grid grid-cols-3 gap-2 text-center">
+            {[
+              { label:'Correct', val: attempt.score?.correct ?? 0, color:'#16a34a', bg:'#f0fdf4' },
+              { label:'Wrong',   val: attempt.score?.wrong ?? 0,   color:'#dc2626', bg:'#fef2f2' },
+              { label:'Skipped', val: (attempt.score?.total ?? 0) - (attempt.score?.correct ?? 0) - (attempt.score?.wrong ?? 0),
+                color:'#64748b', bg:'#f8fafc' },
+            ].map(s => (
+              <div key={s.label} className="rounded-xl p-3" style={{ background: s.bg }}>
+                <p className="text-xl font-bold" style={{ color: s.color }}>{s.val}</p>
+                <p className="text-xs text-slate-400">{s.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Per-question review */}
+          <div>
+            <h4 className="font-bold text-slate-700 text-sm mb-3 flex items-center gap-2">
+              <BookOpen size={15}/> Detailed Question Review
+              <span className="text-xs font-normal text-slate-400">({(attempt.questions || []).length} questions)</span>
+            </h4>
+            <div className="space-y-3">
+              {(attempt.questions || []).map((q, i) => (
+                <QuestionReview key={q.id || i} q={q} answer={attempt.answers?.[q.id]} index={i + 1}/>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── MAIN ─────────────────────────────────────────────────────────────────
+export default function QuizHistory() {
+  const { user }     = useAuth();
+  const attempts     = getStudentAttempts(user?.uniqueId);
+  const [lvlFilter, setLvlFilter] = useState('all');
+
+  const filtered = lvlFilter === 'all' ? attempts : attempts.filter(a => String(a.levelId) === lvlFilter);
+
+  const stats = useMemo(() => {
+    if (!attempts.length) return null;
+    const total  = attempts.length;
+    const passed = attempts.filter(a => (a.score?.pct ?? 0) >= 50).length;
+    const avg    = Math.round(attempts.reduce((s, a) => s + (a.score?.pct ?? 0), 0) / total);
+    const best   = Math.max(...attempts.map(a => a.score?.pct ?? 0));
+    return { total, passed, avg, best };
+  }, [attempts]);
+
+  return (
+    <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily:'Space Grotesk' }}>Quiz History</h1>
+        <p className="text-sm text-slate-400 mt-0.5">Review all attempts with answer analysis and explanations</p>
+      </div>
+
+      {attempts.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center">
+          <BookOpen size={40} className="text-slate-300 mx-auto mb-4"/>
+          <h2 className="text-lg font-bold text-slate-700 mb-2">No attempts yet</h2>
+          <p className="text-slate-400 text-sm mb-6">Complete a level quiz to see your history here.</p>
+          <a href="/dashboard"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm">
+            Go to Dashboard <ArrowRight size={15}/>
+          </a>
+        </div>
+      ) : (
+        <>
+          {/* Stats */}
+          {stats && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
-                { icon: <CheckCircle size={18} className="text-green-500" />, value: result.correct ?? '—', label: 'Correct',    bg: 'bg-green-50'  },
-                { icon: <XCircle    size={18} className="text-red-400" />,   value: result.wrong   ?? '—', label: 'Wrong',      bg: 'bg-red-50'    },
-                { icon: <Minus      size={18} className="text-slate-400" />, value: unanswered,             label: 'Unanswered', bg: 'bg-slate-50'  },
-              ].map(item => (
-                <div key={item.label} className={`${item.bg} rounded-xl p-3 text-center`}>
-                  <div className="flex justify-center mb-1">{item.icon}</div>
-                  <p className="text-xl font-bold text-slate-800">{item.value}</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">{item.label}</p>
+                { label:'Attempts',   val: stats.total,        color:'#4F46E5', icon:<BookOpen size={18}/> },
+                { label:'Passed',     val: stats.passed,       color:'#10B981', icon:<CheckCircle size={18}/> },
+                { label:'Avg Score',  val: `${stats.avg}%`,    color:'#F59E0B', icon:<Target size={18}/> },
+                { label:'Best Score', val: `${stats.best}%`,   color:'#EF4444', icon:<Trophy size={18}/> },
+              ].map(s => (
+                <div key={s.label} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: s.color+'15', color: s.color }}>
+                    {s.icon}
+                  </div>
+                  <div>
+                    <p className="text-xl font-bold text-slate-800" style={{ fontFamily:'Space Grotesk' }}>{s.val}</p>
+                    <p className="text-xs text-slate-400">{s.label}</p>
+                  </div>
                 </div>
               ))}
             </div>
+          )}
 
-            {/* Meta row */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 rounded-xl text-sm">
-                <span className="text-slate-500 flex items-center gap-1.5"><Clock size={13} /> Time Taken</span>
-                <span className="font-semibold text-slate-700">
-                  {result.timeTaken != null ? formatDuration(result.timeTaken) : '—'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 rounded-xl text-sm">
-                <span className="text-slate-500">Submitted</span>
-                <span className="font-semibold text-slate-700">{submittedAt}</span>
-              </div>
-              <div className="flex items-center justify-between px-4 py-2.5 rounded-xl text-sm"
-                style={{ background: '#fef9c3', border: '1px solid #fde68a' }}>
-                <span className="text-yellow-700 font-semibold">Status</span>
-                <span className="font-bold text-yellow-800">Attempt Used</span>
-              </div>
+          {/* Color legend */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-3">
+            <p className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Answer Color Key</p>
+            <div className="flex flex-wrap gap-4 text-xs text-slate-600">
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-green-100 border border-green-300 inline-block"/> Correct Answer</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-100 border border-red-300 inline-block"/> Wrong Answer</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-slate-100 border border-slate-200 inline-block"/> Unattempted / Skipped</span>
             </div>
+          </div>
 
-            {/* One-attempt notice */}
-            <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-100 rounded-xl p-3.5">
-              <ShieldAlert size={15} className="text-amber-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-700 font-medium">
-                You have already used your one allowed attempt. This result is final and cannot be retaken.
-              </p>
-            </div>
+          {/* Filter */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Filter size={14} className="text-slate-400"/>
+            <span className="text-xs font-semibold text-slate-500">Filter by level:</span>
+            {[{k:'all',l:'All'},{k:'1',l:'Level 1'},{k:'2',l:'Level 2'},{k:'3',l:'Level 3'}].map(t => (
+              <button key={t.k} onClick={() => setLvlFilter(t.k)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  lvlFilter === t.k ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}>{t.l}</button>
+            ))}
+            <span className="text-xs text-slate-400 ml-auto">
+              Showing {filtered.length} of {attempts.length} attempt{attempts.length !== 1 ? 's' : ''}
+            </span>
+          </div>
 
-            {/* View My Answers button */}
-            {questions.length > 0 && (
-              <button
-                onClick={() => setShowReview(v => !v)}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm transition-all hover:scale-[1.01]"
-                style={{
-                  background: showReview ? '#f1f5f9' : `linear-gradient(135deg, ${colors.primary}, ${colors.accent})`,
-                  color: showReview ? '#475569' : '#fff',
-                  boxShadow: showReview ? 'none' : `0 4px 16px ${colors.primary}40`,
-                }}
-              >
-                {showReview ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                {showReview ? 'Hide Answers' : 'View My Answers'}
-              </button>
+          {/* List */}
+          <div className="space-y-3">
+            {filtered.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center">
+                <p className="text-slate-400 text-sm">No attempts for this level yet.</p>
+              </div>
+            ) : (
+              filtered.map(attempt => <AttemptCard key={attempt.id || attempt.date} attempt={attempt}/>)
             )}
           </div>
-        </div>
-      )}
-
-      {/* ── Answer Review Panel ── */}
-      {showReview && questions.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">
-            Answer Review — Read Only
-          </p>
-          {questions.map((q, idx) => {
-            const st  = qStatus(q);
-            const sty = STATUS_STYLE[st];
-            const userAns = answers[q.id];
-
-            return (
-              <div
-                key={q.id}
-                className="bg-white rounded-2xl shadow-sm overflow-hidden"
-                style={{ border: `1px solid ${sty.border}` }}
-              >
-                {/* Question header */}
-                <div className="px-4 py-3 flex items-center justify-between gap-3"
-                  style={{ background: sty.bg, borderBottom: `1px solid ${sty.border}` }}>
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-7 h-7 rounded-lg text-white text-xs font-bold flex items-center justify-center shrink-0"
-                      style={{ background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})` }}>
-                      {idx + 1}
-                    </span>
-                    <p className="text-sm font-semibold text-slate-800 leading-snug">{q.text}</p>
-                  </div>
-                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 flex items-center gap-1 ${sty.badge}`}>
-                    {sty.icon} {sty.label}
-                  </span>
-                </div>
-
-                {/* Options */}
-                <div className={`p-3 grid gap-2 ${q.type === 'true_false' ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                  {q.options.map((opt, i) => {
-                    const isCorrect  = i === q.correct;
-                    const isSelected = i === userAns;
-                    const isWrongPick = isSelected && !isCorrect;
-
-                    let optStyle = 'border-slate-200 bg-slate-50 text-slate-600';
-                    let optInline = {};
-
-                    if (isCorrect && isSelected) {
-                      // User picked the right answer → solid green
-                      optStyle = 'border-transparent text-white';
-                      optInline = { background: 'linear-gradient(135deg, #16a34a, #15803d)', boxShadow: '0 2px 8px #16a34a40' };
-                    } else if (isCorrect) {
-                      // Correct answer user didn't pick → outlined green
-                      optStyle = 'border-green-300 bg-green-50 text-green-800';
-                    } else if (isWrongPick) {
-                      // User's wrong choice → red
-                      optStyle = 'border-red-300 bg-red-50 text-red-700';
-                    }
-
-                    return (
-                      <div
-                        key={i}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-sm font-medium select-none
-                          ${q.type === 'true_false' ? 'justify-center' : ''} ${optStyle}`}
-                        style={optInline}
-                      >
-                        {q.type !== 'true_false' && (
-                          <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold shrink-0
-                            ${isCorrect && isSelected ? 'bg-white/20 border-white/40 text-white'
-                            : isCorrect ? 'border-green-400 text-green-700'
-                            : isWrongPick ? 'border-red-400 text-red-600'
-                            : 'border-slate-300 text-slate-400'}`}>
-                            {String.fromCharCode(65 + i)}
-                          </span>
-                        )}
-                        <span>{opt}</span>
-                        {isSelected && !isCorrect && (
-                          <XCircle size={14} className="ml-auto text-red-400 shrink-0" />
-                        )}
-                        {isCorrect && (
-                          <CheckCircle size={14} className={`ml-auto shrink-0 ${isSelected ? 'text-white' : 'text-green-500'}`} />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-
-          <p className="text-center text-xs text-slate-400 py-2">
-            — End of review · Answers are read-only —
-          </p>
-        </div>
+        </>
       )}
     </div>
   );

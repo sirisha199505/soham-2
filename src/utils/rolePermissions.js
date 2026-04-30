@@ -1,20 +1,19 @@
 import { ROLES } from './constants';
 
+const ADMIN_ROLES = [ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.SCHOOL_ADMIN, ROLES.DISTRICT_ADMIN];
+
 export const PERMISSIONS = {
-  // Quiz
-  CREATE_QUIZ:    [ROLES.TEACHER, ROLES.SCHOOL_ADMIN, ROLES.DISTRICT_ADMIN, ROLES.SUPER_ADMIN],
-  ASSIGN_QUIZ:    [ROLES.TEACHER, ROLES.SCHOOL_ADMIN, ROLES.DISTRICT_ADMIN, ROLES.SUPER_ADMIN],
-  ATTEMPT_QUIZ:   [ROLES.STUDENT],
-  VIEW_REPORTS:   [ROLES.TEACHER, ROLES.SCHOOL_ADMIN, ROLES.DISTRICT_ADMIN, ROLES.SUPER_ADMIN],
-  // Question bank
-  MANAGE_QUESTIONS: [ROLES.TEACHER, ROLES.SCHOOL_ADMIN, ROLES.DISTRICT_ADMIN, ROLES.SUPER_ADMIN],
-  // Users
-  MANAGE_USERS:   [ROLES.SCHOOL_ADMIN, ROLES.DISTRICT_ADMIN, ROLES.SUPER_ADMIN],
-  MANAGE_SCHOOLS: [ROLES.DISTRICT_ADMIN, ROLES.SUPER_ADMIN],
-  MANAGE_DISTRICTS: [ROLES.SUPER_ADMIN],
-  // Analytics
-  SCHOOL_ANALYTICS:   [ROLES.SCHOOL_ADMIN, ROLES.DISTRICT_ADMIN, ROLES.SUPER_ADMIN],
-  DISTRICT_ANALYTICS: [ROLES.DISTRICT_ADMIN, ROLES.SUPER_ADMIN],
+  ADMIN_ACCESS:       ADMIN_ROLES,
+  CREATE_QUIZ:        [...ADMIN_ROLES, ROLES.TEACHER],
+  ASSIGN_QUIZ:        [...ADMIN_ROLES, ROLES.TEACHER],
+  ATTEMPT_QUIZ:       [ROLES.STUDENT],
+  VIEW_REPORTS:       [...ADMIN_ROLES, ROLES.TEACHER],
+  MANAGE_QUESTIONS:   [...ADMIN_ROLES, ROLES.TEACHER],
+  MANAGE_USERS:       ADMIN_ROLES,
+  MANAGE_SCHOOLS:     ADMIN_ROLES,
+  MANAGE_DISTRICTS:   ADMIN_ROLES,
+  SCHOOL_ANALYTICS:   ADMIN_ROLES,
+  DISTRICT_ANALYTICS: ADMIN_ROLES,
 };
 
 export const hasPermission = (role, permission) => {
@@ -22,61 +21,37 @@ export const hasPermission = (role, permission) => {
 };
 
 export const getDashboardRoute = (role) => {
-  const routes = {
-    [ROLES.STUDENT]:       '/dashboard/student',
-    [ROLES.TEACHER]:       '/dashboard/teacher',
-    [ROLES.SCHOOL_ADMIN]:  '/dashboard/school-admin',
-    [ROLES.DISTRICT_ADMIN]:'/dashboard/district-admin',
-    [ROLES.SUPER_ADMIN]:   '/dashboard/super-admin',
-  };
-  return routes[role] || '/dashboard/student';
+  if (ADMIN_ROLES.includes(role)) return '/dashboard';
+  if (role === ROLES.TEACHER) return '/dashboard';
+  return '/dashboard';
 };
 
 export const getSidebarItems = (role) => {
-  const common = [
-    { label: 'Dashboard', path: getDashboardRoute(role), icon: 'LayoutDashboard' },
-  ];
+  if (ADMIN_ROLES.includes(role)) {
+    return [
+      { label: 'Dashboard',       path: '/dashboard',           icon: 'LayoutDashboard' },
+      { label: 'Question Bank',   path: '/admin/question-bank', icon: 'BookMarked' },
+      { label: 'Students',        path: '/admin/students',      icon: 'Users' },
+      { label: 'Exam Levels',     path: '/admin/levels',        icon: 'Layers' },
+      { label: 'Content',         path: '/admin/content',       icon: 'FileText' },
+      { label: 'Live Monitoring', path: '/admin/monitoring',    icon: 'Activity' },
+      { label: 'Reports',         path: '/admin/reports',       icon: 'BarChart2' },
+      { label: 'Import / Export', path: '/admin/import-export', icon: 'Upload' },
+      { label: 'Settings',        path: '/admin/settings',      icon: 'Settings' },
+    ];
+  }
 
-  const studentItems = [
+  if (role === ROLES.TEACHER) {
+    return [
+      { label: 'Dashboard',    path: '/dashboard',       icon: 'LayoutDashboard' },
+      { label: 'Monitoring',   path: '/monitoring',      icon: 'Activity' },
+      { label: 'Reports',      path: '/reports',         icon: 'BarChart2' },
+    ];
+  }
+
+  return [
+    { label: 'Dashboard',    path: '/dashboard',    icon: 'LayoutDashboard' },
     { label: 'Quiz History', path: '/quiz-history', icon: 'History' },
-    { label: 'My Profile', path: '/profile', icon: 'User' },
+    { label: 'My Profile',   path: '/profile',      icon: 'User' },
   ];
-
-  const teacherItems = [
-    { label: 'Quiz Management', path: '/quizzes', icon: 'BookOpen' },
-    { label: 'Question Bank', path: '/question-bank', icon: 'Database' },
-    { label: 'Create Quiz', path: '/quiz-create', icon: 'PlusCircle' },
-    { label: 'Assignments', path: '/assignments', icon: 'ClipboardList' },
-    { label: 'Monitoring', path: '/monitoring', icon: 'Activity' },
-    { label: 'Reports', path: '/reports', icon: 'BarChart2' },
-  ];
-
-  const adminItems = [
-    { label: 'Quiz Management', path: '/quizzes', icon: 'BookOpen' },
-    { label: 'Question Bank', path: '/question-bank', icon: 'Database' },
-    { label: 'Create Quiz', path: '/quiz-create', icon: 'PlusCircle' },
-    { label: 'Assignments', path: '/assignments', icon: 'ClipboardList' },
-    { label: 'Reports', path: '/reports', icon: 'BarChart2' },
-    { label: 'Manage Users', path: '/admin/users', icon: 'Users' },
-  ];
-
-  const districtItems = [
-    ...adminItems,
-    { label: 'Schools', path: '/admin/schools', icon: 'Building2' },
-  ];
-
-  const superAdminItems = [
-    ...districtItems,
-    { label: 'Districts', path: '/admin/districts', icon: 'Globe' },
-    { label: 'System Settings', path: '/admin/settings', icon: 'Settings' },
-  ];
-
-  const map = {
-    [ROLES.STUDENT]:       [...common, ...studentItems],
-    [ROLES.TEACHER]:       [...common, ...teacherItems],
-    [ROLES.SCHOOL_ADMIN]:  [...common, ...adminItems],
-    [ROLES.DISTRICT_ADMIN]:[...common, ...districtItems],
-    [ROLES.SUPER_ADMIN]:   [...common, ...superAdminItems],
-  };
-  return map[role] || common;
 };

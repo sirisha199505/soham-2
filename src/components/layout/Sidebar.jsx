@@ -3,6 +3,7 @@ import {
   LayoutDashboard, BookOpen, History, User, TrendingUp,
   Database, PlusCircle, ClipboardList, BarChart2, Users,
   Building2, Globe, Settings, LogOut, ChevronLeft, ChevronRight, X, Activity,
+  Layers, HelpCircle, FileText, Upload, Shield, BookMarked,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -14,11 +15,13 @@ const ICON_MAP = {
   LayoutDashboard, BookOpen, History, User, TrendingUp,
   Database, PlusCircle, ClipboardList, BarChart2, Users,
   Building2, Globe, Settings, Activity,
+  Layers, HelpCircle, FileText, Upload, Shield, BookMarked,
 };
 
 const ROLE_COLORS = {
   student:        '#3BC0EF',
   teacher:        '#FAAB34',
+  admin:          '#4F46E5',
   school_admin:   '#1E3A8A',
   district_admin: '#8B5CF6',
   super_admin:    '#10B981',

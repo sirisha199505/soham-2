@@ -120,8 +120,6 @@ export default function QuizAttempt() {
   const q            = questions[current];
   const answered     = Object.keys(answers).length;
   const tState       = timerState(timeLeft);
-  const progress     = ((current + 1) / TOTAL_QUESTIONS) * 100;
-  const timerBarPct  = (timeLeft / QUIZ_DURATION) * 100;
   const isLast       = current === questions.length - 1;
 
   const timerStyle = {
