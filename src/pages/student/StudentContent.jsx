@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { LEVELS, LEVEL1_PAGES, LEVEL2_PAGES, LEVEL3_PAGES } from '../../utils/levelData';
+import { downloadLevelContentAsPDF } from '../../utils/pdfExport';
 
 const STATIC_CONTENT = { 1: LEVEL1_PAGES, 2: LEVEL2_PAGES, 3: LEVEL3_PAGES };
 const CONTENT_KEY = 'rqa_custom_content';
@@ -46,11 +47,22 @@ export default function StudentContent() {
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-5">
 
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>
-          Study Content
-        </h1>
-        <p className="text-sm text-slate-400 mt-0.5">Browse all level materials before attempting quizzes</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>
+            Study Content
+          </h1>
+          <p className="text-sm text-slate-400 mt-0.5">Browse all level materials before attempting quizzes</p>
+        </div>
+        {total > 0 && (
+          <button
+            onClick={() => downloadLevelContentAsPDF(pages, level.title)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]"
+            style={{ borderColor: `${colors.primary}40`, color: colors.primary, background: `${colors.primary}08` }}
+          >
+            <Download size={15} /> Download PDF
+          </button>
+        )}
       </div>
 
       {/* Level tabs */}

@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, BookOpen, CheckCircle, ArrowRight, Clock, FileText, ExternalLink } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BookOpen, CheckCircle, ArrowRight, Clock, FileText, ExternalLink, Download } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { useTheme } from '../../context/ThemeContext';
 import { LEVELS, LEVEL1_PAGES, LEVEL2_PAGES, LEVEL3_PAGES } from '../../utils/levelData';
+import { downloadLevelContentAsPDF } from '../../utils/pdfExport';
 
 const STATIC_CONTENT = { 1: LEVEL1_PAGES, 2: LEVEL2_PAGES, 3: LEVEL3_PAGES };
 const CONTENT_KEY = 'rqa_custom_content';
@@ -84,6 +85,16 @@ export default function LevelContent() {
           >
             Page {pageIndex + 1} of {total}
           </span>
+
+          {/* Download button */}
+          <button
+            onClick={() => downloadLevelContentAsPDF(pages, level.title)}
+            className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border transition-colors shrink-0"
+            style={{ borderColor: `${level.color.from}40`, color: level.color.from, background: `${level.color.from}08` }}
+            title="Download all content as PDF"
+          >
+            <Download size={12} /> PDF
+          </button>
         </div>
 
         {/* Page progress bar */}
