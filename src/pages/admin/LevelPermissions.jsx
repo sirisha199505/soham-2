@@ -65,8 +65,7 @@ function buildRows(targetLevel) {
 
     rows.push({
       id,
-      name:      student.name      || id,
-      rollNo:    student.rollNo    || '—',
+      name:      student.schoolName || student.name || id,
       className: student.className || '—',
       prevScore:      prev.score?.pct  ?? null,
       prevCorrect:    prev.score?.correct ?? null,
@@ -208,8 +207,7 @@ export default function LevelPermissions() {
       const q = search.toLowerCase();
       rows = rows.filter(r =>
         r.name.toLowerCase().includes(q) ||
-        r.id.toLowerCase().includes(q) ||
-        r.rollNo.toLowerCase().includes(q)
+        r.id.toLowerCase().includes(q)
       );
     }
     return rows;
@@ -411,8 +409,8 @@ export default function LevelPermissions() {
                     </button>
                   </th>
                   <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Student Name</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Student ID</th>
                   <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Class</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Student ID</th>
                   <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Level {activeTab - 1} Score</th>
                   <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Completed On</th>
                   <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Level {activeTab} Status</th>
@@ -440,18 +438,19 @@ export default function LevelPermissions() {
                         </div>
                         <div>
                           <p className="font-semibold text-slate-800 text-sm">{row.name}</p>
-                          <p className="text-[10px] text-slate-400">Roll: {row.rollNo}</p>
                         </div>
                       </div>
+                    </td>
+
+                    {/* Class */}
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">{row.className}</span>
                     </td>
 
                     {/* ID */}
                     <td className="px-4 py-3">
                       <span className="font-mono text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded-lg">{row.id}</span>
                     </td>
-
-                    {/* Class */}
-                    <td className="px-4 py-3 text-slate-600 text-sm">{row.className}</td>
 
                     {/* Score */}
                     <td className="px-4 py-3">

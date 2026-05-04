@@ -20,7 +20,7 @@ function loadReportData() {
     const s = students[userId] || {};
     const row = {
       id: userId,
-      school: s.name || '—',
+      school: s.schoolName || s.name || '—',
       class: s.className || '—',
       l1: userProg[1] || null,
       l2: userProg[2] || null,
@@ -286,7 +286,7 @@ export default function AdminReports() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                {['Student ID', 'School', 'Level 1', 'Level 2', 'Level 3'].map(h => (
+                {['Student ID', 'School', 'Class', 'Level 1', 'Level 2', 'Level 3'].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
@@ -296,9 +296,11 @@ export default function AdminReports() {
                 <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                   <td className="px-4 py-3">
                     <p className="font-mono font-bold text-slate-800 text-xs">{r.id}</p>
-                    <p className="text-[10px] text-slate-400">{r.class}</p>
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-600 max-w-[100px] truncate">{r.school}</td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">{r.class}</span>
+                  </td>
                   {[1, 2, 3].map(lvl => {
                     const ld = r[`l${lvl}`];
                     return (

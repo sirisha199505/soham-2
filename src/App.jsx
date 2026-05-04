@@ -17,8 +17,9 @@ import Dashboard      from './pages/dashboard/Dashboard';
 import QuizList       from './pages/quiz/QuizList';
 import QuizAttempt    from './pages/quiz/QuizAttempt';
 import QuizResult     from './pages/quiz/QuizResult';
-import StudentProfile from './pages/student/StudentProfile';
-import QuizHistory    from './pages/student/QuizHistory';
+import StudentProfile  from './pages/student/StudentProfile';
+import QuizHistory     from './pages/student/QuizHistory';
+import StudentContent  from './pages/student/StudentContent';
 import NotFound          from './pages/NotFound';
 import LevelContent      from './pages/level/LevelContent';
 import LevelQuiz         from './pages/level/LevelQuiz';
@@ -88,6 +89,7 @@ export default function App() {
                 <Route path="/quiz/:id/result"        element={<QuizResult />} />
 
                 {/* Student */}
+                <Route path="/content"      element={<StudentContent />} />
                 <Route path="/profile"      element={<StudentProfile />} />
                 <Route path="/quiz-history" element={<QuizHistory />} />
                 <Route path="/performance"  element={<QuizHistory />} />

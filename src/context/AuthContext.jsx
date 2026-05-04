@@ -40,19 +40,16 @@ export function AuthProvider({ children }) {
   const [completedV, setCompletedV] = useState(0);
 
   /* ── Register a new student ── */
-  const register = useCallback(async (name, rollNo, className, password) => {
+  const register = useCallback(async (schoolName, className, password) => {
     await new Promise(r => setTimeout(r, 700));
 
-    const uniqueId = generateUniqueId(name, rollNo, className);
     const students = getStudents();
 
-    if (students[uniqueId]) {
-      throw new Error(
-        `A student with this combination already exists. Your ID is: ${uniqueId}`
-      );
-    }
+    // Generate unique ID, retry on collision (extremely rare)
+    let uniqueId;
+    do { uniqueId = generateUniqueId(); } while (students[uniqueId]);
 
-    students[uniqueId] = { uniqueId, name, rollNo, className, password };
+    students[uniqueId] = { uniqueId, schoolName, className, password };
     saveStudents(students);
     return uniqueId;
   }, []);

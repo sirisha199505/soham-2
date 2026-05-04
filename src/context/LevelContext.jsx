@@ -116,15 +116,23 @@ export function LevelProvider({ children }) {
 
   const markLevelComplete = useCallback((userId, levelId, score) => {
     setProgress(prev => {
+      const existing    = prev[userId]?.[levelId];
+      // Always keep the highest score across all attempts so the Level Card
+      // shows the same value as QuizHistory's "Best Score" stat.
+      const prevBest    = existing?.score?.pct ?? -1;
+      const bestScore   = score.pct >= prevBest ? score : existing.score;
+      const now         = new Date().toISOString();
       const next = {
         ...prev,
         [userId]: {
           ...prev[userId],
           [levelId]: {
-            ...prev[userId]?.[levelId],
-            status: 'completed',
-            score,
-            completedAt: new Date().toISOString(),
+            ...existing,
+            status:          'completed',
+            score:           bestScore,          // best score ever
+            lastScore:       score,              // this attempt's score
+            completedAt:     existing?.completedAt || now, // first completion time
+            lastCompletedAt: now,                // most recent attempt time
           },
         },
       };

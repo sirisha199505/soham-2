@@ -7,7 +7,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { LEVELS } from '../../utils/levelData';
 import { formatDuration } from '../../utils/helpers';
 import { generateLevelQuiz, recordUsedQuestions, saveQuizAttempt } from '../../utils/quizGenerator';
-import { ensureQuestionBankSeeded, CATEGORY_META } from '../../utils/questionBank';
+import { ensureQuestionBankSeeded, CATEGORY_META, CATEGORIES } from '../../utils/questionBank';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 
@@ -203,13 +203,25 @@ export default function LevelQuiz() {
     // Record used questions
     recordUsedQuestions(user.uniqueId, questions.map(q => q.id));
 
-    // Save full attempt for review
+    // Strip base64 images before saving — prevents localStorage quota overflow
+    // which would silently drop subsequent attempts and break Quiz History.
+    const compactQ = (q) => ({
+      id:          q.id,
+      category:    q.category,
+      type:        q.type,
+      text:        q.text || '',
+      options:     q.options?.map(o => (typeof o === 'string' ? o : (o?.text || ''))),
+      correct:     q.correct,
+      pairs:       q.pairs?.map(p => ({ left: p.left || '', right: p.right || '' })),
+      explanation: q.explanation || '',
+    });
+
     saveQuizAttempt(user.uniqueId, {
-      levelId: id,
+      levelId:    id,
       levelTitle: level?.title || `Level ${id}`,
-      date: new Date().toISOString(),
-      questions: questions.map(q => ({ ...q })),
-      answers: { ...answers },
+      date:       new Date().toISOString(),
+      questions:  questions.map(compactQ),
+      answers:    { ...answers },
       score,
     });
 
@@ -289,7 +301,7 @@ export default function LevelQuiz() {
               <h2 className="text-2xl font-bold" style={{ fontFamily: 'Space Grotesk' }}>
                 {level.title} Complete!
               </h2>
-              <p className="text-white/70 text-sm mt-1">20 Questions · 4 Categories</p>
+              <p className="text-white/70 text-sm mt-1">{questions.length} Questions · {CATEGORIES.length} Categories</p>
             </div>
           </div>
 

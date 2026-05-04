@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Menu, Search, ChevronDown, LogOut, User } from 'lucide-react';
+import { Menu, Search, ChevronDown, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -100,7 +100,7 @@ export default function Navbar({ onMenuClick }) {
 
           {showProfile && (
             <div className="absolute right-0 top-[calc(100%+8px)] w-60 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-50">
-              {/* Profile header */}
+              {/* Profile header — all roles */}
               <div className="px-4 py-4 border-b border-slate-50"
                 style={{ background: `linear-gradient(135deg, ${roleBadge.bg}, transparent)` }}>
                 <div className="flex items-center gap-3">
@@ -139,17 +139,8 @@ export default function Navbar({ onMenuClick }) {
                 </div>
               </div>
 
-              {/* Menu items */}
+              {/* Sign Out */}
               <div className="p-2">
-                {[
-                  { icon: <User size={14} />, label: 'My Profile', action: () => { navigate('/profile'); setShowProfile(false); } },
-                ].map(item => (
-                  <button key={item.label} onClick={item.action}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-xl transition-colors font-medium">
-                    <span className="text-slate-400">{item.icon}</span> {item.label}
-                  </button>
-                ))}
-                <div className="my-1 h-px bg-slate-100" />
                 <button
                   onClick={() => { logout(); navigate('/login'); }}
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-red-500 hover:bg-red-50 rounded-xl transition-colors font-medium"

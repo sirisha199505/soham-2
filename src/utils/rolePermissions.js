@@ -51,6 +51,7 @@ export const getSidebarItems = (role) => {
 
   return [
     { label: 'Dashboard',    path: '/dashboard',    icon: 'LayoutDashboard' },
+    { label: 'Content',      path: '/content',      icon: 'BookOpen' },
     { label: 'Quiz History', path: '/quiz-history', icon: 'History' },
     { label: 'My Profile',   path: '/profile',      icon: 'User' },
   ];

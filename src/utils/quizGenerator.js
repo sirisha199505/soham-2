@@ -2,11 +2,14 @@
 // Generates 20 questions per level: 5 from each of 4 categories
 // Ensures no question repeats across Level 1, 2, 3 for the same student
 
-import { getCategoryQuestions, CATEGORIES } from './questionBank';
+import { getCategoryQuestions, CATEGORIES, DEFAULTS } from './questionBank';
 
 const USED_KEY = 'rqa_used_questions';
 const ATTEMPTS_KEY = 'rqa_quiz_attempts';
 const QUESTIONS_PER_CATEGORY = 5;
+
+// Single source of truth for quiz question count — equals CATEGORIES.length × QUESTIONS_PER_CATEGORY
+export const TOTAL_QUIZ_QUESTIONS = CATEGORIES.length * QUESTIONS_PER_CATEGORY;
 
 function shuffle(arr) {
   const a = [...arr];
@@ -56,23 +59,32 @@ function shuffleOptions(q) {
   };
 }
 
-// Generate 20 questions for a level: 5 per category, no repeats
+// Generate TOTAL_QUIZ_QUESTIONS for a level: QUESTIONS_PER_CATEGORY per category, no repeats.
+// Guarantees the full count by supplementing from built-in defaults when the active pool is small.
 export function generateLevelQuiz(studentId) {
   const usedIds = new Set(getUsedQuestionIds(studentId));
   const selectedQuestions = [];
 
   CATEGORIES.forEach(cat => {
-    const pool = getCategoryQuestions(cat);
-    const available = pool.filter(q => !usedIds.has(q.id));
+    const activePool = getCategoryQuestions(cat);          // admin-managed, active only
+    const available  = activePool.filter(q => !usedIds.has(q.id));
 
-    // If not enough fresh questions, fall back to all active (cycle resets per category)
-    const source = available.length >= QUESTIONS_PER_CATEGORY ? available : pool;
+    // Step 1: prefer unused active questions
+    // Step 2: fall back to all active (allows repeat within a reset cycle)
+    let source = available.length >= QUESTIONS_PER_CATEGORY ? available : activePool;
+
+    // Step 3: if still short, supplement with built-in defaults so count is always met
+    if (source.length < QUESTIONS_PER_CATEGORY) {
+      const existing = new Set(source.map(q => q.id));
+      const extra    = (DEFAULTS[cat] || []).filter(q => !existing.has(q.id));
+      source = [...source, ...extra];
+    }
+
     const picked = shuffle(source).slice(0, QUESTIONS_PER_CATEGORY);
-    // Shuffle options so each student sees different option order
     selectedQuestions.push(...picked.map(shuffleOptions));
   });
 
-  // Shuffle the combined 20 questions so order differs per student
+  // Shuffle combined questions so order differs per student
   return shuffle(selectedQuestions);
 }
 
@@ -85,8 +97,19 @@ export function saveQuizAttempt(studentId, attemptData) {
     all[studentId].unshift({ ...attemptData, id: `att_${Date.now()}` });
     // Keep max 50 attempts per student
     if (all[studentId].length > 50) all[studentId] = all[studentId].slice(0, 50);
-    localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(all));
-  } catch {}
+    try {
+      localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(all));
+    } catch (quotaErr) {
+      // Storage full: drop oldest attempt and retry once
+      if (all[studentId].length > 1) {
+        all[studentId] = all[studentId].slice(0, -1);
+        try { localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(all)); } catch {}
+      }
+      console.warn('Quiz attempt saved with reduced history due to storage limits.', quotaErr);
+    }
+  } catch (err) {
+    console.warn('Failed to save quiz attempt:', err);
+  }
 }
 
 export function getStudentAttempts(studentId) {

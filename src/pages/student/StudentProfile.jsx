@@ -24,8 +24,6 @@ export default function StudentProfile() {
     ? Math.max(...history.map(q => q.result?.pct ?? 0))
     : null;
 
-  const remaining = mockQuizzes.length - completedQuizzes.size;
-
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>My Profile</h1>
@@ -57,11 +55,10 @@ export default function StudentProfile() {
         </div>
 
         {/* Stats row */}
-        <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-slate-100">
+        <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-100 max-w-xs mx-auto w-full">
           {[
-            { value: completedQuizzes.size, label: 'Completed' },
+            { value: completedQuizzes.size,                      label: 'Completed' },
             { value: avgScore !== null ? `${avgScore}%` : '—',  label: 'Avg Score'  },
-            { value: remaining,             label: 'Remaining'  },
           ].map(s => (
             <div key={s.label} className="text-center">
               <p className="font-bold text-slate-800 text-xl" style={{ fontFamily: 'Space Grotesk' }}>{s.value}</p>

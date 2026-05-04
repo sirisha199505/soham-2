@@ -21,10 +21,8 @@ function loadAllData() {
     const p = progress[s.uniqueId] || {};
     return {
       uniqueId: s.uniqueId,
-      name: s.name || '—',
-      rollNo: s.rollNo || '—',
+      schoolName: s.schoolName || s.name || '—',
       className: s.className || '—',
-      school: s.school || '—',
       disabled: disabled.includes(s.uniqueId),
       levels: {
         1: p[1] || null,
@@ -89,14 +87,13 @@ function StudentModal({ student, onClose }) {
             </div>
             <div>
               <p className="font-mono font-bold text-slate-800 text-lg tracking-widest">{student.uniqueId}</p>
-              <p className="text-xs text-slate-500">{student.name} · Class {student.className}</p>
+              <p className="text-xs text-slate-500">{student.schoolName}</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: 'Name',    value: student.name },
-              { label: 'Roll No', value: student.rollNo },
+              { label: 'School',  value: student.schoolName },
               { label: 'Class',   value: student.className },
               { label: 'Status',  value: student.disabled ? 'Disabled' : 'Active' },
             ].map(f => (
@@ -205,7 +202,7 @@ export default function StudentManagement() {
   const filtered = useMemo(() => {
     return data.filter(s => {
       const matchSearch = !search || s.uniqueId.toLowerCase().includes(search.toLowerCase()) ||
-        s.school.toLowerCase().includes(search.toLowerCase()) ||
+        s.schoolName.toLowerCase().includes(search.toLowerCase()) ||
         s.className.toLowerCase().includes(search.toLowerCase());
       const matchFilter = filter === 'all' ? true
         : filter === 'l1' ? s.levels[1]?.status === 'completed'
@@ -302,7 +299,7 @@ export default function StudentManagement() {
         <div className="relative flex-1 max-w-xs">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
-            placeholder="Search by ID, name, class…"
+            placeholder="Search by ID or school…"
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
             className="w-full pl-9 pr-4 py-2.5 text-sm bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
@@ -376,7 +373,7 @@ export default function StudentManagement() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                {['#', 'Student ID', 'Name / Class', 'Level 1', 'Level 2', 'Level 3', 'Status', 'Actions'].map(h => (
+                {['#', 'Student ID', 'School', 'Class', 'Level 1', 'Level 2', 'Level 3', 'Status', 'Actions'].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -394,8 +391,10 @@ export default function StudentManagement() {
                     </div>
                   </td>
                   <td className="px-4 py-3.5">
-                    <p className="text-xs font-medium text-slate-700 truncate max-w-[120px]">{s.name}</p>
-                    <p className="text-[10px] text-slate-400">Class {s.className}</p>
+                    <p className="text-xs font-medium text-slate-700 truncate max-w-[140px]">{s.schoolName}</p>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">{s.className}</span>
                   </td>
                   {[1, 2, 3].map(lvl => (
                     <td key={lvl} className="px-4 py-3.5">

@@ -583,7 +583,7 @@ export const DEFAULT_MATHEMATICS = [
 
 // ─── Utilities ─────────────────────────────────────────────────────────────
 
-const DEFAULTS = {
+export const DEFAULTS = {
   robotics:    DEFAULT_ROBOTICS,
   chemistry:   DEFAULT_CHEMISTRY,
   physics:     DEFAULT_PHYSICS,

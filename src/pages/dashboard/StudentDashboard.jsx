@@ -9,6 +9,7 @@ import { useLevel } from '../../context/LevelContext';
 import { useTheme } from '../../context/ThemeContext';
 import { formatUniqueId } from '../../utils/uniqueId';
 import { LEVELS } from '../../utils/levelData';
+import { TOTAL_QUIZ_QUESTIONS } from '../../utils/quizGenerator';
 
 function getLevelTimeLimit(levelId) {
   try {
@@ -77,10 +78,12 @@ function LevelCard({ level, status, levelData }) {
   const isCompleted = status === 'completed';
   const isUnlocked  = status === 'unlocked';
 
-  const timeLimit  = getLevelTimeLimit(level.id);
-  const score      = levelData?.score;
-  const submittedAt = levelData?.completedAt
-    ? new Date(levelData.completedAt).toLocaleString('en-IN', {
+  const timeLimit   = getLevelTimeLimit(level.id);
+  const score       = levelData?.score;       // best score
+  const lastScore   = levelData?.lastScore;   // most recent attempt
+
+  const lastAttemptAt = levelData?.lastCompletedAt
+    ? new Date(levelData.lastCompletedAt).toLocaleString('en-IN', {
         day: '2-digit', month: 'short', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
       })
@@ -91,6 +94,9 @@ function LevelCard({ level, status, levelData }) {
     scorePct >= 75 ? { text: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' } :
     scorePct >= 50 ? { text: '#d97706', bg: '#fffbeb', border: '#fde68a' } :
                      { text: '#dc2626', bg: '#fef2f2', border: '#fecaca' };
+
+  // Show "Last attempt" chip only when it differs from best
+  const showLastAttempt = lastScore && lastScore.pct !== scorePct;
 
   /* derive header gradient and icon */
   const headerGradient =
@@ -164,7 +170,7 @@ function LevelCard({ level, status, levelData }) {
         {/* Meta pills */}
         <div className="grid grid-cols-2 gap-2">
           {[
-            { icon: <BookOpen size={13} />, label: 'Questions', value: `${level.totalQuestions} Qs` },
+            { icon: <BookOpen size={13} />, label: 'Questions', value: `${TOTAL_QUIZ_QUESTIONS} Qs` },
             { icon: <Clock    size={13} />, label: 'Time Limit', value: `${timeLimit} Min` },
           ].map(m => (
             <div key={m.label} className="bg-slate-50 rounded-xl px-3 py-2 flex items-center gap-2">
@@ -179,17 +185,45 @@ function LevelCard({ level, status, levelData }) {
 
         {/* Score (if completed) */}
         {isCompleted && score && (
-          <div className="rounded-xl p-3 flex items-center gap-3"
-            style={{ background: scoreColor.bg, border: `1px solid ${scoreColor.border}` }}>
-            <Trophy size={22} style={{ color: scoreColor.text }} className="shrink-0" />
-            <div>
-              <p className="text-lg font-bold leading-none" style={{ color: scoreColor.text, fontFamily: 'Space Grotesk' }}>
-                {scorePct}%
-              </p>
-              <p className="text-[10px] mt-0.5" style={{ color: scoreColor.text }}>
-                {score.correct}/{score.total} correct · {submittedAt}
-              </p>
+          <div className="space-y-1.5">
+            {/* Best score row */}
+            <div className="rounded-xl p-3 flex items-center gap-3"
+              style={{ background: scoreColor.bg, border: `1px solid ${scoreColor.border}` }}>
+              <Trophy size={20} style={{ color: scoreColor.text }} className="shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-lg font-bold leading-none" style={{ color: scoreColor.text, fontFamily: 'Space Grotesk' }}>
+                    {scorePct}%
+                  </p>
+                  <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full"
+                    style={{ background: scoreColor.border, color: scoreColor.text }}>
+                    Best
+                  </span>
+                </div>
+                <p className="text-[10px] mt-0.5" style={{ color: scoreColor.text }}>
+                  {score.correct}/{score.total} correct
+                </p>
+              </div>
             </div>
+
+            {/* Last attempt chip — shown only when it differs from best */}
+            {showLastAttempt && (
+              <div className="rounded-xl px-3 py-2 flex items-center justify-between"
+                style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                <span className="text-[10px] text-slate-400 font-medium">Last attempt</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-600">{lastScore.pct}%</span>
+                  <span className="text-[10px] text-slate-400">
+                    {lastScore.correct}/{lastScore.total} · {lastAttemptAt}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Date for single-attempt students */}
+            {!showLastAttempt && lastAttemptAt && (
+              <p className="text-[10px] text-slate-400 text-right">{lastAttemptAt}</p>
+            )}
           </div>
         )}
 
@@ -254,7 +288,7 @@ function LevelCard({ level, status, levelData }) {
 
         {isUnlocked && (
           <Link
-            to={`/level/${level.id}/content`}
+            to={`/level/${level.id}/quiz`}
             className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
             style={{
               background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`,

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { School, Hash, BookOpen, Lock, Eye, EyeOff, AlertCircle, Copy, CheckCircle, ArrowRight } from 'lucide-react';
+import { School, Lock, Eye, EyeOff, AlertCircle, Copy, CheckCircle, ArrowRight, BookOpen } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { formatUniqueId } from '../../utils/uniqueId';
@@ -10,9 +10,7 @@ export default function Register() {
   const { colors }   = useTheme();
   const navigate     = useNavigate();
 
-  const [form, setForm] = useState({
-    schoolName: '', rollNo: '', className: '', password: '', confirm: '',
-  });
+  const [form, setForm] = useState({ schoolName: '', className: 'Class 10', password: '', confirm: '' });
   const [showPass, setShowPass]       = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading]         = useState(false);
@@ -35,14 +33,9 @@ export default function Register() {
       return;
     }
 
-    if (!/^\d{1,2}[A-Za-z]+$/.test(form.className.trim())) {
-      setError('Class must be in format like 9A or 10B (no hyphens).');
-      return;
-    }
-
     setLoading(true);
     try {
-      const uid = await register(form.schoolName, form.rollNo, form.className, form.password);
+      const uid = await register(form.schoolName, form.className, form.password);
       setGeneratedId(uid);
     } catch (err) {
       setError(err.message);
@@ -175,35 +168,22 @@ export default function Register() {
           </div>
         </div>
 
-        {/* Roll Number */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-            Roll Number
-          </label>
-          <div className="relative">
-            <Hash size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              type="text" placeholder="e.g. 2024-ROL-42"
-              value={form.rollNo} onChange={set('rollNo')} required
-              className={`${inputCls} pl-11 pr-4`}
-              style={{ ...inputStyle, ...(form.rollNo ? inputFocusStyle : {}) }}
-            />
-          </div>
-        </div>
-
         {/* Class */}
         <div className="space-y-1.5">
           <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-            Class / Section
+            Class
           </label>
           <div className="relative">
-            <BookOpen size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              type="text" placeholder="e.g. 9A or 10B"
+            <BookOpen size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+            <select
               value={form.className} onChange={set('className')} required
-              className={`${inputCls} pl-11 pr-4`}
+              className={`${inputCls} pl-11 pr-4 appearance-none cursor-pointer`}
               style={{ ...inputStyle, ...(form.className ? inputFocusStyle : {}) }}
-            />
+            >
+              {['Class 6','Class 7','Class 8','Class 9','Class 10','Class 11','Class 12'].map(c => (
+                <option key={c} value={c} style={{ background: '#1e293b', color: '#fff' }}>{c}</option>
+              ))}
+            </select>
           </div>
         </div>
 

@@ -22,6 +22,9 @@ function ScoreBadge({ pct }) {
   );
 }
 
+// Handles both old object options {text,imageUrl} and new string options
+const optText = (o) => (typeof o === 'string' ? o : (o?.text || ''));
+
 // ─── Single question review ───────────────────────────────────────────────
 function QuestionReview({ q, answer, index }) {
   const catMeta  = CATEGORY_META[q.category] || { label: q.category, color: '#64748b', bg: '#f8fafc' };
@@ -79,7 +82,7 @@ function QuestionReview({ q, answer, index }) {
                   <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
                     isActuallyCorrect ? 'bg-green-500 text-white' : isSelected ? 'bg-red-500 text-white' : 'bg-slate-200 text-slate-500'
                   }`}>{String.fromCharCode(65 + i)}</span>
-                  <span className="flex-1">{opt}</span>
+                  <span className="flex-1">{optText(opt)}</span>
                   {isSelected && !isActuallyCorrect && <span className="text-[10px] text-red-400 italic">(your answer)</span>}
                   {isActuallyCorrect && <CheckCircle size={12} className="text-green-500 shrink-0"/>}
                   {isSelected && !isActuallyCorrect && <XCircle size={12} className="text-red-500 shrink-0"/>}

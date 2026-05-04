@@ -1,22 +1,12 @@
 /**
- * Generates a deterministic 8-digit unique student ID
- * based on name, roll number, and class name.
- * Same inputs always produce the same ID.
+ * Generates a unique 8-digit student ID using timestamp + random.
+ * Collision probability is negligible; AuthContext checks and retries.
  */
-export function generateUniqueId(name, rollNo, className) {
-  const str = [name, rollNo, className]
-    .map(s => s.trim().toLowerCase())
-    .join('|');
-
-  // djb2 hash → positive 8-digit number
-  let hash = 5381;
-  for (let i = 0; i < str.length; i++) {
-    hash = Math.imul(hash, 33) ^ str.charCodeAt(i);
-  }
-
-  // Force positive and clamp to 8 digits
-  const positive = (hash >>> 0) % 100000000;
-  return String(positive).padStart(8, '0');
+export function generateUniqueId() {
+  const ts   = Date.now() % 10000;
+  const rand = Math.floor(Math.random() * 10000);
+  const n    = ts * 10000 + rand;
+  return String(n).padStart(8, '0');
 }
 
 /**
