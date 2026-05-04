@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Clock, ChevronLeft, ChevronRight, CheckCircle, AlertTriangle, Trophy, ArrowLeft, Shuffle } from 'lucide-react';
+import { Clock, ChevronLeft, ChevronRight, CheckCircle, Trophy, ArrowLeft, Shuffle, LayoutGrid, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -152,6 +152,7 @@ export default function LevelQuiz() {
   const [showSubmit, setShowSubmit] = useState(false);
   const [result,     setResult]     = useState(null);
   const [saved,      setSaved]      = useState(false);
+  const [showMobilePanel, setShowMobilePanel] = useState(false);
 
   const startRef = useRef(new Date());
 
@@ -334,13 +335,6 @@ export default function LevelQuiz() {
               </div>
             )}
 
-            {!passed && (
-              <div className="rounded-xl p-3.5 flex items-center gap-3 bg-amber-50 border border-amber-100">
-                <AlertTriangle size={18} className="text-amber-500 shrink-0" />
-                <p className="text-sm font-semibold text-amber-700">Score 50% or above to unlock the next level.</p>
-              </div>
-            )}
-
             <div className="flex gap-3">
               <button onClick={() => navigate('/quiz-history')}
                 className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-all">
@@ -418,7 +412,7 @@ export default function LevelQuiz() {
       <div className="flex flex-1 overflow-hidden">
 
         {/* Question area */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6">
           <div className="max-w-2xl mx-auto space-y-5">
 
             {/* Question card */}
@@ -587,6 +581,89 @@ export default function LevelQuiz() {
           </div>
         </div>
       </div>
+
+      {/* Mobile sticky bottom bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-100 shadow-lg px-4 py-2.5 flex items-center gap-3">
+        <div className="flex-1">
+          <p className="text-xs text-slate-400 leading-none">Answered</p>
+          <p className="text-sm font-bold text-slate-800">{answered}/{questions.length}</p>
+        </div>
+        <button
+          onClick={() => setShowMobilePanel(true)}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold">
+          <LayoutGrid size={14} /> Questions
+        </button>
+        <button
+          onClick={() => setShowSubmit(true)}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-xs font-bold"
+          style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}>
+          Submit
+        </button>
+      </div>
+
+      {/* Mobile questions slide-up panel */}
+      {showMobilePanel && (
+        <div className="md:hidden fixed inset-0 z-40 flex flex-col justify-end">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowMobilePanel(false)} />
+          <div className="relative bg-white rounded-t-3xl p-5 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-bold text-slate-800">Questions</p>
+              <button onClick={() => setShowMobilePanel(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
+                <X size={16} className="text-slate-500" />
+              </button>
+            </div>
+
+            <div className="flex rounded-xl overflow-hidden border border-slate-200 mb-4">
+              {[{ key:'all', label:'All' }, { key:'answered', label:'Done' }, { key:'unanswered', label:'Pending' }].map(tab => (
+                <button key={tab.key} onClick={() => setPanelFilter(tab.key)}
+                  className="flex-1 py-2 text-xs font-bold transition-all"
+                  style={panelFilter === tab.key
+                    ? { background: level.color.from, color: '#fff' }
+                    : { background: '#f8fafc', color: '#64748b' }}>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-5 gap-2 mb-5">
+              {questions.map((_, i) => {
+                const st      = getQStatus(i);
+                const visible = isVisible(i);
+                return (
+                  <button key={i}
+                    onClick={() => { setCurrent(i); setShowMobilePanel(false); }}
+                    className={`aspect-square rounded-xl text-sm font-bold transition-all ${
+                      !visible          ? 'opacity-20' :
+                      st === 'answered' ? 'text-white' :
+                      st === 'current'  ? 'text-white ring-2' :
+                      'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                    }`}
+                    style={st === 'answered' ? { background: level.color.from }
+                         : st === 'current'  ? { background: level.color.to }   : {}}>
+                    {i + 1}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-3 pt-4 border-t border-slate-100">
+              <div className="text-center flex-1">
+                <p className="text-2xl font-bold text-slate-800">
+                  {answered}<span className="text-base text-slate-400">/{questions.length}</span>
+                </p>
+                <p className="text-xs text-slate-400">Answered</p>
+              </div>
+              <button
+                onClick={() => { setShowMobilePanel(false); setShowSubmit(true); }}
+                className="flex-[2] text-white text-sm font-semibold py-3 rounded-xl transition-all"
+                style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}>
+                Submit Quiz
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Submit modal */}
       <Modal isOpen={showSubmit} onClose={() => setShowSubmit(false)} title="Submit Quiz?"

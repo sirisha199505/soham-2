@@ -438,10 +438,19 @@ export default function QuizAttempt() {
               <p className="text-xl font-bold text-green-700">{answered}</p>
               <p className="text-xs text-green-600">Answered</p>
             </div>
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-xl font-bold text-slate-600">{questions.length - answered}</p>
-              <p className="text-xs text-slate-500">Not Answered</p>
-            </div>
+            <button
+              className="bg-slate-50 rounded-xl p-3 text-center hover:bg-orange-50 hover:ring-2 hover:ring-orange-300 transition-all group"
+              onClick={() => {
+                const firstUnanswered = questions.findIndex(q => answers[q.id] === undefined);
+                if (firstUnanswered !== -1) setCurrent(firstUnanswered);
+                setPanelFilter('unanswered');
+                setShowSubmit(false);
+              }}
+              title="Click to jump to first unanswered question"
+            >
+              <p className="text-xl font-bold text-slate-600 group-hover:text-orange-600">{questions.length - answered}</p>
+              <p className="text-xs text-slate-500 group-hover:text-orange-500">Not Answered ↗</p>
+            </button>
           </div>
         </div>
       </Modal>
