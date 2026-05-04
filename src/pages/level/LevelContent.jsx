@@ -150,11 +150,20 @@ export default function LevelContent() {
                   <p className="text-xs text-slate-400">PDF document</p>
                 </div>
               </div>
-              <a href={current.pdfData} target="_blank" rel="noopener noreferrer"
-                onClick={() => setPdfOpened(true)}
-                className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
-                <ExternalLink size={12} /> Open in New Tab
-              </a>
+              <div className="flex items-center gap-2">
+                <a href={current.pdfData} target="_blank" rel="noopener noreferrer"
+                  onClick={() => setPdfOpened(true)}
+                  className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+                  <ExternalLink size={12} /> Open
+                </a>
+                <a
+                  href={current.pdfData}
+                  download={current.pdfName || 'study-material.pdf'}
+                  className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-indigo-200 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors"
+                >
+                  <Download size={12} /> Download
+                </a>
+              </div>
             </div>
             <embed
               src={current.pdfData}
