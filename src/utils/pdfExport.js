@@ -2,105 +2,46 @@ import { jsPDF } from 'jspdf';
 
 export function downloadLevelContentAsPDF(pages, levelTitle) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const margin = 20;
-  const pageW = doc.internal.pageSize.getWidth();
-  const maxW = pageW - margin * 2;
+  const M = 20;
+  const W = doc.internal.pageSize.getWidth() - M * 2;
+  let y = M;
 
-  // Cover page
-  doc.setFillColor(99, 102, 241); // indigo
-  doc.rect(0, 0, pageW, 60, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(22);
-  doc.setTextColor(255, 255, 255);
-  doc.text(levelTitle, margin, 30);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
-  doc.setTextColor(199, 210, 254);
-  doc.text('RoboQuiz · Study Material', margin, 42);
-  doc.setFontSize(9);
-  doc.text(`Generated on ${new Date().toLocaleDateString()}`, margin, 52);
+  const addPage = () => { doc.addPage(); y = M; };
+  const check   = (h = 10) => { if (y + h > 272) addPage(); };
 
-  // Table of contents
-  let y = 80;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.setTextColor(30, 41, 59);
-  doc.text('Contents', margin, y);
-  y += 6;
-  doc.setDrawColor(226, 232, 240);
-  doc.line(margin, y, pageW - margin, y);
-  y += 8;
+  // Title
+  doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(30, 41, 59);
+  doc.text(levelTitle, M, y);  y += 8;
+  doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(148, 163, 184);
+  doc.text(`RoboQuiz · Study Material · ${new Date().toLocaleDateString()}`, M, y);  y += 10;
+  doc.setDrawColor(226, 232, 240).line(M, y, M + W, y);  y += 10;
 
-  pages.forEach((page, i) => {
-    if (page.type === 'pdf') return;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(71, 85, 105);
-    doc.text(`${i + 1}.  ${page.title}`, margin + 2, y);
-    y += 6;
-  });
+  pages.filter(p => p.type !== 'pdf').forEach((page, pi) => {
+    if (pi > 0) addPage();
 
-  // Pages content
-  pages.forEach((page, pi) => {
-    if (page.type === 'pdf') return;
-
-    doc.addPage();
-    y = margin;
-
-    // Page title banner
-    doc.setFillColor(238, 242, 255);
-    doc.roundedRect(margin - 4, y - 6, maxW + 8, 22, 3, 3, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(15);
-    doc.setTextColor(67, 56, 202);
-    doc.text(page.title, margin, y + 8);
-    y += 24;
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(148, 163, 184);
-    doc.text(`${levelTitle} · Topic ${pi + 1} of ${pages.filter(p => p.type !== 'pdf').length}`, margin, y);
-    y += 10;
+    // Topic heading
+    doc.setFont('helvetica', 'bold').setFontSize(14).setTextColor(67, 56, 202);
+    doc.text(`${pi + 1}. ${page.title}`, M, y);  y += 10;
 
     (page.sections || []).forEach((sec, si) => {
-      if (y > 258) { doc.addPage(); y = margin; }
+      check(14);
+      doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(30, 41, 59);
+      doc.text(`${si + 1}. ${sec.heading}`, M, y);  y += 7;
 
-      // Section heading
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(12);
-      doc.setTextColor(30, 41, 59);
-      doc.text(`${si + 1}.  ${sec.heading}`, margin, y);
-      y += 3;
-      doc.setDrawColor(199, 210, 254);
-      doc.line(margin, y, margin + maxW * 0.4, y);
-      y += 7;
-
-      // Body text
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.setTextColor(71, 85, 105);
-      const plainBody = (sec.body || '').replace(/\*\*([^*]+)\*\*/g, '$1');
-      const lines = doc.splitTextToSize(plainBody, maxW);
-      lines.forEach(line => {
-        if (y > 272) { doc.addPage(); y = margin; }
-        doc.text(line, margin, y);
-        y += 5.5;
-      });
-      y += 8;
+      doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(71, 85, 105);
+      const plain = (sec.body || '').replace(/\*\*([^*]+)\*\*/g, '$1');
+      doc.splitTextToSize(plain, W).forEach(line => { check(); doc.text(line, M, y); y += 5.5; });
+      y += 5;
     });
   });
 
-  // Footer on all pages
-  const count = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= count; i++) {
-    doc.setPage(i);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(148, 163, 184);
-    doc.text('RoboQuiz · Study Material', margin, 289);
-    doc.text(`${i} / ${count}`, pageW - margin, 289, { align: 'right' });
+  // Footer
+  const total = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= total; i++) {
+    doc.setPage(i).setFont('helvetica', 'normal').setFontSize(8).setTextColor(148, 163, 184);
+    doc.text(`RoboQuiz · ${levelTitle}`, M, 289);
+    doc.text(`${i} / ${total}`, M + W, 289, { align: 'right' });
   }
 
-  const fileName = `${levelTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_content.pdf`;
-  doc.save(fileName);
+  doc.save(`${levelTitle.replace(/\s+/g, '_').toLowerCase()}_content.pdf`);
 }
