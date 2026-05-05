@@ -10,7 +10,7 @@ export default function Register() {
   const { colors }   = useTheme();
   const navigate     = useNavigate();
 
-  const [form, setForm] = useState({ schoolName: '', className: 'Class 10', password: '', confirm: '' });
+  const [form, setForm] = useState({ schoolName: '', className: '', password: '', confirm: '' });
   const [showPass, setShowPass]       = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading]         = useState(false);
@@ -180,6 +180,7 @@ export default function Register() {
               className={`${inputCls} pl-11 pr-4 appearance-none cursor-pointer`}
               style={{ ...inputStyle, ...(form.className ? inputFocusStyle : {}) }}
             >
+              <option value="" disabled style={{ background: '#1e293b', color: '#64748b' }}>Select your class</option>
               {['Class 6','Class 7','Class 8','Class 9','Class 10','Class 11','Class 12'].map(c => (
                 <option key={c} value={c} style={{ background: '#1e293b', color: '#fff' }}>{c}</option>
               ))}
