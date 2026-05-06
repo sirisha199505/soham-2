@@ -35,6 +35,19 @@ export default function LevelContent() {
   const [read,      setRead]      = useState(new Set());
   const [pdfOpened, setPdfOpened] = useState(false);
 
+  const openPdf = (dataUrl) => {
+    try {
+      const arr  = dataUrl.split(',');
+      const mime = arr[0].match(/:(.*?);/)[1];
+      const bstr = atob(arr[1]);
+      const u8   = new Uint8Array(bstr.length);
+      for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([u8], { type: mime }));
+      window.open(url, '_blank');
+      setPdfOpened(true);
+    } catch { window.open(dataUrl, '_blank'); }
+  };
+
   const current = pages[pageIndex];
   const isLast  = pageIndex === total - 1;
   const allRead = read.size === total;
@@ -151,11 +164,11 @@ export default function LevelContent() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <a href={current.pdfData} target="_blank" rel="noopener noreferrer"
-                  onClick={() => setPdfOpened(true)}
+                <button
+                  onClick={() => openPdf(current.pdfData)}
                   className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
                   <ExternalLink size={12} /> Open
-                </a>
+                </button>
                 <a
                   href={current.pdfData}
                   download={current.pdfName || 'study-material.pdf'}

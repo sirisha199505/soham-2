@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Menu, Search, ChevronDown, LogOut } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Menu, Search, ChevronDown, LogOut, HelpCircle } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { ROLES, ROLE_LABELS } from '../../utils/constants';
@@ -20,6 +20,8 @@ export default function Navbar({ onMenuClick }) {
   const { colors } = useTheme();
   const navigate = useNavigate();
   const [showProfile, setShowProfile] = useState(false);
+
+  const handleLogout = () => { logout(); navigate('/login'); };
 
   const roleBadge = ROLE_BADGE_STYLE[user?.role] || ROLE_BADGE_STYLE.student;
 
@@ -139,15 +141,25 @@ export default function Navbar({ onMenuClick }) {
                 </div>
               </div>
 
-              {/* Sign Out */}
-              <div className="p-2">
-                <button
-                  onClick={() => { logout(); navigate('/login'); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-red-500 hover:bg-red-50 rounded-xl transition-colors font-medium"
-                >
-                  <LogOut size={14} /> Sign Out
-                </button>
-              </div>
+            {/* Dropdown actions */}
+            <div className="p-2 space-y-0.5">
+              <Link
+                to="/help"
+                onClick={() => setShowProfile(false)}
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-slate-50 text-slate-600 hover:text-slate-800 transition-colors w-full text-sm font-medium"
+              >
+                <HelpCircle size={15} className="text-slate-400" />
+                Help &amp; Support
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-red-50 text-slate-600 hover:text-red-600 transition-colors w-full text-sm font-medium"
+              >
+                <LogOut size={15} className="text-slate-400" />
+                Sign Out
+              </button>
+            </div>
+
             </div>
           )}
         </div>

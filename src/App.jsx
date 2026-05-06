@@ -20,6 +20,7 @@ import QuizResult     from './pages/quiz/QuizResult';
 import StudentProfile  from './pages/student/StudentProfile';
 import QuizHistory     from './pages/student/QuizHistory';
 import StudentContent  from './pages/student/StudentContent';
+import HelpSupport     from './pages/student/HelpSupport';
 import NotFound          from './pages/NotFound';
 import LevelContent      from './pages/level/LevelContent';
 import LevelQuiz         from './pages/level/LevelQuiz';
@@ -93,6 +94,7 @@ export default function App() {
                 <Route path="/profile"      element={<StudentProfile />} />
                 <Route path="/quiz-history" element={<QuizHistory />} />
                 <Route path="/performance"  element={<QuizHistory />} />
+                <Route path="/help"         element={<HelpSupport />} />
 
                 {/* Centralized Admin routes */}
                 <Route path="/admin/students"      element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><StudentManagement /></ProtectedRoute>} />

@@ -1,9 +1,10 @@
-import { Hash, CheckCircle, BookOpen, Target, Trophy, Clock } from 'lucide-react';
+import { Hash, CheckCircle, BookOpen, Trophy } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { useTheme } from '../../context/ThemeContext';
 import { formatUniqueId } from '../../utils/uniqueId';
 import { LEVELS } from '../../utils/levelData';
+import { getPerformanceLabel } from '../../utils/helpers';
 import Card, { CardHeader } from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 
@@ -31,10 +32,10 @@ export default function StudentProfile() {
     ? Math.max(...levelResults.map(l => l.data.score.pct ?? 0))
     : null;
 
-  const scoreColor = (pct) =>
-    pct >= 75 ? { bg: '#f0fdf4', color: '#16a34a' } :
-    pct >= 50 ? { bg: '#fffbeb', color: '#d97706' } :
-               { bg: '#fef2f2', color: '#dc2626' };
+  const scoreColor = (pct) => {
+    const p = getPerformanceLabel(pct);
+    return { bg: p.bg, color: p.color, border: p.border, label: `${p.emoji} ${p.label}` };
+  };
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6">
@@ -109,7 +110,10 @@ export default function StudentProfile() {
                     <p className="text-xs text-slate-400">{l.subtitle}{completedAt ? ` · ${completedAt}` : ''}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-sm font-bold px-3 py-1 rounded-xl" style={{ background: sc.bg, color: sc.color }}>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-lg" style={{ background: sc.border, color: sc.color }}>
+                      {sc.label}
+                    </span>
+                    <span className="text-sm font-bold px-2.5 py-1 rounded-xl" style={{ background: sc.bg, color: sc.color }}>
                       {pct}%
                     </span>
                     <CheckCircle size={15} className="text-green-500" />

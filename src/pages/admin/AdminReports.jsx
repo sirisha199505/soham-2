@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   BarChart2, Download, TrendingUp, Users,
   CheckCircle, Trophy, RefreshCw,
@@ -7,36 +7,40 @@ import {
   BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
+import { api } from '../../utils/api';
+
+const EMPTY_DATA = {
+  l1: { attempts: 0, passed: 0, failed: 0, avg: 0, passRate: 0 },
+  l2: { attempts: 0, passed: 0, failed: 0, avg: 0, passRate: 0 },
+  l3: { attempts: 0, passed: 0, failed: 0, avg: 0, passRate: 0 },
+  total: 0,
+  studentRows: [],
+};
 
 /* ── Data helpers ── */
-function loadReportData() {
-  const students = JSON.parse(localStorage.getItem('rqa_students') || '{}');
-  const progress = JSON.parse(localStorage.getItem('rqa_level_progress') || '{}');
+async function fetchReportData() {
+  const students = await api.getStudents();
 
   const levelStats = { 1: [], 2: [], 3: [] };
   const studentRows = [];
 
-  Object.entries(progress).forEach(([userId, userProg]) => {
-    const s = students[userId] || {};
-    const row = {
-      id: userId,
-      school: s.schoolName || s.name || '—',
-      class: s.className || '—',
-      l1: userProg[1] || null,
-      l2: userProg[2] || null,
-      l3: userProg[3] || null,
-    };
-    studentRows.push(row);
-
+  students.forEach(s => {
+    const levels = s.levels || {};
+    studentRows.push({
+      id:     s.uniqueId,
+      school: s.schoolName || '—',
+      class:  s.className  || '—',
+      l1: levels[1] || null,
+      l2: levels[2] || null,
+      l3: levels[3] || null,
+    });
     [1, 2, 3].forEach(lvl => {
-      if (userProg[lvl]?.status === 'completed') {
-        const pct = userProg[lvl]?.score?.pct ?? 0;
-        levelStats[lvl].push(pct);
+      if (levels[lvl]?.status === 'completed') {
+        levelStats[lvl].push(levels[lvl]?.score?.pct ?? 0);
       }
     });
   });
 
-  // Compute stats per level
   const computeLevel = (scores) => {
     if (!scores.length) return { attempts: 0, passed: 0, failed: 0, avg: 0, passRate: 0 };
     const passed = scores.filter(s => s >= 50).length;
@@ -48,7 +52,7 @@ function loadReportData() {
     l1: computeLevel(levelStats[1]),
     l2: computeLevel(levelStats[2]),
     l3: computeLevel(levelStats[3]),
-    total: Object.keys(students).length,
+    total: students.length,
     studentRows,
   };
 }
@@ -86,13 +90,21 @@ function StatTile({ label, value, icon, color, sub }) {
 
 /* ── MAIN ── */
 export default function AdminReports() {
-  const [data, setData] = useState(loadReportData);
+  const [data,    setData]    = useState(EMPTY_DATA);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState('all');
   const [page, setPage] = useState(1);
   const PER_PAGE = 8;
 
-  const refresh = () => setData(loadReportData());
+  const loadData = () => {
+    setLoading(true);
+    fetchReportData().then(setData).catch(() => {}).finally(() => setLoading(false));
+  };
+
+  useEffect(() => { loadData(); }, []);
+
+  const refresh = loadData;
 
   const levelChartData = [
     { level: 'Level 1', attempts: data.l1.attempts, passed: data.l1.passed, failed: data.l1.failed, avg: data.l1.avg },
@@ -155,8 +167,8 @@ export default function AdminReports() {
           <p className="text-sm text-slate-400 mt-0.5">Student performance and exam completion data</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={refresh} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
-            <RefreshCw size={14} />
+          <button onClick={refresh} disabled={loading} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
           <button onClick={handleExportSummary} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
             <Download size={14} /> Summary CSV

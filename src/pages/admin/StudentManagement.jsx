@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Users, Search, RefreshCw, CheckCircle,
   ChevronDown, Eye, Unlock, RotateCcw, UserX, UserCheck,
   Hash, X, AlertTriangle, Info, Zap,
 } from 'lucide-react';
 import { useLevel } from '../../context/LevelContext';
+import { api } from '../../utils/api';
 
 const LEVEL_COLORS = { 1: '#3BC0EF', 2: '#8B5CF6', 3: '#10B981' };
 const ADMIN_OVERRIDES_KEY = 'rqa_admin_overrides';
@@ -184,7 +185,7 @@ function ActionsMenu({ student, onAction }) {
 /* ── MAIN ── */
 export default function StudentManagement() {
   const { setStudentOverride } = useLevel();
-  const [data, setData] = useState(loadAllData);
+  const [data, setData] = useState([]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [page, setPage] = useState(1);
@@ -197,7 +198,22 @@ export default function StudentManagement() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const refresh = () => setData(loadAllData());
+  const fetchStudents = () => {
+    api.getStudents().then(students => {
+      setData(students.map(s => ({
+        uniqueId:   s.uniqueId,
+        schoolName: s.schoolName || '—',
+        className:  s.className  || '—',
+        disabled:   false,
+        levels:     { 1: null, 2: null, 3: null },
+        overrides:  [],
+      })));
+    }).catch(() => {});
+  };
+
+  useEffect(() => { fetchStudents(); }, []);
+
+  const refresh = () => fetchStudents();
 
   const filtered = useMemo(() => {
     return data.filter(s => {

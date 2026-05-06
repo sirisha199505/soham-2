@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Clock, CheckCircle, XCircle, Minus, Trophy, ChevronDown, ChevronUp,
   Calendar, Target, BookOpen, ArrowRight, Filter } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getStudentAttempts } from '../../utils/quizGenerator';
 import { CATEGORY_META, CATEGORIES } from '../../utils/questionBank';
-import { formatDuration } from '../../utils/helpers';
+import { formatDuration, getPerformanceLabel } from '../../utils/helpers';
 
 const LEVEL_COLORS = {
   1: { from: '#3BC0EF', to: '#1E3A8A' },
@@ -13,12 +13,16 @@ const LEVEL_COLORS = {
 };
 
 function ScoreBadge({ pct }) {
-  const color = pct >= 75 ? '#16a34a' : pct >= 50 ? '#F59E0B' : '#dc2626';
-  const bg    = pct >= 75 ? '#f0fdf4' : pct >= 50 ? '#fffbeb' : '#fef2f2';
+  const p = getPerformanceLabel(pct);
   return (
-    <span className="font-bold text-sm px-2.5 py-1 rounded-full" style={{ color, background: bg }}>
-      {pct}%
-    </span>
+    <div className="flex items-center gap-1.5">
+      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md" style={{ color: p.color, background: p.border }}>
+        {p.emoji} {p.label}
+      </span>
+      <span className="font-bold text-sm px-2.5 py-1 rounded-full" style={{ color: p.color, background: p.bg }}>
+        {pct}%
+      </span>
+    </div>
   );
 }
 
@@ -237,8 +241,14 @@ function AttemptCard({ attempt }) {
 // ─── MAIN ─────────────────────────────────────────────────────────────────
 export default function QuizHistory() {
   const { user }     = useAuth();
-  const attempts     = getStudentAttempts(user?.uniqueId);
-  const [lvlFilter, setLvlFilter] = useState('all');
+  const [attempts,   setAttempts]  = useState([]);
+  const [lvlFilter,  setLvlFilter] = useState('all');
+
+  useEffect(() => {
+    if (user?.uniqueId) {
+      getStudentAttempts(user.uniqueId).then(setAttempts).catch(() => {});
+    }
+  }, [user?.uniqueId]);
 
   const filtered = lvlFilter === 'all' ? attempts : attempts.filter(a => String(a.levelId) === lvlFilter);
 

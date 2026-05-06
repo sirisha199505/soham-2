@@ -11,15 +11,6 @@ import { ensureQuestionBankSeeded, CATEGORY_META, CATEGORIES } from '../../utils
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 
-function getLevelDuration(levelId) {
-  try {
-    const s = JSON.parse(localStorage.getItem('rqa_level_settings') || '{}');
-    const mins = Number(s[levelId]?.timeLimit);
-    if (mins > 0) return mins * 60;
-  } catch {}
-  return 600; // default 10 min
-}
-
 function timerState(t) {
   if (t <= 30)  return 'critical';
   if (t <= 120) return 'warning';
@@ -126,7 +117,7 @@ export default function LevelQuiz() {
   const id           = Number(levelId);
   const navigate     = useNavigate();
   const { user }     = useAuth();
-  const { getLevelStatus, markLevelComplete } = useLevel();
+  const { getLevelStatus, markLevelComplete, levelSettings } = useLevel();
   const { colors }   = useTheme();
 
   const level  = LEVELS.find(l => l.id === id);
@@ -137,17 +128,23 @@ export default function LevelQuiz() {
     if (status === 'locked') navigate('/dashboard', { replace: true });
   }, [status, navigate]);
 
-  // Generate questions on mount
-  const [questions, setQuestions] = useState(() => {
-    ensureQuestionBankSeeded();
-    return generateLevelQuiz(user?.uniqueId);
-  });
+  // Generate questions on mount (async API call)
+  const [questions, setQuestions] = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  useEffect(() => {
+    ensureQuestionBankSeeded().catch(() => {});
+    generateLevelQuiz(user?.uniqueId).then(qs => {
+      setQuestions(qs);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [current,    setCurrent]    = useState(0);
   const [answers,    setAnswers]    = useState({});
   const [panelFilter,setPanelFilter]= useState('all');
-  const [quizDuration]               = useState(() => getLevelDuration(id));
-  const [timeLeft,   setTimeLeft]   = useState(() => getLevelDuration(id));
+  const [timeLeft,   setTimeLeft]   = useState(null);
+  const quizDuration                 = useRef(600);
   const [timesUp,    setTimesUp]    = useState(false);
   const [showSubmit, setShowSubmit] = useState(false);
   const [result,     setResult]     = useState(null);
@@ -155,6 +152,16 @@ export default function LevelQuiz() {
   const [showMobilePanel, setShowMobilePanel] = useState(false);
 
   const startRef = useRef(new Date());
+
+  // Initialize timer from API-backed levelSettings once questions finish loading
+  useEffect(() => {
+    if (!loading && timeLeft === null) {
+      const mins = Number(levelSettings[id]?.timeLimit);
+      const dur = mins > 0 ? mins * 60 : 600;
+      quizDuration.current = dur;
+      setTimeLeft(dur);
+    }
+  }, [loading, levelSettings, id, timeLeft]);
 
   const computeScore = useCallback(() => {
     let correct = 0, wrong = 0;
@@ -171,18 +178,18 @@ export default function LevelQuiz() {
     });
     const total = questions.length;
     const pct   = total > 0 ? Math.round((correct / total) * 100) : 0;
-    return { correct, wrong, total, pct, timeTaken: quizDuration - timeLeft };
+    return { correct, wrong, total, pct, timeTaken: quizDuration.current - (timeLeft ?? 0) };
   }, [answers, questions, timeLeft]);
 
   // Countdown
   useEffect(() => {
-    if (timesUp || timeLeft <= 0 || result) return;
+    if (timesUp || timeLeft === null || timeLeft <= 0 || result) return;
     const t = setInterval(() => setTimeLeft(p => p - 1), 1000);
     return () => clearInterval(t);
   }, [timesUp, timeLeft, result]);
 
   useEffect(() => {
-    if (timeLeft <= 0 && !timesUp) setTimesUp(true);
+    if (timeLeft !== null && timeLeft <= 0 && !timesUp) setTimesUp(true);
   }, [timeLeft, timesUp]);
 
   useEffect(() => {
@@ -197,12 +204,10 @@ export default function LevelQuiz() {
     return () => clearTimeout(t);
   }, [answers]);
 
-  const doSubmit = (auto = false) => {
+  const doSubmit = async (auto = false) => {
     const score = computeScore();
-    markLevelComplete(user.uniqueId, id, score);
-
-    // Record used questions
-    recordUsedQuestions(user.uniqueId, questions.map(q => q.id));
+    await markLevelComplete(user.uniqueId, id, score);
+    await recordUsedQuestions(user.uniqueId, questions.map(q => q.id));
 
     // Strip base64 images before saving — prevents localStorage quota overflow
     // which would silently drop subsequent attempts and break Quiz History.
@@ -217,7 +222,7 @@ export default function LevelQuiz() {
       explanation: q.explanation || '',
     });
 
-    saveQuizAttempt(user.uniqueId, {
+    await saveQuizAttempt(user.uniqueId, {
       levelId:    id,
       levelTitle: level?.title || `Level ${id}`,
       date:       new Date().toISOString(),
@@ -261,6 +266,18 @@ export default function LevelQuiz() {
     critical: { bg: 'bg-red-50',    text: 'text-red-600',   icon: 'text-red-500'    },
   }[tState];
 
+  // Loading guard — wait for both questions and timer to initialize
+  if (loading || timeLeft === null) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-10 text-center">
+          <div className="w-10 h-10 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin mx-auto mb-4" />
+          <p className="text-slate-500 text-sm">Loading quiz…</p>
+        </div>
+      </div>
+    );
+  }
+
   // No questions guard
   if (!questions.length) {
     return (
@@ -282,10 +299,11 @@ export default function LevelQuiz() {
 
   /* ── Result screen ─────────────────────────────────────────────── */
   if (result) {
-    const passed = result.pct >= 50;
-    const sc = passed
-      ? { text: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0', label: result.pct >= 75 ? 'Excellent!' : 'Good Job!' }
-      : { text: '#dc2626', bg: '#fef2f2', border: '#fecaca', label: 'Keep Practising' };
+    const perf = result.pct >= 90 ? { text: '#d97706', bg: '#fffbeb', border: '#fde68a', label: 'Excellent!' }
+      : result.pct >= 70 ? { text: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0', label: 'Good Job!' }
+      : result.pct >= 40 ? { text: '#2563eb', bg: '#eff6ff', border: '#bfdbfe', label: 'Keep Going!' }
+      : { text: '#64748b', bg: '#f8fafc', border: '#e2e8f0', label: 'Keep Practising' };
+    const sc = perf;
 
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -327,11 +345,11 @@ export default function LevelQuiz() {
               ))}
             </div>
 
-            {passed && id < 3 && (
+            {id < 3 && (
               <div className="rounded-xl p-3.5 flex items-center gap-3"
                 style={{ background: `${level.color.from}10`, border: `1px solid ${level.color.from}25` }}>
                 <CheckCircle size={18} style={{ color: level.color.from }} className="shrink-0" />
-                <p className="text-sm font-semibold text-slate-700">Level {id + 1} is now unlocked! 🎉</p>
+                <p className="text-sm font-semibold text-slate-700">Level {id + 1} is now unlocked!</p>
               </div>
             )}
 

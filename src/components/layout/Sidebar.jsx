@@ -1,14 +1,15 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, History, User, TrendingUp,
   Database, PlusCircle, ClipboardList, BarChart2, Users,
-  Building2, Globe, Settings, LogOut, ChevronLeft, ChevronRight, X, Activity,
+  Building2, Globe, Settings, ChevronLeft, ChevronRight, X, Activity,
   Layers, HelpCircle, FileText, Upload, Shield, BookMarked,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { ROLES, ROLE_LABELS } from '../../utils/constants';
+import { formatUniqueId } from '../../utils/uniqueId';
 import { getSidebarItems } from '../../utils/rolePermissions';
-import { ROLE_LABELS } from '../../utils/constants';
 import Avatar from '../ui/Avatar';
 
 const ICON_MAP = {
@@ -28,13 +29,10 @@ const ROLE_COLORS = {
 };
 
 export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }) {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { colors } = useTheme();
-  const navigate = useNavigate();
   const items = getSidebarItems(user?.role);
   const roleColor = ROLE_COLORS[user?.role] || colors.primary;
-
-  const handleLogout = () => { logout(); navigate('/login'); };
 
   const NavItem = ({ item }) => {
     const Icon = ICON_MAP[item.icon] || BookOpen;
@@ -77,14 +75,14 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
           <div className="shrink-0 p-1 rounded-xl" style={{ background: `${roleColor}12`, border: `1px solid ${roleColor}22` }}>
             <img
               src="/logo2.png"
-              alt="RoboQuiz"
+              alt="Soham Quiz"
               className="object-contain"
               style={{ width: 30, height: 30, borderRadius: 6 }}
             />
           </div>
           {!collapsed && (
             <div className="min-w-0">
-              <p className="font-bold text-slate-800 text-sm leading-tight truncate" style={{ fontFamily: 'Space Grotesk' }}>RoboQuiz</p>
+              <p className="font-bold text-slate-800 text-sm leading-tight truncate" style={{ fontFamily: 'Space Grotesk' }}>Soham Quiz</p>
               <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: roleColor }}>
                 {ROLE_LABELS[user?.role]}
               </p>
@@ -116,31 +114,42 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
         {!collapsed ? (
           <div className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-slate-50 group transition-colors">
             <div className="relative shrink-0">
-              <Avatar name={user?.name} size="sm" />
+              {user?.role === ROLES.STUDENT ? (
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold text-white"
+                  style={{ background: `linear-gradient(135deg, ${roleColor}, ${roleColor}99)` }}>
+                  ID
+                </div>
+              ) : (
+                <Avatar name={user?.name} size="sm" />
+              )}
               <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-slate-800 truncate leading-tight">{user?.name}</p>
-              <p className="text-[11px] truncate mt-0.5" style={{ color: roleColor }}>{user?.email}</p>
+              {user?.role === ROLES.STUDENT ? (
+                <p className="text-sm font-bold text-slate-800 font-mono tracking-wider truncate leading-tight">
+                  #{formatUniqueId(user?.uniqueId)}
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-slate-800 truncate leading-tight">{user?.name}</p>
+                  <p className="text-[11px] truncate mt-0.5" style={{ color: roleColor }}>{user?.email}</p>
+                </>
+              )}
             </div>
-            <button
-              onClick={handleLogout}
-              title="Logout"
-              className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-50 text-slate-300 hover:text-red-500 transition-all"
-            >
-              <LogOut size={14} />
-            </button>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
             <div className="relative">
-              <Avatar name={user?.name} size="sm" />
+              {user?.role === ROLES.STUDENT ? (
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold text-white"
+                  style={{ background: `linear-gradient(135deg, ${roleColor}, ${roleColor}99)` }}>
+                  ID
+                </div>
+              ) : (
+                <Avatar name={user?.name} size="sm" />
+              )}
               <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-green-500 border-2 border-white" />
             </div>
-            <button onClick={handleLogout} title="Logout"
-              className="p-1.5 rounded-lg hover:bg-red-50 text-slate-300 hover:text-red-500 transition-colors">
-              <LogOut size={14} />
-            </button>
           </div>
         )}
       </div>

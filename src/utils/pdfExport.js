@@ -13,7 +13,7 @@ export function downloadLevelContentAsPDF(pages, levelTitle) {
   doc.setFont('helvetica', 'bold').setFontSize(20).setTextColor(30, 41, 59);
   doc.text(levelTitle, M, y);  y += 8;
   doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(148, 163, 184);
-  doc.text(`RoboQuiz · Study Material · ${new Date().toLocaleDateString()}`, M, y);  y += 10;
+  doc.text(`Soham Quiz · Study Material · ${new Date().toLocaleDateString()}`, M, y);  y += 10;
   doc.setDrawColor(226, 232, 240).line(M, y, M + W, y);  y += 10;
 
   pages.filter(p => p.type !== 'pdf').forEach((page, pi) => {
@@ -39,7 +39,7 @@ export function downloadLevelContentAsPDF(pages, levelTitle) {
   const total = doc.internal.getNumberOfPages();
   for (let i = 1; i <= total; i++) {
     doc.setPage(i).setFont('helvetica', 'normal').setFontSize(8).setTextColor(148, 163, 184);
-    doc.text(`RoboQuiz · ${levelTitle}`, M, 289);
+    doc.text(`Soham Quiz · ${levelTitle}`, M, 289);
     doc.text(`${i} / ${total}`, M + W, 289, { align: 'right' });
   }
 

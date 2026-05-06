@@ -24,6 +24,14 @@ export const formatScore = (score, total) => {
   return `${Math.round((score / total) * 100)}%`;
 };
 
+export const getPerformanceLabel = (pct) => {
+  if (pct >= 90) return { emoji: '🏆', label: 'Excellent', color: '#d97706', bg: '#fffbeb', border: '#fde68a' };
+  if (pct >= 80) return { emoji: '💡', label: 'Very Good', color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' };
+  if (pct >= 60) return { emoji: '👍', label: 'Good',      color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' };
+  if (pct >= 40) return { emoji: '⚠️', label: 'Average',   color: '#d97706', bg: '#fff7ed', border: '#fed7aa' };
+  return               { emoji: '❌', label: 'Poor',       color: '#dc2626', bg: '#fef2f2', border: '#fecaca' };
+};
+
 export const getScoreColor = (pct) => {
   if (pct >= 80) return 'text-green-600';
   if (pct >= 60) return 'text-yellow-600';

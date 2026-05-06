@@ -36,7 +36,6 @@ export const getSidebarItems = (role) => {
       { label: 'Content',         path: '/admin/content',       icon: 'FileText' },
       { label: 'Live Monitoring', path: '/admin/monitoring',    icon: 'Activity' },
       { label: 'Reports',         path: '/admin/reports',       icon: 'BarChart2' },
-      { label: 'Import / Export', path: '/admin/import-export', icon: 'Upload' },
       { label: 'Settings',        path: '/admin/settings',      icon: 'Settings' },
     ];
   }

@@ -10,7 +10,8 @@ export default function Register() {
   const { colors }   = useTheme();
   const navigate     = useNavigate();
 
-  const [form, setForm] = useState({ schoolName: '', className: '', password: '', confirm: '' });
+  const [form, setForm]               = useState({ schoolName: '', className: '', password: '', confirm: '' });
+  const [customClass, setCustomClass] = useState('');
   const [showPass, setShowPass]       = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading]         = useState(false);
@@ -24,18 +25,14 @@ export default function Register() {
     e.preventDefault();
     setError('');
 
-    if (form.password !== form.confirm) {
-      setError('Passwords do not match.');
-      return;
-    }
-    if (form.password.length < 6) {
-      setError('Password must be at least 6 characters.');
-      return;
-    }
+    const effectiveClass = form.className === 'Other' ? customClass.trim() : form.className;
+    if (!effectiveClass) { setError('Please enter your class.'); return; }
+    if (form.password !== form.confirm) { setError('Passwords do not match.'); return; }
+    if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
 
     setLoading(true);
     try {
-      const uid = await register(form.schoolName, form.className, form.password);
+      const uid = await register(form.schoolName, effectiveClass, form.password);
       setGeneratedId(uid);
     } catch (err) {
       setError(err.message);
@@ -138,7 +135,7 @@ export default function Register() {
         <h2 className="text-3xl font-bold text-white mb-2" style={{ fontFamily: 'Space Grotesk' }}>
           Student Registration
         </h2>
-        <p className="text-slate-400 text-sm">Create your account to access RoboQuiz</p>
+        <p className="text-slate-400 text-sm">Create your account to access Soham Quiz</p>
       </div>
 
       {error && (
@@ -181,11 +178,24 @@ export default function Register() {
               style={{ ...inputStyle, ...(form.className ? inputFocusStyle : {}) }}
             >
               <option value="" disabled style={{ background: '#1e293b', color: '#64748b' }}>Select your class</option>
-              {['Class 6','Class 7','Class 8','Class 9','Class 10','Class 11','Class 12'].map(c => (
+              {['Class VI','Class VII','Class VIII','Class IX','Class X','Class XI','Class XII','Other'].map(c => (
                 <option key={c} value={c} style={{ background: '#1e293b', color: '#fff' }}>{c}</option>
               ))}
             </select>
           </div>
+          {form.className === 'Other' && (
+            <div className="relative mt-2">
+              <input
+                type="text"
+                placeholder="e.g. Intermediate, Degree, B.Tech…"
+                value={customClass}
+                onChange={e => setCustomClass(e.target.value)}
+                required
+                className={`${inputCls} px-4`}
+                style={{ ...inputStyle, ...(customClass ? inputFocusStyle : {}) }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Password */}

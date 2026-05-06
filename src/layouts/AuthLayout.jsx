@@ -51,10 +51,10 @@ export default function AuthLayout() {
         {/* Logo */}
         <div className="relative flex items-center gap-3 z-10">
           <div className="p-1.5 rounded-2xl" style={{ background: `${colors.primary}20`, border: `1px solid ${colors.primary}35` }}>
-            <img src="/logo2.png" alt="RoboQuiz" className="w-10 h-10 object-contain" style={{ borderRadius: 8 }} />
+            <img src="/logo2.png" alt="Soham Quiz" className="w-10 h-10 object-contain" style={{ borderRadius: 8 }} />
           </div>
           <div>
-            <p className="text-white font-bold text-xl tracking-tight" style={{ fontFamily: 'Space Grotesk' }}>RoboQuiz</p>
+            <p className="text-white font-bold text-xl tracking-tight" style={{ fontFamily: 'Space Grotesk' }}>Soham Quiz</p>
             <p style={{ color: colors.primary, fontSize: 11, fontWeight: 500, letterSpacing: '0.08em' }}>ASSESSMENT PLATFORM</p>
           </div>
         </div>
@@ -113,7 +113,7 @@ export default function AuthLayout() {
           </div>
         </div>
 
-        <p className="relative z-10 text-slate-600 text-xs">© 2026 RoboQuiz. Built for Indian Robotics Education.</p>
+        <p className="relative z-10 text-slate-600 text-xs">© 2026 Soham Quiz. Robotics Assessment Platform.</p>
       </div>
 
       {/* ── Right form panel ── */}
@@ -128,8 +128,8 @@ export default function AuthLayout() {
         <div className="w-full max-w-md relative z-10">
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2.5 mb-8 justify-center">
-            <img src="/logo2.png" alt="RoboQuiz" className="w-10 h-10 object-contain rounded-xl" />
-            <p className="text-white font-bold text-xl" style={{ fontFamily: 'Space Grotesk' }}>RoboQuiz</p>
+            <img src="/logo2.png" alt="Soham Quiz" className="w-10 h-10 object-contain rounded-xl" />
+            <p className="text-white font-bold text-xl" style={{ fontFamily: 'Space Grotesk' }}>Soham Quiz</p>
           </div>
           <Outlet />
         </div>

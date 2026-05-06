@@ -96,7 +96,7 @@ export default function Login() {
               Student Sign In
             </h2>
             <p className="text-slate-400 text-sm mt-1">
-              Use your unique Student ID to access RoboQuiz
+              Use your unique Student ID to access Soham Quiz
             </p>
           </>
         )}

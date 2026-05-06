@@ -10,13 +10,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { formatUniqueId } from '../../utils/uniqueId';
 import { LEVELS } from '../../utils/levelData';
 import { TOTAL_QUIZ_QUESTIONS } from '../../utils/quizGenerator';
-
-function getLevelTimeLimit(levelId) {
-  try {
-    const s = JSON.parse(localStorage.getItem('rqa_level_settings') || '{}');
-    return s[levelId]?.timeLimit ?? 10;
-  } catch { return 10; }
-}
+import { getPerformanceLabel } from '../../utils/helpers';
 
 /* ─────────────────────────────────────────────────────────────── */
 /*  Welcome banner                                                 */
@@ -71,14 +65,14 @@ function WelcomeBanner({ greeting, displayId, colors, completedCount }) {
 /* ─────────────────────────────────────────────────────────────── */
 /*  Level Card                                                     */
 /* ─────────────────────────────────────────────────────────────── */
-function LevelCard({ level, status, levelData }) {
+function LevelCard({ level, status, levelData, levelSettings }) {
   const isLocked    = status === 'locked';
   const isPending   = status === 'pending_approval';
   const isRejected  = status === 'rejected';
   const isCompleted = status === 'completed';
   const isUnlocked  = status === 'unlocked';
 
-  const timeLimit   = getLevelTimeLimit(level.id);
+  const timeLimit   = Number(levelSettings?.[level.id]?.timeLimit) || 10;
   const score       = levelData?.score;       // best score
   const lastScore   = levelData?.lastScore;   // most recent attempt
 
@@ -89,11 +83,9 @@ function LevelCard({ level, status, levelData }) {
       })
     : null;
 
-  const scorePct = score?.pct ?? 0;
-  const scoreColor =
-    scorePct >= 75 ? { text: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' } :
-    scorePct >= 50 ? { text: '#d97706', bg: '#fffbeb', border: '#fde68a' } :
-                     { text: '#dc2626', bg: '#fef2f2', border: '#fecaca' };
+  const scorePct   = score?.pct ?? 0;
+  const perf       = getPerformanceLabel(scorePct);
+  const scoreColor = { text: perf.color, bg: perf.bg, border: perf.border };
 
   // Show "Last attempt" chip only when it differs from best
   const showLastAttempt = lastScore && lastScore.pct !== scorePct;
@@ -195,9 +187,9 @@ function LevelCard({ level, status, levelData }) {
                   <p className="text-lg font-bold leading-none" style={{ color: scoreColor.text, fontFamily: 'Space Grotesk' }}>
                     {scorePct}%
                   </p>
-                  <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full"
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
                     style={{ background: scoreColor.border, color: scoreColor.text }}>
-                    Best
+                    {perf.emoji} {perf.label}
                   </span>
                 </div>
                 <p className="text-[10px] mt-0.5" style={{ color: scoreColor.text }}>
@@ -402,7 +394,7 @@ function ApprovalNoticeBanner({ statuses }) {
 /* ─────────────────────────────────────────────────────────────── */
 export default function StudentDashboard() {
   const { user }  = useAuth();
-  const { getLevelStatus, getLevel } = useLevel();
+  const { getLevelStatus, getLevel, levelSettings } = useLevel();
   const { colors } = useTheme();
 
   const displayId = user?.uniqueId ? `#${formatUniqueId(user.uniqueId)}` : '#Student';
@@ -454,7 +446,7 @@ export default function StudentDashboard() {
             level={level}
             status={statuses[i]}
             levelData={getLevel(userId, level.id)}
-            userId={userId}
+            levelSettings={levelSettings}
           />
         ))}
       </div>

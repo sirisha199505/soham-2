@@ -599,76 +599,56 @@ export const CATEGORY_META = {
   mathematics: { label: 'Mathematics', color: '#8B5CF6', bg: '#f5f3ff' },
 };
 
-export function loadQuestionBank() {
+import { api } from './api';
+
+// ─── API-backed functions ────────────────────────────────────────────────────
+
+export async function loadQuestionBank() {
   try {
-    const stored = JSON.parse(localStorage.getItem(QB_KEY) || '{}');
-    const result = {};
-    CATEGORIES.forEach(cat => {
-      result[cat] = Array.isArray(stored[cat]) && stored[cat].length > 0
-        ? stored[cat]
-        : DEFAULTS[cat].map(q => ({ ...q }));
-    });
-    return result;
+    return await api.getQuestionBank();
   } catch {
+    // Fallback to defaults if API is unavailable
     const result = {};
     CATEGORIES.forEach(cat => { result[cat] = DEFAULTS[cat].map(q => ({ ...q })); });
     return result;
   }
 }
 
-export function saveQuestionBank(bank) {
-  try { localStorage.setItem(QB_KEY, JSON.stringify(bank)); } catch {}
-}
+export function saveQuestionBank() {}
 
-export function ensureQuestionBankSeeded() {
+export async function ensureQuestionBankSeeded() {
   try {
-    const stored = JSON.parse(localStorage.getItem(QB_KEY) || '{}');
-    let changed = false;
-    CATEGORIES.forEach(cat => {
-      if (!Array.isArray(stored[cat]) || stored[cat].length === 0) {
-        stored[cat] = DEFAULTS[cat].map(q => ({ ...q }));
-        changed = true;
-      }
-    });
-    if (changed) localStorage.setItem(QB_KEY, JSON.stringify(stored));
+    const allDefaults = CATEGORIES.flatMap(cat => DEFAULTS[cat].map(q => ({ ...q })));
+    await api.seedQuestions(allDefaults);
   } catch {}
 }
 
-export function getCategoryQuestions(category) {
-  const bank = loadQuestionBank();
+export async function getCategoryQuestions(category) {
+  const bank = await loadQuestionBank();
   return (bank[category] || []).filter(q => q.status === 'active');
 }
 
-export function getAllActiveQuestions() {
-  const bank = loadQuestionBank();
+export async function getAllActiveQuestions() {
+  const bank = await loadQuestionBank();
   return CATEGORIES.flatMap(cat => (bank[cat] || []).filter(q => q.status === 'active'));
 }
 
-export function saveCategoryQuestions(category, questions) {
-  const bank = loadQuestionBank();
-  bank[category] = questions;
-  saveQuestionBank(bank);
+export async function saveCategoryQuestions(category, questions) {
+  for (const q of questions) {
+    await api.updateQuestion(q.id, q);
+  }
 }
 
-export function addQuestion(question) {
-  const bank = loadQuestionBank();
-  const cat = question.category;
-  if (!bank[cat]) bank[cat] = [];
-  bank[cat].push(question);
-  saveQuestionBank(bank);
+export async function addQuestion(question) {
+  await api.addQuestion(question);
 }
 
-export function updateQuestion(question) {
-  const bank = loadQuestionBank();
-  const cat = question.category;
-  bank[cat] = (bank[cat] || []).map(q => q.id === question.id ? question : q);
-  saveQuestionBank(bank);
+export async function updateQuestion(question) {
+  await api.updateQuestion(question.id, question);
 }
 
-export function deleteQuestion(category, questionId) {
-  const bank = loadQuestionBank();
-  bank[category] = (bank[category] || []).filter(q => q.id !== questionId);
-  saveQuestionBank(bank);
+export async function deleteQuestion(category, questionId) {
+  await api.deleteQuestion(questionId);
 }
 
 export function generateQuestionId(category) {

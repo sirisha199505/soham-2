@@ -1,32 +1,10 @@
-import { createContext, useContext, useState, useCallback, useMemo } from 'react';
-import { ROLES } from '../utils/constants';
+import { createContext, useContext, useState, useCallback } from 'react';
 import { getDashboardRoute } from '../utils/rolePermissions';
-import { generateUniqueId } from '../utils/uniqueId';
+import { api } from '../utils/api';
 
 const AuthContext = createContext(null);
-
-const STUDENTS_KEY = 'rqa_students';
-const USER_KEY     = 'rqa_user';
-
-// ── Staff accounts (hardcoded, no registration needed) ───────────────────────
-const DEMO_STAFF = {
-  'admin@roboquiz.in': {
-    id: 'admin@roboquiz.in', email: 'admin@roboquiz.in',
-    name: 'System Administrator', role: ROLES.ADMIN, password: 'admin123',
-  },
-  'teacher@roboquiz.in': {
-    id: 'teacher@roboquiz.in', email: 'teacher@roboquiz.in',
-    name: 'Ms. Kavya Nair', role: ROLES.TEACHER, password: 'teacher123',
-  },
-};
-
-function getStudents() {
-  try { return JSON.parse(localStorage.getItem(STUDENTS_KEY) || '{}'); }
-  catch { return {}; }
-}
-function saveStudents(s) {
-  localStorage.setItem(STUDENTS_KEY, JSON.stringify(s));
-}
+const TOKEN_KEY = 'rqa_token';
+const USER_KEY  = 'rqa_user';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
@@ -36,159 +14,41 @@ export function AuthProvider({ children }) {
     } catch { return null; }
   });
 
-  // Version bump forces completedQuizzes to re-derive from localStorage
-  const [completedV, setCompletedV] = useState(0);
-
   /* ── Register a new student ── */
   const register = useCallback(async (schoolName, className, password) => {
-    await new Promise(r => setTimeout(r, 700));
-
-    const students = getStudents();
-
-    // Generate unique ID, retry on collision (extremely rare)
-    let uniqueId;
-    do { uniqueId = generateUniqueId(); } while (students[uniqueId]);
-
-    students[uniqueId] = { uniqueId, schoolName, className, password };
-    saveStudents(students);
-    return uniqueId;
+    const data = await api.register(schoolName, className, password);
+    // Store token for auto-login after register
+    localStorage.setItem(TOKEN_KEY, data.token);
+    return data.uniqueId;
   }, []);
 
-  /* ── Login — checks staff accounts first, then students ── */
+  /* ── Login ── */
   const login = useCallback(async (identifier, password) => {
-    await new Promise(r => setTimeout(r, 800));
-
-    const key = identifier.trim().toLowerCase();
-
-    // Check demo staff accounts (email-based)
-    const staff = DEMO_STAFF[key];
-    if (staff) {
-      if (staff.password !== password) {
-        throw new Error('Incorrect password for this staff account.');
-      }
-      const userData = { id: staff.id, email: staff.email, name: staff.name, role: staff.role };
-      localStorage.setItem(USER_KEY, JSON.stringify(userData));
-      setUser(userData);
-      return getDashboardRoute(staff.role);
-    }
-
-    // Fall back to student lookup
-    const students = getStudents();
-    const student  = students[identifier.trim()];
-    if (!student || student.password !== password) {
-      throw new Error('Invalid ID or password. Please check your credentials.');
-    }
-
-    const userData = {
-      id:       student.uniqueId,
-      uniqueId: student.uniqueId,
-      role:     ROLES.STUDENT,
-    };
-    localStorage.setItem(USER_KEY, JSON.stringify(userData));
-    setUser(userData);
-    return getDashboardRoute(ROLES.STUDENT);
+    const data = await api.login(identifier, password);
+    localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    setUser(data.user);
+    return getDashboardRoute(data.user.role);
   }, []);
 
   const logout = useCallback(() => {
+    localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     setUser(null);
   }, []);
 
-  /* ── Quiz attendance: record the moment a student starts ── */
-  const markQuizStarted = useCallback((quizId) => {
-    if (!user?.uniqueId) return;
-    try {
-      const key     = `rqa_started_${user.uniqueId}`;
-      const started = JSON.parse(localStorage.getItem(key) || '{}');
-      if (!started[quizId]) {
-        started[quizId] = { startedAt: new Date().toISOString() };
-        localStorage.setItem(key, JSON.stringify(started));
-      }
-    } catch {}
-  }, [user?.uniqueId]);
-
-  const isQuizStarted = useCallback((quizId) => {
-    if (!user?.uniqueId) return false;
-    try {
-      const key     = `rqa_started_${user.uniqueId}`;
-      const started = JSON.parse(localStorage.getItem(key) || '{}');
-      return !!started[quizId];
-    } catch { return false; }
-  }, [user?.uniqueId]);
-
-  /* ── Quiz completion (one-time play) ── */
-  const completedQuizzes = useMemo(() => {
-    if (!user?.uniqueId) return new Set();
-    try {
-      const key = `rqa_completed_${user.uniqueId}`;
-      const arr = JSON.parse(localStorage.getItem(key) || '[]');
-      return new Set(arr);
-    } catch { return new Set(); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uniqueId, completedV]);
-
-  /**
-   * Mark a quiz as completed and store its result.
-   * scoreData = { pct, correct, wrong, total, timeTaken, questions: [...], answers: {...} }
-   */
-  const markQuizComplete = useCallback((quizId, scoreData = {}) => {
-    if (!user?.uniqueId) return;
-    const key     = `rqa_completed_${user.uniqueId}`;
-    const recKey  = `rqa_results_${user.uniqueId}`;
-    try {
-      // Store completed IDs list
-      const arr = JSON.parse(localStorage.getItem(key) || '[]');
-      if (!arr.includes(quizId)) {
-        arr.push(quizId);
-        localStorage.setItem(key, JSON.stringify(arr));
-      }
-      // Store result details keyed by quizId (persist questions + answers for review)
-      const { questions = [], answers = {}, ...rest } = scoreData;
-      const results = JSON.parse(localStorage.getItem(recKey) || '{}');
-      results[quizId] = {
-        ...rest,
-        completedAt:  new Date().toISOString(),
-        questionIds:  questions.map(q => q.id),
-        answers,
-      };
-      localStorage.setItem(recKey, JSON.stringify(results));
-      setCompletedV(v => v + 1);
-    } catch {
-      localStorage.setItem(key, JSON.stringify([quizId]));
-      setCompletedV(v => v + 1);
-    }
-  }, [user?.uniqueId]);
-
-  /** Returns stored result for a given quizId, or null */
-  const getQuizResult = useCallback((quizId) => {
-    if (!user?.uniqueId) return null;
-    try {
-      const results = JSON.parse(localStorage.getItem(`rqa_results_${user.uniqueId}`) || '{}');
-      return results[quizId] || null;
-    } catch { return null; }
-  }, [user?.uniqueId]);
-
-  const hasAttemptedQuiz = useCallback(
-    (quizId) => completedQuizzes.has(quizId),
-    [completedQuizzes]
-  );
-
-  /**
-   * Returns a list of registered student IDs ONLY — no names, roll numbers, or passwords.
-   * Safe to expose to school admins.
-   */
-  const getStudentList = useCallback(() => {
-    const students = getStudents();
-    return Object.values(students).map(s => ({
-      uniqueId:        s.uniqueId,
-      quizzesCompleted: (() => {
-        try {
-          const arr = JSON.parse(localStorage.getItem(`rqa_completed_${s.uniqueId}`) || '[]');
-          return arr.length;
-        } catch { return 0; }
-      })(),
-    }));
+  /* ── Student list (admin) ── */
+  const getStudentList = useCallback(async () => {
+    return api.getStudents();
   }, []);
+
+  // Backward-compat stubs for old quiz pages (no-ops in API mode)
+  const hasAttemptedQuiz  = () => false;
+  const markQuizStarted   = () => {};
+  const markQuizComplete  = () => {};
+  const completedQuizzes  = new Set();
+  const getQuizResult     = () => null;
+  const isQuizStarted     = () => false;
 
   const value = {
     user,
@@ -196,13 +56,13 @@ export function AuthProvider({ children }) {
     logout,
     register,
     isAuthenticated: !!user,
-    completedQuizzes,
-    markQuizComplete,
-    markQuizStarted,
-    isQuizStarted,
-    hasAttemptedQuiz,
-    getQuizResult,
     getStudentList,
+    hasAttemptedQuiz,
+    markQuizStarted,
+    markQuizComplete,
+    completedQuizzes,
+    getQuizResult,
+    isQuizStarted,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

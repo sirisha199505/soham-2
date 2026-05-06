@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   Activity, RefreshCw, Pause, Play, StopCircle, RotateCcw,
-  AlertTriangle, CheckCircle, Clock, Users, Hash, Wifi,
+  AlertTriangle, CheckCircle, Users, Hash, Wifi,
   UserX, TrendingUp, Ghost, Loader2,
 } from 'lucide-react';
 
@@ -32,9 +32,9 @@ const STATUS_CONFIG = {
 const LEVEL_COLORS = { 1: '#3BC0EF', 2: '#8B5CF6', 3: '#10B981' };
 
 const MOCK_IDS = [
-  'RQ4A1B2', 'RQ7C3D4', 'RQ2E5F6', 'RQ9G7H8', 'RQ1I9J0',
-  'RQ3K2L1', 'RQ6M4N3', 'RQ8O6P5', 'RQ5Q8R7', 'RQ0S1T9',
-  'RQ2U3V4', 'RQ7W5X6',
+  '20240001', '20240002', '20240003', '20240004', '20240005',
+  '20240006', '20240007', '20240008', '20240009', '20240010',
+  '20240011', '20240012',
 ];
 
 const MOCK_STATUSES = [
@@ -90,12 +90,6 @@ function buildInitialSessions() {
   return sessions;
 }
 
-function formatTime(secs) {
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
 // ─── Action confirm modal ─────────────────────────────────────────────────
 function ActionModal({ action, session, onConfirm, onClose }) {
   const cfg = {
@@ -142,18 +136,6 @@ export default function LiveMonitoring() {
     setToast({ msg, type });
     setTimeout(() => setToast(''), 2500);
   };
-
-  // Tick elapsed for active sessions
-  useEffect(() => {
-    const iv = setInterval(() => {
-      setSessions(prev => prev.map(s =>
-        s.status === 'active' || s.status === 'progress'
-          ? { ...s, elapsed: s.elapsed + 1 }
-          : s
-      ));
-    }, 1000);
-    return () => clearInterval(iv);
-  }, []);
 
   const refresh = () => { setSessions(buildInitialSessions()); showToast('Sessions refreshed'); };
 
@@ -304,7 +286,7 @@ export default function LiveMonitoring() {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-100">
-              {['Student ID', 'Level', 'Time Elapsed', 'Progress', 'Status', 'Actions'].map(h => (
+              {['Student ID', 'Level', 'Progress', 'Status', 'Actions'].map(h => (
                 <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -312,7 +294,7 @@ export default function LiveMonitoring() {
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-12 text-center text-slate-400 text-sm">
+                <td colSpan={5} className="px-4 py-12 text-center text-slate-400 text-sm">
                   No sessions match the current filter
                 </td>
               </tr>
@@ -348,17 +330,6 @@ export default function LiveMonitoring() {
                       style={{ background:`linear-gradient(135deg,${lvlColor},${lvlColor}99)` }}>
                       Level {sess.level}
                     </span>
-                  </td>
-
-                  {/* Elapsed */}
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-1.5">
-                      {(sess.status==='active'||sess.status==='progress') && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse shrink-0"/>
-                      )}
-                      <Clock size={12} className="text-slate-400"/>
-                      <span className="font-mono text-sm text-slate-700">{formatTime(sess.elapsed)}</span>
-                    </div>
                   </td>
 
                   {/* Progress */}

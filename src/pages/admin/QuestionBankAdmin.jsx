@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Plus, ChevronDown, ChevronUp, Edit2, Trash2, BookOpen,
   CheckCircle, X, Save, Eye, EyeOff, AlertTriangle, Image,
@@ -7,10 +7,10 @@ import {
   ChevronRight, Database, MoreVertical, Calendar,
 } from 'lucide-react';
 import Modal from '../../components/ui/Modal';
-import { loadQuestionBank, saveQuestionBank, CATEGORIES, CATEGORY_META } from '../../utils/questionBank';
+import { loadQuestionBank, CATEGORIES, CATEGORY_META, addQuestion as apiAddQuestion, updateQuestion as apiUpdateQuestion, deleteQuestion as apiDeleteQuestion } from '../../utils/questionBank';
 
 // ─── Storage ──────────────────────────────────────────────────────────────
-const STORAGE_KEY = 'roboquiz_qbank_multi_v1';
+const STORAGE_KEY = 'sohamquiz_qbank_v1';
 
 // Map level name → rqa_question_bank category key
 const NAME_TO_CAT = Object.fromEntries(
@@ -82,26 +82,34 @@ function toFlat(storage) {
 }
 
 function loadStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed?.banks?.length > 0) return parsed;
-    }
-  } catch {}
-  try {
-    const seeded = fromFlat(loadQuestionBank());
-    persist(seeded);
-    return seeded;
-  } catch {}
+  // Returns default empty structure; data is loaded async via useEffect
   return { banks: [] };
 }
 
-function persist(data) {
+async function loadStorageFromAPI() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    saveQuestionBank(toFlat(data));
-  } catch {}
+    const flat   = await loadQuestionBank();
+    const seeded = fromFlat(flat);
+    return seeded;
+  } catch {
+    return { banks: [] };
+  }
+}
+
+// Persist a single question operation to the API
+async function persistQuestion(op, q, cat) {
+  try {
+    const flat = { ...q, category: cat, status: 'active' };
+    if (op === 'add')    await apiAddQuestion(flat);
+    if (op === 'update') await apiUpdateQuestion(flat);
+    if (op === 'delete') await apiDeleteQuestion(cat, q.id);
+  } catch (err) {
+    console.error('persistQuestion failed:', err.message);
+  }
+}
+
+function persist() {
+  // No-op: operations are persisted individually via persistQuestion
 }
 
 let _seq = Date.now();
@@ -1180,6 +1188,17 @@ export default function QuestionBankAdmin() {
   const [storage, setStorage]         = useState(() => loadStorage());
   const [selectedBankId, setSelectedBankId] = useState(null);
   const [toast, setToast]             = useState('');
+
+  // Load question bank from API on mount
+  useEffect(() => {
+    loadStorageFromAPI().then(data => {
+      if (data.banks.length > 0) {
+        setStorage(data);
+        if (!selectedBankId) setSelectedBankId(data.banks[0].id);
+      }
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const showToast = (msg, color='green') => { setToast({msg,color}); setTimeout(()=>setToast(''),2500); };
 

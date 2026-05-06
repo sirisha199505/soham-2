@@ -1,89 +1,100 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import { useAuth } from './AuthContext';
+import { api } from '../utils/api';
 
 const LevelContext = createContext(null);
 
-const STORAGE_KEY        = 'rqa_level_progress';
-const GLOBAL_ACCESS_KEY  = 'rqa_global_level_access';
-const LEVEL_SETTINGS_KEY = 'rqa_level_settings';
-const OVERRIDES_KEY      = 'rqa_admin_overrides';
-export const APPROVALS_KEY      = 'rqa_level_approvals';
-// shape: { [userId]: { 2: 'pending'|'approved'|'rejected', 3: 'pending'|'approved'|'rejected' } }
-
-function load() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
-  catch { return {}; }
-}
-function save(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
-function loadLevelSettings() {
-  try { return JSON.parse(localStorage.getItem(LEVEL_SETTINGS_KEY) || '{}'); }
-  catch { return {}; }
-}
-
-function loadGlobalAccess() {
-  try { return JSON.parse(localStorage.getItem(GLOBAL_ACCESS_KEY) || '{}'); }
-  catch { return {}; }
-}
-
-function loadOverrides() {
-  try { return JSON.parse(localStorage.getItem(OVERRIDES_KEY) || '{}'); }
-  catch { return {}; }
-}
-
-function saveOverridesData(data) {
-  localStorage.setItem(OVERRIDES_KEY, JSON.stringify(data));
-}
-
-export function loadApprovals() {
-  try { return JSON.parse(localStorage.getItem(APPROVALS_KEY) || '{}'); }
-  catch { return {}; }
-}
-
-export function saveApprovals(data) {
-  localStorage.setItem(APPROVALS_KEY, JSON.stringify(data));
-}
-
 export function LevelProvider({ children }) {
-  const [progress,       setProgress]       = useState(load);
-  const [approvals,      setApprovals]      = useState(loadApprovals);
-  const [overrides,      setOverridesState] = useState(loadOverrides);
-  const [levelSettings,  setLevelSettings]  = useState(loadLevelSettings);
-  const [globalAccess,   setGlobalAccessState] = useState(loadGlobalAccess);
+  const { user } = useAuth();
+  const [progress,      setProgress]      = useState({});
+  const [approvals,     setApprovals]     = useState({});
+  const [overrides,     setOverrides]     = useState({});
+  const [levelSettings, setLevelSettings] = useState({});
+  const [globalAccess,  setGlobalAccess]  = useState({});
 
+  // Track which userIds we've already fetched so we don't loop
+  const fetchedUsers = useRef(new Set());
+
+  // Reload whenever the logged-in user changes (login / logout)
   useEffect(() => {
-    function onStorage(e) {
-      if (e.key === OVERRIDES_KEY)      { try { setOverridesState(JSON.parse(e.newValue || '{}')); }    catch {} }
-      if (e.key === LEVEL_SETTINGS_KEY) { try { setLevelSettings(JSON.parse(e.newValue || '{}'));  }    catch {} }
-      if (e.key === GLOBAL_ACCESS_KEY)  { try { setGlobalAccessState(JSON.parse(e.newValue || '{}')); } catch {} }
-    }
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    if (!user) return;
+
+    api.getLevelSettings()
+      .then(levels => {
+        // Convert array [{ id, open, ... }] → map { [id]: { ... } }
+        const map = {};
+        if (Array.isArray(levels)) levels.forEach(l => { map[l.id] = l; });
+        setLevelSettings(map);
+      })
+      .catch(() => {});
+
+    api.getGlobalAccess()
+      .then(levels => {
+        const map = {};
+        if (Array.isArray(levels)) levels.forEach(l => { map[l.levelId] = l.open; });
+        setGlobalAccess(map);
+      })
+      .catch(() => {});
+
+    // Admin-only calls — ignore 403s silently
+    api.getApprovals()
+      .then(rows => {
+        const map = {};
+        if (Array.isArray(rows)) rows.forEach(r => {
+          if (!map[r.userId]) map[r.userId] = {};
+          map[r.userId][r.levelId] = r.status;
+        });
+        setApprovals(map);
+      })
+      .catch(() => {});
+
+    api.getOverrides()
+      .then(rows => {
+        const map = {};
+        if (Array.isArray(rows)) rows.forEach(r => {
+          if (!map[r.userId]) map[r.userId] = [];
+          map[r.userId].push(r.levelId);
+        });
+        setOverrides(map);
+      })
+      .catch(() => {});
+  }, [user?.id]);
+
+  /* ── Fetch progress for a specific student ── */
+  const fetchProgress = useCallback(async (userId) => {
+    if (!userId || fetchedUsers.current.has(userId)) return;
+    fetchedUsers.current.add(userId);
+    try {
+      const rows = await api.getLevelProgress(userId);
+      // Convert array [{ levelId, status, score, ... }] → map { [levelId]: { ... } }
+      const map = {};
+      if (Array.isArray(rows)) rows.forEach(r => { map[r.levelId] = r; });
+      setProgress(prev => ({ ...prev, [userId]: map }));
+    } catch {}
   }, []);
 
-  // progress shape: { [userId]: { [levelId]: { status, score, completedAt, contentRead } } }
-
   const getLevel = useCallback((userId, levelId) => {
+    if (userId && !fetchedUsers.current.has(userId)) fetchProgress(userId);
     return progress[userId]?.[levelId] ?? null;
-  }, [progress]);
+  }, [progress, fetchProgress]);
 
   const getLevelStatus = useCallback((userId, levelId) => {
-    // 1. Admin deactivated this level → locked for everyone
-    const isActive = levelSettings[levelId]?.active !== false;
-    if (!isActive) return 'locked';
+    if (userId && !fetchedUsers.current.has(userId)) fetchProgress(userId);
 
-    // 2. Global unlock: admin opened level for ALL students
+    // 1. Admin deactivated → locked
+    if (levelSettings[levelId]?.active === false) return 'locked';
+
+    // 2. Global unlock
     if (levelId !== 1 && globalAccess[levelId] === true) {
       return progress[userId]?.[levelId]?.status ?? 'unlocked';
     }
 
-    // 3. Per-student admin override (manual individual unlock)
+    // 3. Per-student override
     if (overrides[userId]?.includes(levelId)) {
       return progress[userId]?.[levelId]?.status ?? 'unlocked';
     }
 
-    // 4. Level 1 always accessible by default
+    // 4. Level 1 always unlocked
     if (levelId === 1) {
       return progress[userId]?.[1]?.status ?? 'unlocked';
     }
@@ -92,66 +103,64 @@ export function LevelProvider({ children }) {
     const prev = progress[userId]?.[levelId - 1];
     if (prev?.status !== 'completed') return 'locked';
 
-    // 6. Level is active and student completed the previous level → auto-unlock.
-    //    Admin can still explicitly reject individual students via setApproval.
+    // 6. Check approval
     const approval = approvals[userId]?.[levelId];
     if (approval === 'rejected') return 'rejected';
+    if (approval === 'pending')  return 'pending_approval';
     return progress[userId]?.[levelId]?.status ?? 'unlocked';
+  }, [progress, approvals, overrides, levelSettings, globalAccess, fetchProgress]);
 
-  }, [progress, approvals, overrides, levelSettings, globalAccess]);
-
-  const markContentRead = useCallback((userId, levelId) => {
-    setProgress(prev => {
-      const next = {
+  const markContentRead = useCallback(async (userId, levelId) => {
+    try {
+      await api.markContentRead(userId, levelId);
+      setProgress(prev => ({
         ...prev,
         [userId]: {
           ...prev[userId],
           [levelId]: { ...prev[userId]?.[levelId], contentRead: true },
         },
-      };
-      save(next);
-      return next;
-    });
+      }));
+    } catch {}
   }, []);
 
-  const markLevelComplete = useCallback((userId, levelId, score) => {
-    setProgress(prev => {
-      const existing    = prev[userId]?.[levelId];
-      // Always keep the highest score across all attempts so the Level Card
-      // shows the same value as QuizHistory's "Best Score" stat.
-      const prevBest    = existing?.score?.pct ?? -1;
-      const bestScore   = score.pct >= prevBest ? score : existing.score;
-      const now         = new Date().toISOString();
-      const next = {
-        ...prev,
-        [userId]: {
-          ...prev[userId],
-          [levelId]: {
-            ...existing,
-            status:          'completed',
-            score:           bestScore,          // best score ever
-            lastScore:       score,              // this attempt's score
-            completedAt:     existing?.completedAt || now, // first completion time
-            lastCompletedAt: now,                // most recent attempt time
-          },
-        },
-      };
-      save(next);
-      return next;
-    });
+  const markLevelComplete = useCallback(async (userId, levelId, score) => {
+    try {
+      await api.completeLevelProgress(userId, levelId, score);
 
-    // Auto-create a pending approval entry for the next level
-    if (levelId === 1 || levelId === 2) {
-      const nextId = levelId + 1;
-      setApprovals(prev => {
-        if (prev[userId]?.[nextId]) return prev; // already has a record, don't overwrite
-        const next = {
+      setProgress(prev => {
+        const existing  = prev[userId]?.[levelId];
+        const prevBest  = existing?.score?.pct ?? -1;
+        const bestScore = score.pct >= prevBest ? score : existing?.score;
+        const now       = new Date().toISOString();
+        return {
           ...prev,
-          [userId]: { ...prev[userId], [nextId]: 'pending' },
+          [userId]: {
+            ...prev[userId],
+            [levelId]: {
+              ...existing,
+              status:          'completed',
+              score:           bestScore,
+              lastScore:       score,
+              completedAt:     existing?.completedAt || now,
+              lastCompletedAt: now,
+            },
+          },
         };
-        saveApprovals(next);
-        return next;
       });
+
+      // Auto-pending approval for next level (optimistic)
+      const nextLevel = levelId + 1;
+      if (nextLevel <= 3) {
+        setApprovals(prev => {
+          if (prev[userId]?.[nextLevel]) return prev;
+          return {
+            ...prev,
+            [userId]: { ...prev[userId], [nextLevel]: 'pending' },
+          };
+        });
+      }
+    } catch (err) {
+      console.error('markLevelComplete failed:', err.message);
     }
   }, []);
 
@@ -160,51 +169,61 @@ export function LevelProvider({ children }) {
   }, [progress]);
 
   // Admin: toggle a level active/inactive
-  const setLevelActive = useCallback((levelId, active) => {
-    setLevelSettings(prev => {
-      const next = { ...prev, [levelId]: { ...prev[levelId], active } };
-      localStorage.setItem(LEVEL_SETTINGS_KEY, JSON.stringify(next));
-      return next;
-    });
-  }, []);
+  const setLevelActive = useCallback(async (levelId, active) => {
+    try {
+      const current = levelSettings[levelId] || {};
+      await api.saveLevelSettings(levelId, { ...current, active });
+      setLevelSettings(prev => ({
+        ...prev,
+        [levelId]: { ...prev[levelId], active },
+      }));
+    } catch (err) {
+      console.error('setLevelActive failed:', err.message);
+    }
+  }, [levelSettings]);
 
   // Admin: toggle global access for a level
-  const setGlobalAccess = useCallback((levelId, open) => {
-    setGlobalAccessState(prev => {
-      const next = { ...prev, [levelId]: open };
-      localStorage.setItem(GLOBAL_ACCESS_KEY, JSON.stringify(next));
-      return next;
-    });
+  const setGlobalAccessFn = useCallback(async (levelId, open) => {
+    try {
+      await api.setGlobalAccess(levelId, open);
+      setGlobalAccess(prev => ({ ...prev, [levelId]: open }));
+    } catch (err) {
+      console.error('setGlobalAccess failed:', err.message);
+    }
   }, []);
 
   // Admin: per-student override unlock
-  const setStudentOverride = useCallback((userId, levelId) => {
-    setOverridesState(prev => {
-      const existing = prev[userId] ?? [];
-      if (existing.includes(levelId)) return prev;
-      const next = { ...prev, [userId]: [...existing, levelId] };
-      saveOverridesData(next);
-      return next;
-    });
+  const setStudentOverride = useCallback(async (userId, levelId) => {
+    try {
+      await api.setOverride(userId, levelId);
+      setOverrides(prev => {
+        const existing = prev[userId] ?? [];
+        if (existing.includes(levelId)) return prev;
+        return { ...prev, [userId]: [...existing, levelId] };
+      });
+    } catch (err) {
+      console.error('setStudentOverride failed:', err.message);
+    }
   }, []);
 
-  // Admin: approve or reject a student's access to a level
-  const setApproval = useCallback((userId, levelId, status) => {
-    setApprovals(prev => {
-      const next = {
+  // Admin: approve or reject a student's level access
+  const setApproval = useCallback(async (userId, levelId, status) => {
+    try {
+      await api.setApproval(userId, levelId, status);
+      setApprovals(prev => ({
         ...prev,
         [userId]: { ...prev[userId], [levelId]: status },
-      };
-      saveApprovals(next);
-      return next;
-    });
+      }));
+    } catch (err) {
+      console.error('setApproval failed:', err.message);
+    }
   }, []);
 
   return (
     <LevelContext.Provider value={{
       getLevel, getLevelStatus, markContentRead, markLevelComplete, isContentRead,
-      setApproval, approvals, setStudentOverride, setLevelActive, setGlobalAccess,
-      levelSettings, globalAccess,
+      setApproval, approvals, setStudentOverride, setLevelActive,
+      setGlobalAccess: setGlobalAccessFn, levelSettings, globalAccess,
     }}>
       {children}
     </LevelContext.Provider>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Users, Trophy, TrendingUp, CheckCircle, BarChart2,
@@ -10,6 +10,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import { useAuth } from '../../context/AuthContext';
+import { api } from '../../utils/api';
 
 /* ── helpers ── */
 function loadAdminStats() {
@@ -87,15 +88,29 @@ function QuickAction({ icon, label, to, color }) {
   );
 }
 
+const EMPTY_STATS = { totalStudents: 0, l1Done: 0, l2Done: 0, l3Done: 0, totalAttempts: 0, avgScore: 0, passRate: 0, passCount: 0, failCount: 0 };
+
 export default function AdminDashboard() {
   const { user } = useAuth();
-  const [stats, setStats] = useState(loadAdminStats);
-  const [recent, setRecent] = useState(loadRecentStudents);
+  const [stats,     setStats]     = useState(EMPTY_STATS);
+  const [recent,    setRecent]    = useState([]);
   const [refreshed, setRefreshed] = useState(false);
 
+  const fetchData = () => {
+    api.getStudents().then(students => {
+      setStats(prev => ({ ...prev, totalStudents: students.length }));
+      setRecent(students.slice(0, 5).map(s => ({
+        id:     s.uniqueId,
+        school: s.schoolName || '—',
+        class:  s.className  || '—',
+      })));
+    }).catch(() => {});
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
   const refresh = () => {
-    setStats(loadAdminStats());
-    setRecent(loadRecentStudents());
+    fetchData();
     setRefreshed(true);
     setTimeout(() => setRefreshed(false), 1500);
   };

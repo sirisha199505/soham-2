@@ -1,36 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   ShieldCheck, Search, CheckCircle, XCircle, Clock,
   ChevronDown, Users, Filter, RefreshCw, CheckSquare,
   Square, Trophy, Calendar, Hourglass, AlertCircle,
   UserCheck, UserX, ToggleLeft, ToggleRight, ChevronRight,
 } from 'lucide-react';
-import { loadApprovals, saveApprovals } from '../../context/LevelContext';
+import { useLevel } from '../../context/LevelContext';
+import { api } from '../../utils/api';
 import { LEVELS } from '../../utils/levelData';
-
-const PROGRESS_KEY  = 'rqa_level_progress';
-const STUDENTS_KEY  = 'rqa_students';
-const SETTINGS_KEY  = 'rqa_level_settings';
-const GLOBAL_KEY    = 'rqa_global_level_access';
-
-/* ── Helpers ─────────────────────────────────────────────────── */
-function loadProgress() {
-  try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}'); }
-  catch { return {}; }
-}
-function loadStudents() {
-  try { return JSON.parse(localStorage.getItem(STUDENTS_KEY) || '{}'); }
-  catch { return {}; }
-}
-function loadLevelSettings() {
-  try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); }
-  catch { return {}; }
-}
-function loadGlobal() {
-  try { return JSON.parse(localStorage.getItem(GLOBAL_KEY) || '{}'); }
-  catch { return {}; }
-}
-function saveGlobal(g) { localStorage.setItem(GLOBAL_KEY, JSON.stringify(g)); }
 
 function formatDate(iso) {
   if (!iso) return '—';
@@ -41,43 +18,27 @@ function formatDate(iso) {
 }
 
 /* ── Build the student rows for a given target level (2 or 3) ── */
-function buildRows(targetLevel) {
-  const prevLevel  = targetLevel - 1;
-  const students   = loadStudents();
-  const progress   = loadProgress();
-  const approvals  = loadApprovals();
-
-  const rows = [];
-
-  // All student IDs who completed the previous level
-  const allIds = new Set([
-    ...Object.keys(students),
-    ...Object.keys(progress),
-  ]);
-
-  allIds.forEach(id => {
-    const prev = progress[id]?.[prevLevel];
-    if (prev?.status !== 'completed') return; // hasn't completed prev level yet
-
-    const student    = students[id] || {};
-    const approval   = approvals[id]?.[targetLevel] ?? 'pending';
-    const targetData = progress[id]?.[targetLevel];
-
-    rows.push({
-      id,
-      name:      student.schoolName || student.name || id,
-      className: student.className || '—',
-      prevScore:      prev.score?.pct  ?? null,
-      prevCorrect:    prev.score?.correct ?? null,
-      prevTotal:      prev.score?.total ?? null,
-      prevCompletedAt: prev.completedAt ?? null,
-      approval,
-      targetStatus: targetData?.status ?? null,
-      targetScore:  targetData?.score?.pct ?? null,
+function buildRows(targetLevel, apiStudents, approvals) {
+  const prevLevel = targetLevel - 1;
+  return apiStudents
+    .filter(s => s.levels?.[prevLevel]?.status === 'completed')
+    .map(s => {
+      const prevData   = s.levels?.[prevLevel] || {};
+      const targetData = s.levels?.[targetLevel] || {};
+      const approval   = approvals[s.uniqueId]?.[targetLevel] ?? 'pending';
+      return {
+        id:              s.uniqueId,
+        name:            s.schoolName || s.uniqueId,
+        className:       s.className || '—',
+        prevScore:       prevData.score?.pct    ?? null,
+        prevCorrect:     prevData.score?.correct ?? null,
+        prevTotal:       prevData.score?.total   ?? null,
+        prevCompletedAt: prevData.completedAt    ?? null,
+        approval,
+        targetStatus: targetData.status      ?? null,
+        targetScore:  targetData.score?.pct  ?? null,
+      };
     });
-  });
-
-  return rows;
 }
 
 /* ── Status badge ── */
@@ -184,21 +145,32 @@ function StatsRow({ rows }) {
 
 /* ── Main Page ── */
 export default function LevelPermissions() {
-  const [activeTab,  setActiveTab]  = useState(2);
-  const [search,     setSearch]     = useState('');
-  const [filter,     setFilter]     = useState('all'); // all | pending | approved | rejected
-  const [selected,   setSelected]   = useState(new Set());
-  const [approvals,  setApprovals]  = useState(loadApprovals);
-  const [global,     setGlobal]     = useState(loadGlobal);
-  const [toast,      setToast]      = useState(null);
+  const { approvals: ctxApprovals, setApproval: ctxSetApproval, globalAccess, setGlobalAccess: ctxSetGlobalAccess } = useLevel();
+  const [activeTab,   setActiveTab]   = useState(2);
+  const [search,      setSearch]      = useState('');
+  const [filter,      setFilter]      = useState('all');
+  const [selected,    setSelected]    = useState(new Set());
+  const [approvals,   setApprovals]   = useState({});
+  const [global,      setGlobal]      = useState({});
+  const [toast,       setToast]       = useState(null);
+  const [apiStudents, setApiStudents] = useState([]);
+
+  // Sync from LevelContext (which loads from API)
+  useEffect(() => { setApprovals(ctxApprovals); }, [ctxApprovals]);
+  useEffect(() => { setGlobal(globalAccess); }, [globalAccess]);
+
+  // Fetch full student list with per-level progress
+  useEffect(() => {
+    api.getStudents().then(setApiStudents).catch(() => {});
+  }, []);
 
   function showToast(msg, type = 'success') {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 2500);
   }
 
-  /* rebuild rows whenever tab or approvals change */
-  const allRows = useMemo(() => buildRows(activeTab), [activeTab, approvals]);
+  /* rebuild rows whenever tab, students or approvals change */
+  const allRows = useMemo(() => buildRows(activeTab, apiStudents, approvals), [activeTab, apiStudents, approvals]);
 
   const filtered = useMemo(() => {
     let rows = allRows;
@@ -214,30 +186,33 @@ export default function LevelPermissions() {
   }, [allRows, filter, search]);
 
   /* Counts for tabs */
-  const level2Pending = useMemo(() => buildRows(2).filter(r => r.approval === 'pending').length, [approvals]);
-  const level3Pending = useMemo(() => buildRows(3).filter(r => r.approval === 'pending').length, [approvals]);
+  const level2Pending = useMemo(() => buildRows(2, apiStudents, approvals).filter(r => r.approval === 'pending').length, [apiStudents, approvals]);
+  const level3Pending = useMemo(() => buildRows(3, apiStudents, approvals).filter(r => r.approval === 'pending').length, [apiStudents, approvals]);
 
-  /* Write approval change */
+  /* Write approval change via API */
   function applyApproval(ids, status) {
-    const raw = loadApprovals();
+    const updated = { ...approvals };
     ids.forEach(id => {
-      if (!raw[id]) raw[id] = {};
-      raw[id][activeTab] = status;
+      ctxSetApproval(id, activeTab, status);
+      if (!updated[id]) updated[id] = {};
+      updated[id][activeTab] = status;
     });
-    saveApprovals(raw);
-    setApprovals({ ...raw });
+    setApprovals(updated);
     setSelected(new Set());
     showToast(
       `${status === 'approved' ? 'Approved' : 'Rejected'} ${ids.length} student${ids.length > 1 ? 's' : ''}`,
       status === 'approved' ? 'success' : 'error'
     );
+    // Refresh student list so level status columns update
+    api.getStudents().then(setApiStudents).catch(() => {});
   }
 
   /* Global toggle */
   function handleGlobalToggle() {
-    const next = { ...global, [activeTab]: !global[activeTab] };
+    const newVal = !global[activeTab];
+    const next   = { ...global, [activeTab]: newVal };
     setGlobal(next);
-    saveGlobal(next);
+    ctxSetGlobalAccess(activeTab, newVal);
     showToast(
       next[activeTab]
         ? `Level ${activeTab} opened globally for all students`
