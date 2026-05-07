@@ -57,11 +57,13 @@ router.get('/progress/:userId', requireAuth, async (req, res) => {
     if (userRes.rowCount === 0) return res.json({});
 
     const dbUserId = userRes.rows[0].id;
-    const result   = await pool.query(
-      'SELECT * FROM level_progress WHERE user_id=$1', [dbUserId]
-    );
+    const [progressResult, approvalsResult] = await Promise.all([
+      pool.query('SELECT * FROM level_progress WHERE user_id=$1', [dbUserId]),
+      pool.query('SELECT level_id, status FROM level_approvals WHERE user_id=$1', [dbUserId]),
+    ]);
+
     const progress = {};
-    result.rows.forEach(r => {
+    progressResult.rows.forEach(r => {
       progress[r.level_id] = {
         status:          r.status,
         score:           r.score,
@@ -71,6 +73,13 @@ router.get('/progress/:userId', requireAuth, async (req, res) => {
         contentRead:     r.content_read,
       };
     });
+
+    // Merge approval status so students can see pending/approved/rejected
+    approvalsResult.rows.forEach(r => {
+      if (!progress[r.level_id]) progress[r.level_id] = {};
+      progress[r.level_id].approvalStatus = r.status;
+    });
+
     res.json(progress);
   } catch (err) {
     console.error(err.message);
@@ -125,6 +134,21 @@ router.post('/progress/:userId/:levelId/complete', requireAuth, async (req, res)
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: 'Failed to record completion.' });
+  }
+});
+
+// DELETE /api/levels/progress/:userId (admin) — reset all progress for a student
+router.delete('/progress/:userId', requireAdmin, async (req, res) => {
+  try {
+    const userRes = await pool.query('SELECT id FROM users WHERE unique_id=$1', [req.params.userId]);
+    if (userRes.rowCount === 0) return res.status(404).json({ error: 'User not found.' });
+    const dbUserId = userRes.rows[0].id;
+    await pool.query('DELETE FROM level_progress WHERE user_id=$1', [dbUserId]);
+    await pool.query('DELETE FROM level_approvals WHERE user_id=$1', [dbUserId]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Failed to reset progress.' });
   }
 });
 

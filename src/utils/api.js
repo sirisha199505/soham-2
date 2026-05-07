@@ -95,4 +95,5 @@ export const api = {
 
   // Students
   getStudents: () => request('GET', '/api/students'),
+  resetStudentProgress: (userId) => request('DELETE', `/api/levels/progress/${userId}`),
 };

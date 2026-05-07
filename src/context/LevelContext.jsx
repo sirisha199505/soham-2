@@ -74,9 +74,17 @@ export function LevelProvider({ children }) {
     fetchedUsers.current.add(userId);
     try {
       const data = await api.getLevelProgress(userId);
-      // backend returns { levelId: { status, score, ... } }
-      const map = toMap(data, (k) => Number(k), (_k, v) => v);
+      const map = {};
+      const userApprovals = {};
+      Object.entries(data || {}).forEach(([k, v]) => {
+        const levelId = Number(k);
+        map[levelId] = v;
+        if (v.approvalStatus) userApprovals[levelId] = v.approvalStatus;
+      });
       setProgress(prev => ({ ...prev, [userId]: map }));
+      if (Object.keys(userApprovals).length > 0) {
+        setApprovals(prev => ({ ...prev, [userId]: userApprovals }));
+      }
     } catch {}
   }, []);
 

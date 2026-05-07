@@ -11,41 +11,8 @@ const LEVEL_COLORS = { 1: '#3BC0EF', 2: '#8B5CF6', 3: '#10B981' };
 const ADMIN_OVERRIDES_KEY = 'rqa_admin_overrides';
 const DISABLED_KEY = 'rqa_disabled_students';
 
-/* ── data helpers ── */
-function loadAllData() {
-  const students = JSON.parse(localStorage.getItem('rqa_students') || '{}');
-  const progress = JSON.parse(localStorage.getItem('rqa_level_progress') || '{}');
-  const overrides = JSON.parse(localStorage.getItem(ADMIN_OVERRIDES_KEY) || '{}');
-  const disabled = JSON.parse(localStorage.getItem(DISABLED_KEY) || '[]');
-
-  return Object.values(students).map(s => {
-    const p = progress[s.uniqueId] || {};
-    return {
-      uniqueId: s.uniqueId,
-      schoolName: s.schoolName || s.name || '—',
-      className: s.className || '—',
-      disabled: disabled.includes(s.uniqueId),
-      levels: {
-        1: p[1] || null,
-        2: p[2] || null,
-        3: p[3] || null,
-      },
-      overrides: overrides[s.uniqueId] || [],
-    };
-  });
-}
-
 function saveDisabled(ids) {
   localStorage.setItem(DISABLED_KEY, JSON.stringify(ids));
-}
-
-function resetStudentProgress(userId) {
-  const progress = JSON.parse(localStorage.getItem('rqa_level_progress') || '{}');
-  delete progress[userId];
-  localStorage.setItem('rqa_level_progress', JSON.stringify(progress));
-  const overrides = JSON.parse(localStorage.getItem(ADMIN_OVERRIDES_KEY) || '{}');
-  delete overrides[userId];
-  localStorage.setItem(ADMIN_OVERRIDES_KEY, JSON.stringify(overrides));
 }
 
 /* ── LevelBadge ── */
@@ -198,17 +165,26 @@ export default function StudentManagement() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const fetchStudents = () => {
-    api.getStudents().then(students => {
+  const fetchStudents = async () => {
+    try {
+      const [students, overridesData] = await Promise.all([
+        api.getStudents(),
+        api.getOverrides().catch(() => ({})),
+      ]);
+      const disabled = JSON.parse(localStorage.getItem(DISABLED_KEY) || '[]');
       setData(students.map(s => ({
         uniqueId:   s.uniqueId,
         schoolName: s.schoolName || '—',
         className:  s.className  || '—',
-        disabled:   false,
-        levels:     { 1: null, 2: null, 3: null },
-        overrides:  [],
+        disabled:   disabled.includes(s.uniqueId),
+        levels: {
+          1: s.levels?.[1] || null,
+          2: s.levels?.[2] || null,
+          3: s.levels?.[3] || null,
+        },
+        overrides: overridesData[s.uniqueId] || [],
       })));
-    }).catch(() => {});
+    } catch {}
   };
 
   useEffect(() => { fetchStudents(); }, []);
@@ -249,9 +225,9 @@ export default function StudentManagement() {
       refresh();
     }
     if (action === 'reset') {
-      resetStudentProgress(student.uniqueId);
-      showToast(`Progress reset for ${student.uniqueId}`, 'warning');
-      refresh();
+      api.resetStudentProgress(student.uniqueId)
+        .then(() => { showToast(`Progress reset for ${student.uniqueId}`, 'warning'); fetchStudents(); })
+        .catch(() => showToast('Reset failed', 'warning'));
     }
     if (action === 'toggle') {
       const disabled = JSON.parse(localStorage.getItem(DISABLED_KEY) || '[]');

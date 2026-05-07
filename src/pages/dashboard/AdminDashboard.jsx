@@ -12,36 +12,32 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../utils/api';
 
-/* ── helpers ── */
-function loadAdminStats() {
-  const students = JSON.parse(localStorage.getItem('rqa_students') || '{}');
-  const progress = JSON.parse(localStorage.getItem('rqa_level_progress') || '{}');
-  const totalStudents = Object.keys(students).length;
-
+function computeStats(students) {
   let l1Done = 0, l2Done = 0, l3Done = 0;
   const scores = [];
   let passCount = 0, failCount = 0;
+  let totalAttempts = 0;
 
-  Object.values(progress).forEach(p => {
-    if (p[1]?.status === 'completed') { l1Done++; const sc = p[1]?.score?.pct; if (sc !== undefined) { scores.push(sc); sc >= 50 ? passCount++ : failCount++; } }
-    if (p[2]?.status === 'completed') { l2Done++; const sc = p[2]?.score?.pct; if (sc !== undefined) { scores.push(sc); sc >= 50 ? passCount++ : failCount++; } }
-    if (p[3]?.status === 'completed') { l3Done++; const sc = p[3]?.score?.pct; if (sc !== undefined) { scores.push(sc); sc >= 50 ? passCount++ : failCount++; } }
+  students.forEach(s => {
+    totalAttempts += s.attemptsCount || 0;
+    [1, 2, 3].forEach(lvl => {
+      const lp = s.levels?.[lvl];
+      if (lp?.status === 'completed') {
+        if (lvl === 1) l1Done++;
+        if (lvl === 2) l2Done++;
+        if (lvl === 3) l3Done++;
+        const sc = lp.score?.pct;
+        if (sc !== undefined && sc !== null) {
+          scores.push(sc);
+          sc >= 50 ? passCount++ : failCount++;
+        }
+      }
+    });
   });
 
-  const totalAttempts = l1Done + l2Done + l3Done;
-  const avgScore = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-  const passRate = passCount + failCount > 0 ? Math.round((passCount / (passCount + failCount)) * 100) : 0;
-
-  return { totalStudents, l1Done, l2Done, l3Done, totalAttempts, avgScore, passRate, passCount, failCount };
-}
-
-function loadRecentStudents() {
-  const students = JSON.parse(localStorage.getItem('rqa_students') || '{}');
-  return Object.values(students).slice(-5).reverse().map(s => ({
-    id: s.uniqueId,
-    school: s.name || '—',
-    class: s.className || '—',
-  }));
+  const avgScore  = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+  const passRate  = passCount + failCount > 0 ? Math.round((passCount / (passCount + failCount)) * 100) : 0;
+  return { totalStudents: students.length, l1Done, l2Done, l3Done, totalAttempts, avgScore, passRate, passCount, failCount };
 }
 
 /* ── static chart data ── */
@@ -98,7 +94,7 @@ export default function AdminDashboard() {
 
   const fetchData = () => {
     api.getStudents().then(students => {
-      setStats(prev => ({ ...prev, totalStudents: students.length }));
+      setStats(computeStats(students));
       setRecent(students.slice(0, 5).map(s => ({
         id:     s.uniqueId,
         school: s.schoolName || '—',
