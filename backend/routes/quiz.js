@@ -29,9 +29,15 @@ function shuffleOptions(q) {
   };
 }
 
-// GET /api/quiz/generate/:userId
+// Difficulty mapped per level: Level 1 = easy, Level 2 = medium, Level 3 = hard
+const LEVEL_DIFFICULTY = { '1': 'easy', '2': 'medium', '3': 'hard' };
+
+// GET /api/quiz/generate/:userId?level=1
 router.get('/generate/:userId', requireAuth, async (req, res) => {
   const { userId } = req.params;
+  const levelId    = req.query.level || '';
+  const difficulty = LEVEL_DIFFICULTY[levelId] || null;
+
   try {
     const userRes = await pool.query('SELECT id FROM users WHERE unique_id=$1', [userId]);
     if (userRes.rowCount === 0) return res.status(404).json({ error: 'User not found.' });
@@ -45,9 +51,25 @@ router.get('/generate/:userId', requireAuth, async (req, res) => {
 
     const selected = [];
     for (const cat of CATEGORIES) {
-      const activeRes = await pool.query(
-        "SELECT * FROM questions WHERE category=$1 AND status='active'", [cat]
-      );
+      // Fetch questions filtered by difficulty for this level
+      let activeRes;
+      if (difficulty) {
+        activeRes = await pool.query(
+          "SELECT * FROM questions WHERE category=$1 AND status='active' AND difficulty=$2",
+          [cat, difficulty]
+        );
+        // If not enough level-specific questions, fall back to any difficulty
+        if (activeRes.rows.length < QUESTIONS_PER_CATEGORY) {
+          activeRes = await pool.query(
+            "SELECT * FROM questions WHERE category=$1 AND status='active'", [cat]
+          );
+        }
+      } else {
+        activeRes = await pool.query(
+          "SELECT * FROM questions WHERE category=$1 AND status='active'", [cat]
+        );
+      }
+
       const active    = activeRes.rows;
       const available = active.filter(q => !usedIds.has(q.id));
 

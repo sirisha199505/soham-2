@@ -121,4 +121,42 @@ router.get('/me', requireAuth, async (req, res) => {
   }
 });
 
+// POST /api/auth/reset-password — student password reset via unique ID + school/class verification
+router.post('/reset-password', async (req, res) => {
+  const { uniqueId, schoolName, className, newPassword } = req.body;
+
+  if (!uniqueId || !newPassword || newPassword.length < 4) {
+    return res.status(400).json({ error: 'Student ID and a password of at least 4 characters are required.' });
+  }
+
+  try {
+    const result = await pool.query(
+      "SELECT * FROM users WHERE unique_id=$1 AND role='student'",
+      [uniqueId.trim()]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Student ID not found.' });
+    }
+
+    const user = result.rows[0];
+
+    // Verify school name and class name match (case-insensitive, trimmed)
+    const normalize = s => (s || '').toLowerCase().trim();
+    if (
+      normalize(user.school_name) !== normalize(schoolName) ||
+      normalize(user.class_name)  !== normalize(className)
+    ) {
+      return res.status(401).json({ error: 'School name or class name does not match our records.' });
+    }
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE users SET password_hash=$1 WHERE unique_id=$2', [hash, uniqueId.trim()]);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Reset password error:', err.message);
+    res.status(500).json({ error: 'Password reset failed.' });
+  }
+});
+
 module.exports = router;

@@ -7,10 +7,10 @@ import { api } from './api';
 const QUESTIONS_PER_CATEGORY = 5;
 export const TOTAL_QUIZ_QUESTIONS = CATEGORIES.length * QUESTIONS_PER_CATEGORY;
 
-// Generate a quiz for the student via the backend
-export async function generateLevelQuiz(studentId) {
+// Generate a quiz for the student via the backend (filtered by level)
+export async function generateLevelQuiz(studentId, levelId) {
   try {
-    return await api.generateQuiz(studentId);
+    return await api.generateQuiz(studentId, levelId);
   } catch (err) {
     console.error('generateLevelQuiz failed:', err.message);
     return [];

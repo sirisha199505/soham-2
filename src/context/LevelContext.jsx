@@ -4,6 +4,18 @@ import { api } from '../utils/api';
 
 const LevelContext = createContext(null);
 
+// Helper: backend returns plain objects (not arrays) — normalise both formats
+function toMap(data, keyFn, valFn) {
+  const map = {};
+  if (!data) return map;
+  if (Array.isArray(data)) {
+    data.forEach(item => { map[keyFn(item)] = valFn ? valFn(item) : item; });
+  } else if (typeof data === 'object') {
+    Object.entries(data).forEach(([k, v]) => { map[keyFn(k, v)] = valFn ? valFn(k, v) : v; });
+  }
+  return map;
+}
+
 export function LevelProvider({ children }) {
   const { user } = useAuth();
   const [progress,      setProgress]      = useState({});
@@ -19,45 +31,41 @@ export function LevelProvider({ children }) {
   useEffect(() => {
     if (!user) return;
 
+    // Level settings: backend returns { "1": { title, active, ... }, "2": {...} }
     api.getLevelSettings()
-      .then(levels => {
-        // Convert array [{ id, open, ... }] → map { [id]: { ... } }
-        const map = {};
-        if (Array.isArray(levels)) levels.forEach(l => { map[l.id] = l; });
+      .then(data => {
+        const map = toMap(
+          data,
+          (k) => Number(k),    // key → numeric level ID
+          (_k, v) => v,        // value → settings object as-is
+        );
         setLevelSettings(map);
       })
       .catch(() => {});
 
+    // Global access: backend returns { "1": false, "2": true, ... }
     api.getGlobalAccess()
-      .then(levels => {
-        const map = {};
-        if (Array.isArray(levels)) levels.forEach(l => { map[l.levelId] = l.open; });
+      .then(data => {
+        const map = toMap(data, (k) => Number(k), (_k, v) => v);
         setGlobalAccess(map);
       })
       .catch(() => {});
 
-    // Admin-only calls — ignore 403s silently
-    api.getApprovals()
-      .then(rows => {
-        const map = {};
-        if (Array.isArray(rows)) rows.forEach(r => {
-          if (!map[r.userId]) map[r.userId] = {};
-          map[r.userId][r.levelId] = r.status;
-        });
-        setApprovals(map);
-      })
-      .catch(() => {});
+    // Admin-only calls — only fetch for admin roles to avoid 401/403 for students
+    const ADMIN_ROLES = ['admin', 'super_admin', 'school_admin', 'district_admin', 'teacher'];
+    if (ADMIN_ROLES.includes(user.role)) {
+      api.getApprovals()
+        .then(data => {
+          setApprovals(typeof data === 'object' && data ? data : {});
+        })
+        .catch(() => {});
 
-    api.getOverrides()
-      .then(rows => {
-        const map = {};
-        if (Array.isArray(rows)) rows.forEach(r => {
-          if (!map[r.userId]) map[r.userId] = [];
-          map[r.userId].push(r.levelId);
-        });
-        setOverrides(map);
-      })
-      .catch(() => {});
+      api.getOverrides()
+        .then(data => {
+          setOverrides(typeof data === 'object' && data ? data : {});
+        })
+        .catch(() => {});
+    }
   }, [user?.id]);
 
   /* ── Fetch progress for a specific student ── */
@@ -65,10 +73,9 @@ export function LevelProvider({ children }) {
     if (!userId || fetchedUsers.current.has(userId)) return;
     fetchedUsers.current.add(userId);
     try {
-      const rows = await api.getLevelProgress(userId);
-      // Convert array [{ levelId, status, score, ... }] → map { [levelId]: { ... } }
-      const map = {};
-      if (Array.isArray(rows)) rows.forEach(r => { map[r.levelId] = r; });
+      const data = await api.getLevelProgress(userId);
+      // backend returns { levelId: { status, score, ... } }
+      const map = toMap(data, (k) => Number(k), (_k, v) => v);
       setProgress(prev => ({ ...prev, [userId]: map }));
     } catch {}
   }, []);
@@ -168,14 +175,18 @@ export function LevelProvider({ children }) {
     return progress[userId]?.[levelId]?.contentRead === true;
   }, [progress]);
 
-  // Admin: toggle a level active/inactive
-  const setLevelActive = useCallback(async (levelId, active) => {
+  // Admin: save full level settings (title, subtitle, description, timeLimit, active)
+  const setLevelActive = useCallback(async (levelId, settings) => {
     try {
       const current = levelSettings[levelId] || {};
-      await api.saveLevelSettings(levelId, { ...current, active });
+      // settings may be a plain { active } boolean call (legacy) or a full form object
+      const payload = typeof settings === 'boolean'
+        ? { ...current, active: settings }
+        : { ...current, ...settings };
+      await api.saveLevelSettings(levelId, payload);
       setLevelSettings(prev => ({
         ...prev,
-        [levelId]: { ...prev[levelId], active },
+        [levelId]: { ...(prev[levelId] || {}), ...payload },
       }));
     } catch (err) {
       console.error('setLevelActive failed:', err.message);

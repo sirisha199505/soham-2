@@ -1,16 +1,29 @@
-// In dev: Vite proxies /api → http://localhost:3001
+// In dev: Vite proxies /api → http://localhost:3001 (keep VITE_API_URL empty in .env)
 // In prod: set VITE_API_URL to your deployed API base URL
 const BASE = import.meta.env.VITE_API_URL || '';
 
+const TOKEN_KEY = 'rqa_token';
+const USER_KEY  = 'rqa_user';
+
+// Paths that don't require a token — never clear localStorage on 401 from these
+const PUBLIC_PATHS = ['/api/auth/login', '/api/auth/register', '/api/auth/reset-password'];
+
 function getToken() {
-  const token = localStorage.getItem('rqa_token');
+  const token = localStorage.getItem(TOKEN_KEY);
   return token && token !== 'undefined' && token !== 'null' ? token : null;
+}
+
+function clearSession() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
 }
 
 async function request(method, path, body) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  // Only attach token to endpoints that need it — never send it to public auth routes
+  const isPublicPath = PUBLIC_PATHS.some(p => path.includes(p));
+  if (token && !isPublicPath) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(`${BASE}${path}`, {
     method,
@@ -20,6 +33,11 @@ async function request(method, path, body) {
 
   let data;
   try { data = await res.json(); } catch { data = {}; }
+
+  // A 401 on a protected endpoint means the token is stale/expired — clear it
+  if (res.status === 401 && !isPublicPath) {
+    clearSession();
+  }
 
   if (!res.ok || data.status === 'error') {
     throw new Error(data.data || data.error || `Request failed (${res.status})`);
@@ -36,10 +54,12 @@ export const api = {
 
   // Auth
   register: (schoolName, className, password) =>
-    request('POST', '/api/register', { schoolName, className, password }),
+    request('POST', '/api/auth/register', { schoolName, className, password }),
   login: (identifier, password) =>
-    request('POST', '/api/login', { identifier, password }),
-  me: () => request('GET', '/api/me/info'),
+    request('POST', '/api/auth/login', { identifier, password }),
+  me: () => request('GET', '/api/auth/me'),
+  resetPassword: (uniqueId, schoolName, className, newPassword) =>
+    request('POST', '/api/auth/reset-password', { uniqueId, schoolName, className, newPassword }),
 
   // Levels
   getLevelSettings: () => request('GET', '/api/levels/settings'),
@@ -67,7 +87,7 @@ export const api = {
   seedQuestions: (questions) => request('POST', '/api/questions/seed', questions),
 
   // Quiz
-  generateQuiz: (userId) => request('GET', `/api/quiz/generate/${userId}`),
+  generateQuiz: (userId, levelId) => request('GET', `/api/quiz/generate/${userId}?level=${levelId || ''}`),
   recordUsedQuestions: (userId, questionIds) =>
     request('POST', `/api/quiz/used/${userId}`, { questionIds }),
   getAttempts: (userId) => request('GET', `/api/quiz/attempts/${userId}`),

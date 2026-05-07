@@ -179,7 +179,14 @@ export default function ExamLevels() {
   }, []);
 
   const handleSave = async (levelId, form) => {
-    await setLevelActive(levelId, form.active);
+    // Pass the full form so title, subtitle, description, timeLimit, and active all persist
+    await setLevelActive(levelId, {
+      title:       form.title,
+      subtitle:    form.subtitle,
+      description: form.description,
+      timeLimit:   Number(form.timeLimit) || 10,
+      active:      form.active,
+    });
     setEditing(null);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);

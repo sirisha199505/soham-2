@@ -133,7 +133,7 @@ export default function LevelQuiz() {
   const [loading,   setLoading]   = useState(true);
   useEffect(() => {
     ensureQuestionBankSeeded().catch(() => {});
-    generateLevelQuiz(user?.uniqueId).then(qs => {
+    generateLevelQuiz(user?.uniqueId, id).then(qs => {
       setQuestions(qs);
       setLoading(false);
     }).catch(() => setLoading(false));
