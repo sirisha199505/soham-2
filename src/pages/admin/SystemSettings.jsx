@@ -1,57 +1,34 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Settings, Save, CheckCircle, RotateCcw, Clock, Target,
   RefreshCw, Eye, Shuffle, Users, Lock, Unlock,
   AlertTriangle, Info, ToggleLeft, ToggleRight, Shield,
-  Layers, ChevronDown, ChevronUp, BookOpen, Key, Timer,
+  Layers, ChevronDown, ChevronUp, BookOpen, Key, Timer, Loader2,
 } from 'lucide-react';
-
-const SETTINGS_KEY = 'rqa_system_settings';
+import { api } from '../../utils/api';
 
 const DEFAULT_LEVEL_CFG = {
-  timerMinutes:   10,
-  passingMark:    50,
-  retryLimit:     1,
-  randomize:      false,
-  locked:         false,
-  showHints:      false,
-  questionsCount: 10,
+  timerMinutes: 10, passingMark: 50, retryLimit: 1,
+  randomize: false, locked: false, showHints: false, questionsCount: 10,
 };
 
 const DEFAULT_SETTINGS = {
-  quizTimerMinutes:        10,
-  passingMark:             50,
-  retryLimit:              1,
-  randomizeQuestions:      false,
-  showResultsImmediately:  true,
-  registrationOpen:        true,
-  showLeaderboard:         false,
-  allowSelfReset:          false,
-  maintenanceMode:         false,
-  maxStudentsPerClass:     60,
+  quizTimerMinutes:       10,
+  passingMark:            50,
+  retryLimit:             1,
+  randomizeQuestions:     false,
+  showResultsImmediately: true,
+  registrationOpen:       true,
+  showLeaderboard:        false,
+  allowSelfReset:         false,
+  maintenanceMode:        false,
+  maxStudentsPerClass:    60,
   levels: {
     1: { ...DEFAULT_LEVEL_CFG, timerMinutes: 10, passingMark: 50, locked: false },
     2: { ...DEFAULT_LEVEL_CFG, timerMinutes: 15, passingMark: 60, locked: true  },
     3: { ...DEFAULT_LEVEL_CFG, timerMinutes: 20, passingMark: 70, locked: true  },
   },
 };
-
-function loadSettings() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
-    return {
-      ...DEFAULT_SETTINGS,
-      ...stored,
-      levels: {
-        1: { ...DEFAULT_SETTINGS.levels[1], ...(stored.levels?.[1] || {}) },
-        2: { ...DEFAULT_SETTINGS.levels[2], ...(stored.levels?.[2] || {}) },
-        3: { ...DEFAULT_SETTINGS.levels[3], ...(stored.levels?.[3] || {}) },
-      },
-    };
-  } catch { return { ...DEFAULT_SETTINGS }; }
-}
-
-function saveSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
 
 /* ── Toggle row ── */
 function ToggleRow({ label, desc, value, onChange, icon, color = '#4F46E5' }) {
@@ -243,27 +220,51 @@ function LevelSettingsPanel({ lvl, cfg, onChange }) {
 
 /* ── MAIN ── */
 export default function SystemSettings() {
-  const [settings, setSettings] = useState(loadSettings);
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [loading,    setLoading]    = useState(true);
   const [saved,      setSaved]      = useState(false);
   const [showReset,  setShowReset]  = useState(false);
   const [activeTab,  setActiveTab]  = useState('global');
 
+  useEffect(() => {
+    api.getSettings()
+      .then(data => {
+        if (data && Object.keys(data).length > 0) setSettings(data);
+      })
+      .catch(err => console.error('Failed to load settings:', err))
+      .finally(() => setLoading(false));
+  }, []);
+
   const update = (key, val) => setSettings(p => ({ ...p, [key]: val }));
   const updateLevel = (lvl, cfg) => setSettings(p => ({ ...p, levels: { ...p.levels, [lvl]: cfg } }));
 
-  const handleSave = () => {
-    saveSettings(settings);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+  const handleSave = async () => {
+    try {
+      await api.saveSettings(settings);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      console.error('Failed to save settings:', err);
+    }
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     setSettings({ ...DEFAULT_SETTINGS });
-    saveSettings({ ...DEFAULT_SETTINGS });
+    try {
+      await api.saveSettings({ ...DEFAULT_SETTINGS });
+    } catch (err) {
+      console.error('Failed to reset settings:', err);
+    }
     setShowReset(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
+
+  if (loading) return (
+    <div className="min-h-full flex items-center justify-center">
+      <Loader2 size={28} className="animate-spin text-indigo-400" />
+    </div>
+  );
 
   return (
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-6">
@@ -403,7 +404,7 @@ export default function SystemSettings() {
                 icon={<Settings size={14}/>} color="#EF4444"/>
               <div className="flex items-start gap-2 bg-slate-50 rounded-xl px-4 py-3">
                 <Info size={13} className="text-slate-400 shrink-0 mt-0.5"/>
-                <p className="text-xs text-slate-500">Settings are saved to browser localStorage. In production these would be stored server-side.</p>
+                <p className="text-xs text-slate-500">Settings are saved to the database and apply globally to all users.</p>
               </div>
             </div>
           </div>

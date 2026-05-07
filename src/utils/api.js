@@ -96,4 +96,15 @@ export const api = {
   // Students
   getStudents: () => request('GET', '/api/students'),
   resetStudentProgress: (userId) => request('DELETE', `/api/levels/progress/${userId}`),
+
+  // Content
+  getContent:  (levelId) => request('GET', `/api/content/${levelId}`),
+  saveContent: (levelId, pages) => request('PUT', `/api/content/${levelId}`, pages),
+
+  // Settings
+  getSettings:  () => request('GET', '/api/settings'),
+  saveSettings: (settings) => request('PUT', '/api/settings', settings),
+
+  // Monitoring
+  getMonitoringSessions: () => request('GET', '/api/monitoring/sessions'),
 };

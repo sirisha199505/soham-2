@@ -5,11 +5,14 @@ const fs       = require('fs');
 const path     = require('path');
 const pool     = require('./db');
 
-const authRouter      = require('./routes/auth');
-const levelsRouter    = require('./routes/levels');
-const questionsRouter = require('./routes/questions');
-const quizRouter      = require('./routes/quiz');
-const studentsRouter  = require('./routes/students');
+const authRouter       = require('./routes/auth');
+const levelsRouter     = require('./routes/levels');
+const questionsRouter  = require('./routes/questions');
+const quizRouter       = require('./routes/quiz');
+const studentsRouter   = require('./routes/students');
+const contentRouter    = require('./routes/content');
+const settingsRouter   = require('./routes/settings');
+const monitoringRouter = require('./routes/monitoring');
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -30,11 +33,14 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 
 // Routes
-app.use('/api/auth',      authRouter);
-app.use('/api/levels',    levelsRouter);
-app.use('/api/questions', questionsRouter);
-app.use('/api/quiz',      quizRouter);
-app.use('/api/students',  studentsRouter);
+app.use('/api/auth',       authRouter);
+app.use('/api/levels',     levelsRouter);
+app.use('/api/questions',  questionsRouter);
+app.use('/api/quiz',       quizRouter);
+app.use('/api/students',   studentsRouter);
+app.use('/api/content',    contentRouter);
+app.use('/api/settings',   settingsRouter);
+app.use('/api/monitoring', monitoringRouter);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
 

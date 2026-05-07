@@ -91,3 +91,32 @@ CREATE TABLE IF NOT EXISTS quiz_attempts (
   score        JSONB,
   attempted_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS content_pages (
+  id          SERIAL PRIMARY KEY,
+  level_id    INTEGER NOT NULL,
+  page_order  INTEGER NOT NULL DEFAULT 0,
+  title       VARCHAR(255) NOT NULL,
+  type        VARCHAR(20) DEFAULT 'text',
+  sections    JSONB DEFAULT '[]',
+  pdf_data    TEXT,
+  pdf_name    VARCHAR(255),
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS system_settings (
+  id                       INTEGER PRIMARY KEY DEFAULT 1,
+  quiz_timer_minutes       INTEGER DEFAULT 10,
+  passing_mark             INTEGER DEFAULT 50,
+  retry_limit              INTEGER DEFAULT 1,
+  randomize_questions      BOOLEAN DEFAULT FALSE,
+  show_results_immediately BOOLEAN DEFAULT TRUE,
+  registration_open        BOOLEAN DEFAULT TRUE,
+  show_leaderboard         BOOLEAN DEFAULT FALSE,
+  allow_self_reset         BOOLEAN DEFAULT FALSE,
+  maintenance_mode         BOOLEAN DEFAULT FALSE,
+  max_students_per_class   INTEGER DEFAULT 60,
+  level_configs            JSONB DEFAULT '{}'
+);
+
+INSERT INTO system_settings (id) VALUES (1) ON CONFLICT DO NOTHING;

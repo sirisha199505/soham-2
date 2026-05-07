@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Activity, RefreshCw, Pause, Play, StopCircle, RotateCcw,
   AlertTriangle, CheckCircle, Users, Hash, Wifi,
   UserX, TrendingUp, Ghost, Loader2,
 } from 'lucide-react';
+import { api } from '../../utils/api';
 
 // ─── Status config ────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
@@ -31,64 +32,6 @@ const STATUS_CONFIG = {
 
 const LEVEL_COLORS = { 1: '#3BC0EF', 2: '#8B5CF6', 3: '#10B981' };
 
-const MOCK_IDS = [
-  '20240001', '20240002', '20240003', '20240004', '20240005',
-  '20240006', '20240007', '20240008', '20240009', '20240010',
-  '20240011', '20240012',
-];
-
-const MOCK_STATUSES = [
-  'active', 'active', 'active', 'progress', 'active',
-  'progress', 'abandoned', 'active', 'anonymous', 'progress',
-  'abandoned', 'anonymous',
-];
-
-function generateSession(id, lvl, offset, status) {
-  const start    = new Date(Date.now() - offset * 1000);
-  const answered = status === 'abandoned'
-    ? Math.floor(Math.random() * 4)
-    : Math.min(10, Math.floor(offset / 60) + Math.floor(Math.random() * 3));
-  return {
-    id:        `sess_${id}`,
-    studentId: status === 'anonymous' ? '????????' : id,
-    level:     lvl,
-    startTime: start,
-    answered,
-    total:     10,
-    elapsed:   offset,
-    status,
-  };
-}
-
-function buildInitialSessions() {
-  const sessions = [];
-  const offsets  = [120, 240, 60, 480, 180, 360, 90, 540, 300, 420, 150, 270];
-  const levels   = [1, 1, 2, 1, 2, 3, 1, 2, 1, 3, 2, 1];
-  MOCK_IDS.forEach((id, i) => {
-    sessions.push(generateSession(id, levels[i], offsets[i], MOCK_STATUSES[i]));
-  });
-
-  // Merge real in-progress data from localStorage
-  const progress = JSON.parse(localStorage.getItem('rqa_level_progress') || '{}');
-  Object.entries(progress).forEach(([userId, userProg]) => {
-    [1, 2, 3].forEach(lvl => {
-      if (userProg[lvl] && userProg[lvl].status !== 'completed') {
-        sessions.push({
-          id: `real_${userId}_${lvl}`,
-          studentId: userId,
-          level: lvl,
-          startTime: new Date(Date.now() - 180000),
-          answered: 0,
-          total: 10,
-          elapsed: 180,
-          status: 'active',
-          real: true,
-        });
-      }
-    });
-  });
-  return sessions;
-}
 
 // ─── Action confirm modal ─────────────────────────────────────────────────
 function ActionModal({ action, session, onConfirm, onClose }) {
@@ -126,7 +69,8 @@ function ActionModal({ action, session, onConfirm, onClose }) {
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────
 export default function LiveMonitoring() {
-  const [sessions,     setSessions]     = useState(buildInitialSessions);
+  const [sessions,     setSessions]     = useState([]);
+  const [loading,      setLoading]      = useState(true);
   const [filter,       setFilter]       = useState('all');
   const [search,       setSearch]       = useState('');
   const [actionModal,  setActionModal]  = useState(null);
@@ -137,7 +81,24 @@ export default function LiveMonitoring() {
     setTimeout(() => setToast(''), 2500);
   };
 
-  const refresh = () => { setSessions(buildInitialSessions()); showToast('Sessions refreshed'); };
+  const loadSessions = useCallback(async () => {
+    try {
+      const data = await api.getMonitoringSessions();
+      setSessions(data);
+    } catch (err) {
+      console.error('Failed to load sessions:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadSessions(); }, [loadSessions]);
+
+  const refresh = async () => {
+    setLoading(true);
+    await loadSessions();
+    showToast('Sessions refreshed');
+  };
 
   const executeAction = () => {
     const { action, session } = actionModal;
@@ -184,6 +145,12 @@ export default function LiveMonitoring() {
     { key:'abandoned', label:`Abandoned (${counts.abandoned})` },
     { key:'anonymous', label:`Anonymous (${counts.anonymous})` },
   ];
+
+  if (loading) return (
+    <div className="min-h-full flex items-center justify-center">
+      <Loader2 size={28} className="animate-spin text-indigo-400" />
+    </div>
+  );
 
   return (
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-5">
@@ -319,7 +286,6 @@ export default function LiveMonitoring() {
                         <p className={`font-mono font-bold text-xs tracking-wide ${isAnon?'text-slate-400 italic':'text-slate-800'}`}>
                           {sess.studentId}
                         </p>
-                        {sess.real && <p className="text-[9px] text-green-600 font-bold">● REAL</p>}
                       </div>
                     </div>
                   </td>

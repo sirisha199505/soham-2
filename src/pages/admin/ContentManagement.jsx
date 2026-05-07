@@ -1,40 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   FileText, Plus, Edit2, Trash2, X, Save, CheckCircle,
-  BookOpen, ChevronDown, ChevronUp, Info, Upload, Eye,
+  BookOpen, ChevronDown, ChevronUp, Info, Upload, Eye, Loader2,
 } from 'lucide-react';
-import { LEVEL1_PAGES, LEVEL2_PAGES, LEVEL3_PAGES, LEVELS } from '../../utils/levelData';
-
-const CONTENT_KEY = 'rqa_custom_content';
-
-const DEFAULT_PAGES = {
-  1: LEVEL1_PAGES,
-  2: LEVEL2_PAGES,
-  3: LEVEL3_PAGES,
-};
-
-function deepClone(pages) {
-  return pages.map(p => ({ ...p, sections: p.sections.map(s => ({ ...s })) }));
-}
-
-function loadContent() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(CONTENT_KEY) || '{}');
-    return {
-      1: saved[1] || deepClone(DEFAULT_PAGES[1]),
-      2: saved[2] || deepClone(DEFAULT_PAGES[2]),
-      3: saved[3] || deepClone(DEFAULT_PAGES[3]),
-    };
-  } catch {
-    return {
-      1: deepClone(DEFAULT_PAGES[1]),
-      2: deepClone(DEFAULT_PAGES[2]),
-      3: deepClone(DEFAULT_PAGES[3]),
-    };
-  }
-}
-
-function saveContent(d) { localStorage.setItem(CONTENT_KEY, JSON.stringify(d)); }
+import { LEVELS } from '../../utils/levelData';
+import { api } from '../../utils/api';
 
 const LEVEL_COLORS = {
   1: { from: '#3BC0EF', to: '#1E3A8A' },
@@ -265,13 +235,35 @@ function LevelSection({ levelId, pages, onEdit, onDelete, onAdd }) {
 
 /* ── MAIN ── */
 export default function ContentManagement() {
-  const [content, setContent] = useState(loadContent);
+  const [content, setContent] = useState({ 1: [], 2: [], 3: [] });
+  const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState('');
 
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(''), 2500); };
 
-  const handleSave = (levelId, form, existingPage) => {
+  useEffect(() => {
+    Promise.all([
+      api.getContent(1),
+      api.getContent(2),
+      api.getContent(3),
+    ]).then(([p1, p2, p3]) => {
+      setContent({ 1: p1, 2: p2, 3: p3 });
+    }).catch(err => {
+      console.error('Failed to load content:', err);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const persistLevel = async (levelId, pages) => {
+    try {
+      await api.saveContent(levelId, pages);
+    } catch (err) {
+      console.error('Failed to save content:', err);
+      showToast('Save failed — check connection');
+    }
+  };
+
+  const handleSave = async (levelId, form, existingPage) => {
     const next = { ...content };
     if (existingPage !== null && existingPage !== undefined) {
       const idx = next[levelId].findIndex(p => p.title === existingPage.title);
@@ -281,18 +273,24 @@ export default function ContentManagement() {
       next[levelId] = [...(next[levelId] || []), { page: (next[levelId]?.length || 0) + 1, ...form }];
     }
     setContent(next);
-    saveContent(next);
+    await persistLevel(levelId, next[levelId]);
     setModal(null);
     showToast('Content page saved');
   };
 
-  const handleDelete = (levelId, idx) => {
+  const handleDelete = async (levelId, idx) => {
     const next = { ...content };
     next[levelId] = next[levelId].filter((_, i) => i !== idx);
     setContent(next);
-    saveContent(next);
+    await persistLevel(levelId, next[levelId]);
     showToast('Page deleted');
   };
+
+  if (loading) return (
+    <div className="min-h-full flex items-center justify-center">
+      <Loader2 size={28} className="animate-spin text-indigo-400" />
+    </div>
+  );
 
   return (
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-5">
