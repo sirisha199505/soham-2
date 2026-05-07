@@ -14,10 +14,15 @@ const studentsRouter  = require('./routes/students');
 const app  = express();
 const PORT = process.env.PORT || 3001;
 
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
+  .split(',').map(s => s.trim()).filter(Boolean);
+
 app.use(cors({
   origin: (origin, cb) => {
-    // Allow requests with no origin (mobile apps, Postman, server-side) and any localhost port
-    if (!origin || /^http:\/\/localhost(:\d+)?$/.test(origin)) return cb(null, true);
+    if (!origin) return cb(null, true); // Postman / server-side
+    if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return cb(null, true); // local dev
+    if (/\.vercel\.app$/.test(origin)) return cb(null, true); // any Vercel preview/prod URL
+    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true); // custom domains
     cb(new Error('Not allowed by CORS'));
   },
   credentials: true,
