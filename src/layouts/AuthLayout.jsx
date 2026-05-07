@@ -118,19 +118,79 @@ export default function AuthLayout() {
 
       {/* ── Right form panel ── */}
       <div
-        className="flex-1 flex items-center justify-center p-6 relative"
+        className="flex-1 flex items-center justify-center relative overflow-y-auto"
         style={{ background: 'linear-gradient(160deg, #0d1f3c 0%, #060e20 100%)' }}
       >
         {/* Subtle glow behind form */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full opacity-8 blur-[100px]"
           style={{ background: colors.primary }} />
 
-        <div className="w-full max-w-md relative z-10">
-          {/* Mobile logo */}
-          <div className="lg:hidden flex items-center gap-2.5 mb-8 justify-center">
-            <img src="/logo2.png" alt="Soham Quiz" className="w-10 h-10 object-contain rounded-xl" />
-            <p className="text-white font-bold text-xl" style={{ fontFamily: 'Space Grotesk' }}>Soham Quiz</p>
+        <div className="w-full max-w-md relative z-10 px-5 py-8">
+          {/* ── Mobile branding (hidden on lg+) ── */}
+          <div className="lg:hidden mb-8 space-y-5">
+            {/* Logo row */}
+            <div className="flex items-center gap-2.5 justify-center">
+              <div className="p-1.5 rounded-xl" style={{ background: `${colors.primary}20`, border: `1px solid ${colors.primary}35` }}>
+                <img src="/logo2.png" alt="Soham Quiz" className="w-9 h-9 object-contain" style={{ borderRadius: 6 }} />
+              </div>
+              <p className="text-white font-bold text-xl" style={{ fontFamily: 'Space Grotesk' }}>Soham Quiz</p>
+            </div>
+
+            {/* Trusted badge */}
+            <div className="flex justify-center">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold"
+                style={{ background: `${colors.primary}20`, color: colors.primary, border: `1px solid ${colors.primary}30` }}>
+                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: colors.primary }} />
+                Trusted by 240+ schools across India
+              </div>
+            </div>
+
+            {/* Heading */}
+            <h1 className="text-2xl font-bold text-white text-center leading-snug" style={{ fontFamily: 'Space Grotesk' }}>
+              Transforming Robotics Education Through{' '}
+              <span style={{
+                background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 100%)`,
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+              }}>
+                Smart Assessments
+              </span>
+            </h1>
+
+            <p className="text-slate-400 text-sm text-center leading-relaxed">
+              A comprehensive quiz platform built for robotics education — empowering students, teachers, and administrators with real-time insights.
+            </p>
+
+            {/* Features */}
+            <div className="grid grid-cols-1 gap-2">
+              {FEATURES.map((f, i) => (
+                <div key={i} className="flex items-center gap-2.5">
+                  <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ background: `${colors.primary}20`, color: colors.primary }}>
+                    {f.icon}
+                  </div>
+                  <p className="text-slate-300 text-xs">{f.text}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Stats */}
+            <div className="flex justify-center gap-8 pt-1">
+              {[
+                { value: '45K+', label: 'Students' },
+                { value: '12K+', label: 'Quizzes' },
+                { value: '98%',  label: 'Uptime' },
+              ].map(stat => (
+                <div key={stat.label} className="text-center">
+                  <p className="text-xl font-bold text-white" style={{ fontFamily: 'Space Grotesk' }}>{stat.value}</p>
+                  <p className="text-slate-500 text-xs mt-0.5">{stat.label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-white/10" />
           </div>
+
           <Outlet />
         </div>
       </div>

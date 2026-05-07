@@ -18,23 +18,31 @@ function clearSession() {
   localStorage.removeItem(USER_KEY);
 }
 
-async function request(method, path, body) {
+async function request(method, path, body, attempt = 0) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();
-  // Only attach token to endpoints that need it — never send it to public auth routes
   const isPublicPath = PUBLIC_PATHS.some(p => path.includes(p));
   if (token && !isPublicPath) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    // Network error (Render cold start / no connection) — retry once after 4 s
+    if (attempt === 0) {
+      await new Promise(r => setTimeout(r, 4000));
+      return request(method, path, body, 1);
+    }
+    throw new Error('Server is starting up — please try again in a moment.');
+  }
 
   let data;
   try { data = await res.json(); } catch { data = {}; }
 
-  // A 401 on a protected endpoint means the token is stale/expired — clear it
   if (res.status === 401 && !isPublicPath) {
     clearSession();
   }
@@ -42,7 +50,6 @@ async function request(method, path, body) {
   if (!res.ok || data.status === 'error') {
     throw new Error(data.data || data.error || `Request failed (${res.status})`);
   }
-  // Unwrap { status:'success', data: X } — return X directly
   return data?.status === 'success' ? data.data : data;
 }
 

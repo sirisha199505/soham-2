@@ -195,7 +195,7 @@ export default function Login() {
             </svg>
           )}
           {loading
-            ? 'Signing in…'
+            ? 'Signing in… (may take ~10s on first load)'
             : isAdmin
               ? 'Login as Admin'
               : 'Sign In'}
