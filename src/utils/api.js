@@ -24,28 +24,40 @@ async function request(method, path, body, attempt = 0) {
   const isPublicPath = PUBLIC_PATHS.some(p => path.includes(p));
   if (token && !isPublicPath) headers['Authorization'] = `Bearer ${token}`;
 
+  // AbortController gives us a hard timeout — Render cold starts hang the
+  // connection open without throwing, so without this fetch waits forever.
+  const controller = new AbortController();
+  const timeoutId  = setTimeout(() => controller.abort(), 30000); // 30 s
+
   let res;
   try {
     res = await fetch(`${BASE}${path}`, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body:   body !== undefined ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
     });
-  } catch {
-    // Network error (Render cold start / no connection) — retry once after 4 s
+    clearTimeout(timeoutId);
+  } catch (err) {
+    clearTimeout(timeoutId);
+    // On first attempt: wait 5 s then retry (covers both connection refused
+    // and abort/timeout — Render may just need a moment to wake up).
     if (attempt === 0) {
-      await new Promise(r => setTimeout(r, 4000));
+      await new Promise(r => setTimeout(r, 5000));
       return request(method, path, body, 1);
     }
-    throw new Error('Server is starting up — please try again in a moment.');
+    const isTimeout = err.name === 'AbortError';
+    throw new Error(
+      isTimeout
+        ? 'Server is waking up (Render cold start). Please wait 30 s and try again.'
+        : 'Cannot reach server. Check your connection and try again.'
+    );
   }
 
   let data;
   try { data = await res.json(); } catch { data = {}; }
 
-  if (res.status === 401 && !isPublicPath) {
-    clearSession();
-  }
+  if (res.status === 401 && !isPublicPath) clearSession();
 
   if (!res.ok || data.status === 'error') {
     throw new Error(data.data || data.error || `Request failed (${res.status})`);

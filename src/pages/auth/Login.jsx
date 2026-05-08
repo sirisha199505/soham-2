@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Hash, Lock, Eye, EyeOff, AlertCircle, ChevronRight,
-  Mail, GraduationCap, ShieldCheck,
+  Mail, GraduationCap, ShieldCheck, Loader2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -16,7 +16,14 @@ export default function Login() {
   const [form,     setForm]     = useState({ identifier: '', password: '' });
   const [showPass, setShowPass] = useState(false);
   const [loading,  setLoading]  = useState(false);
+  const [waitSec,  setWaitSec]  = useState(0);
   const [error,    setError]    = useState('');
+
+  useEffect(() => {
+    if (!loading) { setWaitSec(0); return; }
+    const id = setInterval(() => setWaitSec(s => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [loading]);
 
   const switchTab = (t) => {
     setTab(t);
@@ -188,14 +195,11 @@ export default function Login() {
             boxShadow: `0 10px 32px ${colors.primary}50`,
           }}
         >
-          {loading && (
-            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-            </svg>
-          )}
+          {loading && <Loader2 size={16} className="animate-spin" />}
           {loading
-            ? 'Signing in… (may take ~10s on first load)'
+            ? waitSec < 6
+              ? 'Signing in…'
+              : `Server waking up… ${waitSec}s`
             : isAdmin
               ? 'Login as Admin'
               : 'Sign In'}

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { School, Lock, Eye, EyeOff, AlertCircle, Copy, CheckCircle, ArrowRight, BookOpen } from 'lucide-react';
+import { School, Lock, Eye, EyeOff, AlertCircle, Copy, CheckCircle, ArrowRight, BookOpen, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { formatUniqueId } from '../../utils/uniqueId';
@@ -15,9 +15,17 @@ export default function Register() {
   const [showPass, setShowPass]       = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading]         = useState(false);
+  const [waitSec, setWaitSec]         = useState(0);
   const [error, setError]             = useState('');
   const [generatedId, setGeneratedId] = useState(null);
   const [copied, setCopied]           = useState(false);
+
+  // Count seconds while loading so user sees a live timer
+  useEffect(() => {
+    if (!loading) { setWaitSec(0); return; }
+    const id = setInterval(() => setWaitSec(s => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [loading]);
 
   const set = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }));
 
@@ -255,13 +263,12 @@ export default function Register() {
             boxShadow: `0 10px 32px ${colors.primary}50`,
           }}
         >
-          {loading && (
-            <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-            </svg>
-          )}
-          {loading ? 'Creating account… (may take ~10s on first load)' : 'Create Account'}
+          {loading && <Loader2 size={16} className="animate-spin" />}
+          {loading
+            ? waitSec < 6
+              ? 'Creating account…'
+              : `Server waking up… ${waitSec}s`
+            : 'Create Account'}
           {!loading && <ArrowRight size={16} />}
         </button>
       </form>
