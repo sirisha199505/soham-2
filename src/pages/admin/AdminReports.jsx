@@ -30,13 +30,14 @@ async function fetchReportData() {
       id:     s.uniqueId,
       school: s.schoolName || '—',
       class:  s.className  || '—',
-      l1: levels[1] || null,
-      l2: levels[2] || null,
-      l3: levels[3] || null,
+      l1: levels['1'] || null,
+      l2: levels['2'] || null,
+      l3: levels['3'] || null,
     });
     [1, 2, 3].forEach(lvl => {
-      if (levels[lvl]?.status === 'completed') {
-        levelStats[lvl].push(levels[lvl]?.score?.pct ?? 0);
+      const ld = levels[String(lvl)];
+      if (ld?.status === 'completed') {
+        levelStats[lvl].push(ld?.score?.pct ?? 0);
       }
     });
   });

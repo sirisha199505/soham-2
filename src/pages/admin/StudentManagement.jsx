@@ -167,10 +167,7 @@ export default function StudentManagement() {
 
   const fetchStudents = async () => {
     try {
-      const [students, overridesData] = await Promise.all([
-        api.getStudents(),
-        api.getOverrides().catch(() => ({})),
-      ]);
+      const students = await api.getStudents();
       const disabled = JSON.parse(localStorage.getItem(DISABLED_KEY) || '[]');
       setData(students.map(s => ({
         uniqueId:   s.uniqueId,
@@ -178,11 +175,11 @@ export default function StudentManagement() {
         className:  s.className  || '—',
         disabled:   disabled.includes(s.uniqueId),
         levels: {
-          1: s.levels?.[1] || null,
-          2: s.levels?.[2] || null,
-          3: s.levels?.[3] || null,
+          1: s.levels?.['1'] || null,
+          2: s.levels?.['2'] || null,
+          3: s.levels?.['3'] || null,
         },
-        overrides: overridesData[s.uniqueId] || [],
+        overrides: s.overrideIds || [],
       })));
     } catch {}
   };
