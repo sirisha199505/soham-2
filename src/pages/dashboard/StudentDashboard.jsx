@@ -1,7 +1,6 @@
 import {
   Lock, CheckCircle, ArrowRight, Hash, Trophy, Clock,
-  BookOpen, Star, ChevronRight, Zap, AlertCircle, XCircle,
-  Hourglass, ShieldCheck,
+  BookOpen, Star, ChevronRight, Zap,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -67,14 +66,12 @@ function WelcomeBanner({ greeting, displayId, colors, completedCount }) {
 /* ─────────────────────────────────────────────────────────────── */
 function LevelCard({ level, status, levelData, levelSettings }) {
   const isLocked    = status === 'locked';
-  const isPending   = status === 'pending_approval';
-  const isRejected  = status === 'rejected';
   const isCompleted = status === 'completed';
   const isUnlocked  = status === 'unlocked';
 
   const timeLimit   = Number(levelSettings?.[level.id]?.timeLimit) || 10;
-  const score       = levelData?.score;       // best score
-  const lastScore   = levelData?.lastScore;   // most recent attempt
+  const score       = levelData?.score;
+  const lastScore   = levelData?.lastScore;
 
   const lastAttemptAt = levelData?.lastCompletedAt
     ? new Date(levelData.lastCompletedAt).toLocaleString('en-IN', {
@@ -87,40 +84,27 @@ function LevelCard({ level, status, levelData, levelSettings }) {
   const perf       = getPerformanceLabel(scorePct);
   const scoreColor = { text: perf.color, bg: perf.bg, border: perf.border };
 
-  // Show "Last attempt" chip only when it differs from best
   const showLastAttempt = lastScore && lastScore.pct !== scorePct;
 
-  /* derive header gradient and icon */
   const headerGradient =
     isLocked   ? 'linear-gradient(135deg, #94a3b8, #64748b)' :
-    isPending  ? 'linear-gradient(135deg, #f59e0b, #d97706)' :
-    isRejected ? 'linear-gradient(135deg, #ef4444, #b91c1c)' :
     `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`;
 
   const statusLabel =
-    isLocked   ? 'Locked' :
-    isPending  ? 'Awaiting Approval' :
-    isRejected ? 'Access Denied' :
-    isCompleted? 'Completed' :
-                 'Ready';
+    isLocked    ? 'Locked' :
+    isCompleted ? 'Completed' :
+                  'Ready';
 
-  const StatusIcon = isLocked ? Lock : isPending ? Hourglass : isRejected ? XCircle : isCompleted ? CheckCircle : Zap;
+  const StatusIcon = isLocked ? Lock : isCompleted ? CheckCircle : Zap;
 
-  /* border colour */
   const borderColor =
-    isPending  ? '#fde68a' :
-    isRejected ? '#fecaca' :
-    isCompleted? `${level.color.from}40` :
+    isCompleted ? `${level.color.from}40` :
     '#f1f5f9';
 
   return (
     <div
       className="bg-white rounded-2xl border shadow-sm overflow-hidden transition-all duration-300"
-      style={{
-        borderColor,
-        opacity: isLocked ? 0.75 : 1,
-        boxShadow: (isPending || isRejected) ? '0 0 0 1px ' + borderColor : undefined,
-      }}
+      style={{ borderColor, opacity: isLocked ? 0.75 : 1 }}
     >
       {/* Header */}
       <div className="relative p-5 pb-4 overflow-hidden" style={{ background: headerGradient }}>
@@ -141,11 +125,8 @@ function LevelCard({ level, status, levelData, levelSettings }) {
           </div>
         </div>
 
-        {/* Sub-label row */}
         <div className="relative z-10 flex items-center gap-1.5 mt-3">
-          {isLocked    && <><Lock     size={11} className="text-white/60" /><span className="text-white/50 text-xs">Complete previous level to unlock</span></>}
-          {isPending   && <><Hourglass size={11} className="text-white/80"/><span className="text-white/80 text-xs font-semibold">Waiting for admin approval</span></>}
-          {isRejected  && <><XCircle  size={11} className="text-white/80" /><span className="text-white/80 text-xs font-semibold">Access denied by admin</span></>}
+          {isLocked    && <><Lock        size={11} className="text-white/60" /><span className="text-white/50 text-xs">Complete previous level to unlock</span></>}
           {isCompleted && Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="h-1.5 rounded-full" style={{ width: i === 0 ? 20 : 8, background: 'rgba(255,255,255,0.9)' }} />
           ))}
@@ -178,7 +159,6 @@ function LevelCard({ level, status, levelData, levelSettings }) {
         {/* Score (if completed) */}
         {isCompleted && score && (
           <div className="space-y-1.5">
-            {/* Best score row */}
             <div className="rounded-xl p-3 flex items-center gap-3"
               style={{ background: scoreColor.bg, border: `1px solid ${scoreColor.border}` }}>
               <Trophy size={20} style={{ color: scoreColor.text }} className="shrink-0" />
@@ -198,7 +178,6 @@ function LevelCard({ level, status, levelData, levelSettings }) {
               </div>
             </div>
 
-            {/* Last attempt chip — shown only when it differs from best */}
             {showLastAttempt && (
               <div className="rounded-xl px-3 py-2 flex items-center justify-between"
                 style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
@@ -212,7 +191,6 @@ function LevelCard({ level, status, levelData, levelSettings }) {
               </div>
             )}
 
-            {/* Date for single-attempt students */}
             {!showLastAttempt && lastAttemptAt && (
               <p className="text-[10px] text-slate-400 text-right">{lastAttemptAt}</p>
             )}
@@ -223,52 +201,25 @@ function LevelCard({ level, status, levelData, levelSettings }) {
         <div className="space-y-1">
           <div className="flex justify-between text-[10px] text-slate-400 font-medium">
             <span>Progress</span>
-            <span>
-              {isCompleted ? '100%' : isLocked ? '0%' : isPending ? 'Pending' : isRejected ? 'Denied' : 'In Progress'}
-            </span>
+            <span>{isCompleted ? '100%' : isLocked ? '0%' : 'In Progress'}</span>
           </div>
           <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
             <div
               className="h-2 rounded-full transition-all duration-700"
               style={{
-                width: isCompleted ? '100%' : isPending ? '60%' : isRejected ? '60%' : '0%',
-                background:
-                  isLocked   ? '#94a3b8' :
-                  isPending  ? '#f59e0b' :
-                  isRejected ? '#ef4444' :
-                  `linear-gradient(90deg, ${level.color.from}, ${level.color.to})`,
+                width: isCompleted ? '100%' : '0%',
+                background: isLocked
+                  ? '#94a3b8'
+                  : `linear-gradient(90deg, ${level.color.from}, ${level.color.to})`,
               }}
             />
           </div>
         </div>
 
-        {/* ── CTA / Status button ── */}
-
+        {/* CTA */}
         {isLocked && (
           <div className="flex items-center gap-2 w-full py-3 rounded-xl text-slate-400 text-sm font-semibold bg-slate-50 border border-slate-200 justify-center">
             <Lock size={14} /> Locked
-          </div>
-        )}
-
-        {isPending && (
-          <div className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 space-y-1">
-            <div className="flex items-center gap-2 text-amber-700 font-bold text-sm">
-              <Hourglass size={14} /> Waiting for Admin Approval
-            </div>
-            <p className="text-xs text-amber-600">
-              You have completed the previous level. An admin will review and grant access shortly.
-            </p>
-          </div>
-        )}
-
-        {isRejected && (
-          <div className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 space-y-1">
-            <div className="flex items-center gap-2 text-red-700 font-bold text-sm">
-              <XCircle size={14} /> Access Rejected
-            </div>
-            <p className="text-xs text-red-500">
-              Your request to access this level was not approved. Please contact your administrator.
-            </p>
           </div>
         )}
 
@@ -305,25 +256,15 @@ function LevelPath({ statuses }) {
         const st = statuses[i];
         const isCompleted = st === 'completed';
         const isUnlocked  = st === 'unlocked';
-        const isPending   = st === 'pending_approval';
-        const isRejected  = st === 'rejected';
 
         const nodeStyle =
           isCompleted
             ? { background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`, color: '#fff' }
           : isUnlocked
             ? { background: `${level.color.from}20`, color: level.color.from, border: `2px solid ${level.color.from}` }
-          : isPending
-            ? { background: '#fef3c7', color: '#d97706', border: '2px solid #fde68a' }
-          : isRejected
-            ? { background: '#fee2e2', color: '#dc2626', border: '2px solid #fecaca' }
           : { background: '#f1f5f9', color: '#94a3b8', border: '2px solid #e2e8f0' };
 
-        const NodeIcon =
-          isCompleted ? <CheckCircle size={18} /> :
-          isPending   ? <Hourglass   size={14} /> :
-          isRejected  ? <XCircle     size={14} /> :
-          level.id;
+        const NodeIcon = isCompleted ? <CheckCircle size={18} /> : level.id;
 
         return (
           <div key={level.id} className="flex items-center">
@@ -344,47 +285,6 @@ function LevelPath({ statuses }) {
           </div>
         );
       })}
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────── */
-/*  Approval notice banner (shown when any level is pending)       */
-/* ─────────────────────────────────────────────────────────────── */
-function ApprovalNoticeBanner({ statuses }) {
-  const pendingLevels  = LEVELS.filter((l, i) => statuses[i] === 'pending_approval').map(l => l.title);
-  const rejectedLevels = LEVELS.filter((l, i) => statuses[i] === 'rejected').map(l => l.title);
-
-  if (!pendingLevels.length && !rejectedLevels.length) return null;
-
-  return (
-    <div className="space-y-2">
-      {pendingLevels.length > 0 && (
-        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
-          <Hourglass size={18} className="text-amber-500 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-sm font-bold text-amber-800">
-              Approval Pending — {pendingLevels.join(', ')}
-            </p>
-            <p className="text-xs text-amber-600 mt-0.5">
-              You have completed the previous level. Your request is with the admin for approval. You will be notified once access is granted.
-            </p>
-          </div>
-        </div>
-      )}
-      {rejectedLevels.length > 0 && (
-        <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4">
-          <AlertCircle size={18} className="text-red-500 mt-0.5 shrink-0" />
-          <div>
-            <p className="text-sm font-bold text-red-800">
-              Access Rejected — {rejectedLevels.join(', ')}
-            </p>
-            <p className="text-xs text-red-500 mt-0.5">
-              Access to {rejectedLevels.join(', ')} was not approved. Please contact your administrator for assistance.
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -416,10 +316,7 @@ export default function StudentDashboard() {
         completedCount={completedCount}
       />
 
-      {/* 2 — Approval notice (conditional) */}
-      <ApprovalNoticeBanner statuses={statuses} />
-
-      {/* 3 — Level path */}
+      {/* 2 — Level path */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-6 py-5">
         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 text-center">
           Your Learning Path
@@ -427,18 +324,18 @@ export default function StudentDashboard() {
         <LevelPath statuses={statuses} />
       </div>
 
-      {/* 4 — Section label */}
+      {/* 3 — Section label */}
       <div className="flex items-center gap-3">
         <div className="w-1 h-6 rounded-full" style={{ background: colors.primary }} />
         <h2 className="text-lg font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>
           Exam Levels
         </h2>
         <span className="text-xs text-slate-400 font-medium">
-          Complete each level — admin approval required to proceed
+          Complete each level in sequence to unlock the next
         </span>
       </div>
 
-      {/* 5 — Level cards grid */}
+      {/* 4 — Level cards grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {LEVELS.map((level, i) => (
           <LevelCard

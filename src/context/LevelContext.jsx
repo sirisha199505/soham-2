@@ -117,16 +117,12 @@ export function LevelProvider({ children }) {
       return progress[userId]?.[1]?.status ?? 'unlocked';
     }
 
-    // 5. Previous level must be completed
+    // 5. Previous level must be completed (no approval step — admin locks/unlocks directly)
     const prev = progress[userId]?.[levelId - 1];
     if (prev?.status !== 'completed') return 'locked';
 
-    // 6. Check approval
-    const approval = approvals[userId]?.[levelId];
-    if (approval === 'rejected') return 'rejected';
-    if (approval === 'pending')  return 'pending_approval';
     return progress[userId]?.[levelId]?.status ?? 'unlocked';
-  }, [progress, approvals, overrides, levelSettings, globalAccess, fetchProgress]);
+  }, [progress, overrides, levelSettings, globalAccess, fetchProgress]);
 
   const markContentRead = useCallback(async (userId, levelId) => {
     try {
@@ -142,41 +138,30 @@ export function LevelProvider({ children }) {
   }, []);
 
   const markLevelComplete = useCallback(async (userId, levelId, score) => {
+    // Optimistic update first — next level unlocks immediately after completion
+    setProgress(prev => {
+      const existing  = prev[userId]?.[levelId];
+      const prevBest  = existing?.score?.pct ?? -1;
+      const bestScore = score.pct >= prevBest ? score : existing?.score;
+      const now       = new Date().toISOString();
+      return {
+        ...prev,
+        [userId]: {
+          ...prev[userId],
+          [levelId]: {
+            ...existing,
+            status:          'completed',
+            score:           bestScore,
+            lastScore:       score,
+            completedAt:     existing?.completedAt || now,
+            lastCompletedAt: now,
+          },
+        },
+      };
+    });
+
     try {
       await api.completeLevelProgress(userId, levelId, score);
-
-      setProgress(prev => {
-        const existing  = prev[userId]?.[levelId];
-        const prevBest  = existing?.score?.pct ?? -1;
-        const bestScore = score.pct >= prevBest ? score : existing?.score;
-        const now       = new Date().toISOString();
-        return {
-          ...prev,
-          [userId]: {
-            ...prev[userId],
-            [levelId]: {
-              ...existing,
-              status:          'completed',
-              score:           bestScore,
-              lastScore:       score,
-              completedAt:     existing?.completedAt || now,
-              lastCompletedAt: now,
-            },
-          },
-        };
-      });
-
-      // Auto-pending approval for next level (optimistic)
-      const nextLevel = levelId + 1;
-      if (nextLevel <= 3) {
-        setApprovals(prev => {
-          if (prev[userId]?.[nextLevel]) return prev;
-          return {
-            ...prev,
-            [userId]: { ...prev[userId], [nextLevel]: 'pending' },
-          };
-        });
-      }
     } catch (err) {
       console.error('markLevelComplete failed:', err.message);
     }
