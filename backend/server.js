@@ -1,82 +1,72 @@
 require('dotenv').config();
-const express  = require('express');
-const cors     = require('cors');
-const fs       = require('fs');
-const path     = require('path');
-const pool     = require('./db');
-
-const authRouter       = require('./routes/auth');
-const levelsRouter     = require('./routes/levels');
-const questionsRouter  = require('./routes/questions');
-const quizRouter       = require('./routes/quiz');
-const studentsRouter   = require('./routes/students');
-const contentRouter    = require('./routes/content');
-const settingsRouter   = require('./routes/settings');
-const monitoringRouter = require('./routes/monitoring');
+const express = require('express');
+const cors    = require('cors');
+const fs      = require('fs');
+const path    = require('path');
+const pool    = require('./db');
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
 
+// ─── CORS ─────────────────────────────────────────────────────────────────
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
   .split(',').map(s => s.trim()).filter(Boolean);
 
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin) return cb(null, true); // Postman / server-side
-    if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return cb(null, true); // local dev
-    if (/\.vercel\.app$/.test(origin)) return cb(null, true); // any Vercel preview/prod URL
-    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true); // custom domains
+    if (!origin)                                    return cb(null, true);
+    if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return cb(null, true);
+    if (/\.vercel\.app$/.test(origin))              return cb(null, true);
+    if (ALLOWED_ORIGINS.includes(origin))           return cb(null, true);
     cb(new Error('Not allowed by CORS'));
   },
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
 
-// Routes
-app.use('/api/auth',       authRouter);
-app.use('/api/levels',     levelsRouter);
-app.use('/api/questions',  questionsRouter);
-app.use('/api/quiz',       quizRouter);
-app.use('/api/students',   studentsRouter);
-app.use('/api/content',    contentRouter);
-app.use('/api/settings',   settingsRouter);
-app.use('/api/monitoring', monitoringRouter);
-
-// Track DB readiness — routes that need the DB will wait or return 503
+// ─── DB READY FLAG ────────────────────────────────────────────────────────
 let dbReady = false;
 
-app.get('/api/health', (req, res) => {
+// ─── 1. HEALTH — always responds immediately (no DB needed) ───────────────
+app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', db: dbReady, time: new Date() });
 });
 
-// Middleware: block non-health requests until DB is ready
-app.use((req, res, next) => {
+// ─── 2. GATE — all other /api routes wait for DB ready ───────────────────
+app.use('/api', (req, res, next) => {
   if (!dbReady) {
-    return res.status(503).json({ error: 'Server is starting up, please retry in a few seconds.' });
+    return res.status(503).json({
+      error: 'Server is starting up — please retry in a few seconds.',
+    });
   }
   next();
 });
 
-// Start listening IMMEDIATELY so Render marks the service live and the
-// health-ping from the frontend gets a fast response even before DB is ready.
+// ─── 3. ROUTES (only reached after DB is ready) ───────────────────────────
+app.use('/api/auth',       require('./routes/auth'));
+app.use('/api/levels',     require('./routes/levels'));
+app.use('/api/questions',  require('./routes/questions'));
+app.use('/api/quiz',       require('./routes/quiz'));
+app.use('/api/students',   require('./routes/students'));
+app.use('/api/content',    require('./routes/content'));
+app.use('/api/settings',   require('./routes/settings'));
+app.use('/api/monitoring', require('./routes/monitoring'));
+
+// ─── 4. START LISTENING immediately so Render marks the service live ──────
 const server = app.listen(PORT, () => {
-  console.log(`✓ RoboQuiz API listening on port ${PORT} (DB init in progress…)`);
+  console.log(`✓ RoboQuiz listening on port ${PORT} — DB init in progress…`);
+});
+server.on('error', err => {
+  console.error('Server error:', err.message);
+  process.exit(1);
 });
 
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`✗ Port ${PORT} already in use.`);
-    process.exit(1);
-  }
-  throw err;
-});
-
-// Run schema migrations + seeding in background
+// ─── 5. DB INIT runs in background after server is already listening ───────
 async function initDB() {
   try {
     const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
     await pool.query(schema);
-    console.log('✓ Database schema ready');
+    console.log('✓ Schema ready');
 
     const bcrypt = require('bcrypt');
     const staff = [
@@ -91,14 +81,14 @@ async function initDB() {
           'INSERT INTO users (email, name, role, password_hash) VALUES ($1,$2,$3,$4)',
           [s.email, s.name, s.role, hash]
         );
-        console.log(`✓ Seeded staff: ${s.email}`);
+        console.log(`✓ Seeded: ${s.email}`);
       }
     }
 
     dbReady = true;
-    console.log('✓ DB ready — all routes now active');
+    console.log('✓ DB ready — all routes active');
   } catch (err) {
-    console.error('DB init error:', err.message);
+    console.error('DB init failed:', err.message);
     process.exit(1);
   }
 }
