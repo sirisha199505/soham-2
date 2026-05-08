@@ -7,6 +7,29 @@ import { api } from './api';
 const QUESTIONS_PER_CATEGORY = 5;
 export const TOTAL_QUIZ_QUESTIONS = CATEGORIES.length * QUESTIONS_PER_CATEGORY;
 
+// ── localStorage helpers ─────────────────────────────────────────────────────
+const localKey = (studentId) => `quiz_attempts_${studentId}`;
+
+function localSave(studentId, attempt) {
+  try {
+    const key = localKey(studentId);
+    const existing = JSON.parse(localStorage.getItem(key) || '[]');
+    // Prepend so newest is first
+    existing.unshift(attempt);
+    localStorage.setItem(key, JSON.stringify(existing));
+  } catch {}
+}
+
+function localRead(studentId) {
+  try {
+    return JSON.parse(localStorage.getItem(localKey(studentId)) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+// ── Public API ───────────────────────────────────────────────────────────────
+
 // Generate a quiz for the student via the backend (filtered by level)
 export async function generateLevelQuiz(studentId, levelId) {
   try {
@@ -26,23 +49,66 @@ export async function recordUsedQuestions(studentId, questionIds) {
   }
 }
 
-// Save a completed quiz attempt
+// Save a completed quiz attempt — writes to localStorage first (guaranteed),
+// then tries the API (best-effort).
 export async function saveQuizAttempt(studentId, attemptData) {
+  const attempt = {
+    id:         `local_${Date.now()}`,
+    userId:     studentId,
+    levelId:    attemptData.levelId,
+    levelTitle: attemptData.levelTitle || `Level ${attemptData.levelId}`,
+    date:       attemptData.date || new Date().toISOString(),
+    score:      attemptData.score,
+    answers:    attemptData.answers || {},
+    questions:  attemptData.questions || [],
+    questionIds: (attemptData.questions || []).map(q => q.id),
+  };
+
+  // Always persist locally so Quiz History never loses data
+  localSave(studentId, attempt);
+
+  // Also send to backend (may fail on Render cold starts — that's OK)
   try {
     await api.saveAttempt({ userId: studentId, ...attemptData });
   } catch (err) {
-    console.error('saveQuizAttempt failed:', err.message);
+    console.error('saveQuizAttempt API failed (local copy saved):', err.message);
   }
 }
 
-// Fetch all attempts for a student
+// Fetch all attempts — merges API results with locally stored ones.
+// Local entries fill gaps caused by API failures or Render cold-start token loss.
 export async function getStudentAttempts(studentId) {
+  let apiAttempts = [];
   try {
-    return await api.getAttempts(studentId);
+    apiAttempts = await api.getAttempts(studentId);
   } catch (err) {
-    console.error('getStudentAttempts failed:', err.message);
-    return [];
+    console.error('getStudentAttempts API failed:', err.message);
   }
+
+  const local = localRead(studentId);
+
+  if (apiAttempts.length > 0 && local.length === 0) return apiAttempts;
+  if (apiAttempts.length === 0 && local.length === 0) return [];
+
+  // Merge: prefer API records (have DB ids), fill in any local-only attempts.
+  // A local record is considered "synced" if the API already has an attempt
+  // for the same levelId on the same day (within ±60 s).
+  const synced = new Set(
+    apiAttempts.map(a => {
+      const d = new Date(a.date);
+      return `${a.levelId}_${Math.floor(d.getTime() / 60000)}`;
+    })
+  );
+
+  const unsynced = local.filter(a => {
+    const d = new Date(a.date);
+    return !synced.has(`${a.levelId}_${Math.floor(d.getTime() / 60000)}`);
+  });
+
+  // Combine: API first (newest from DB), then unsynced local entries
+  return [...apiAttempts, ...unsynced].sort(
+    (a, b) => new Date(b.date) - new Date(a.date)
+  );
 }
 
 export async function getAllAttempts() {

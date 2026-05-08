@@ -2,9 +2,11 @@ import { useState, useMemo, useEffect } from 'react';
 import { Clock, CheckCircle, XCircle, Minus, Trophy, ChevronDown, ChevronUp,
   Calendar, Target, BookOpen, ArrowRight, Filter } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useLevel } from '../../context/LevelContext';
 import { getStudentAttempts } from '../../utils/quizGenerator';
 import { CATEGORY_META, CATEGORIES } from '../../utils/questionBank';
 import { formatDuration, getPerformanceLabel } from '../../utils/helpers';
+import { LEVELS } from '../../utils/levelData';
 
 const LEVEL_COLORS = {
   1: { from: '#3BC0EF', to: '#1E3A8A' },
@@ -240,15 +242,47 @@ function AttemptCard({ attempt }) {
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────
 export default function QuizHistory() {
-  const { user }     = useAuth();
-  const [attempts,   setAttempts]  = useState([]);
-  const [lvlFilter,  setLvlFilter] = useState('all');
+  const { user }      = useAuth();
+  const { getLevel }  = useLevel();
+  const [attempts,    setAttempts]  = useState([]);
+  const [lvlFilter,   setLvlFilter] = useState('all');
 
   useEffect(() => {
-    if (user?.uniqueId) {
-      getStudentAttempts(user.uniqueId).then(setAttempts).catch(() => {});
-    }
-  }, [user?.uniqueId]);
+    if (!user?.uniqueId) return;
+    getStudentAttempts(user.uniqueId).then(apiAttempts => {
+      if (apiAttempts.length > 0) {
+        setAttempts(apiAttempts);
+        return;
+      }
+      // Both API and localStorage empty — synthesize from LevelContext progress
+      // so students who completed before localStorage persistence was added still
+      // see their history.
+      const synthetic = LEVELS
+        .map(lvl => {
+          const data = getLevel(user.uniqueId, lvl.id);
+          if (!data || data.status !== 'completed') return null;
+          const score = data.score || {};
+          return {
+            id:         `ctx_${lvl.id}`,
+            levelId:    lvl.id,
+            levelTitle: lvl.title,
+            date:       data.completedAt || data.lastCompletedAt || new Date().toISOString(),
+            score:      {
+              pct:       score.pct ?? 0,
+              total:     score.total ?? 0,
+              correct:   score.correct ?? 0,
+              wrong:     score.wrong ?? 0,
+              timeTaken: 0,
+            },
+            answers:     {},
+            questions:   [],
+            questionIds: [],
+          };
+        })
+        .filter(Boolean);
+      setAttempts(synthetic);
+    }).catch(() => {});
+  }, [user?.uniqueId, getLevel]);
 
   const filtered = lvlFilter === 'all' ? attempts : attempts.filter(a => String(a.levelId) === lvlFilter);
 
