@@ -24,10 +24,10 @@ async function request(method, path, body, attempt = 0) {
   const isPublicPath = PUBLIC_PATHS.some(p => path.includes(p));
   if (token && !isPublicPath) headers['Authorization'] = `Bearer ${token}`;
 
-  // AbortController gives us a hard timeout — Render cold starts hang the
-  // connection open without throwing, so without this fetch waits forever.
+  // Hard 55-second timeout via AbortController.
+  // Render free tier cold start can take 30-50 s; without this fetch hangs forever.
   const controller = new AbortController();
-  const timeoutId  = setTimeout(() => controller.abort(), 30000); // 30 s
+  const timeoutId  = setTimeout(() => controller.abort(), 55000);
 
   let res;
   try {
@@ -40,22 +40,22 @@ async function request(method, path, body, attempt = 0) {
     clearTimeout(timeoutId);
   } catch (err) {
     clearTimeout(timeoutId);
-    // On first attempt: wait 5 s then retry (covers both connection refused
-    // and abort/timeout — Render may just need a moment to wake up).
-    if (attempt === 0) {
+    if (attempt < 2) {
+      // Wait then retry — Render needs time to wake up
       await new Promise(r => setTimeout(r, 5000));
-      return request(method, path, body, 1);
+      return request(method, path, body, attempt + 1);
     }
-    const isTimeout = err.name === 'AbortError';
-    throw new Error(
-      isTimeout
-        ? 'Server is waking up (Render cold start). Please wait 30 s and try again.'
-        : 'Cannot reach server. Check your connection and try again.'
-    );
+    throw new Error('Server is not responding. Please wait a moment and try again.');
   }
 
   let data;
   try { data = await res.json(); } catch { data = {}; }
+
+  // 503 = DB still initialising — retry automatically up to 3 times
+  if (res.status === 503 && attempt < 3) {
+    await new Promise(r => setTimeout(r, 4000));
+    return request(method, path, body, attempt + 1);
+  }
 
   if (res.status === 401 && !isPublicPath) clearSession();
 

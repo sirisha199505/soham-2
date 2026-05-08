@@ -42,20 +42,46 @@ app.use('/api/content',    contentRouter);
 app.use('/api/settings',   settingsRouter);
 app.use('/api/monitoring', monitoringRouter);
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date() }));
+// Track DB readiness — routes that need the DB will wait or return 503
+let dbReady = false;
 
-// Run schema migrations on startup
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', db: dbReady, time: new Date() });
+});
+
+// Middleware: block non-health requests until DB is ready
+app.use((req, res, next) => {
+  if (!dbReady) {
+    return res.status(503).json({ error: 'Server is starting up, please retry in a few seconds.' });
+  }
+  next();
+});
+
+// Start listening IMMEDIATELY so Render marks the service live and the
+// health-ping from the frontend gets a fast response even before DB is ready.
+const server = app.listen(PORT, () => {
+  console.log(`✓ RoboQuiz API listening on port ${PORT} (DB init in progress…)`);
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`✗ Port ${PORT} already in use.`);
+    process.exit(1);
+  }
+  throw err;
+});
+
+// Run schema migrations + seeding in background
 async function initDB() {
   try {
     const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
     await pool.query(schema);
     console.log('✓ Database schema ready');
 
-    // Seed default staff accounts if not present
     const bcrypt = require('bcrypt');
     const staff = [
-      { email: 'admin@roboquiz.in',   name: 'System Administrator', role: 'admin',        password: 'admin123' },
-      { email: 'teacher@roboquiz.in', name: 'Ms. Kavya Nair',       role: 'teacher',      password: 'teacher123' },
+      { email: 'admin@roboquiz.in',   name: 'System Administrator', role: 'admin',   password: 'admin123'   },
+      { email: 'teacher@roboquiz.in', name: 'Ms. Kavya Nair',       role: 'teacher', password: 'teacher123' },
     ];
     for (const s of staff) {
       const exists = await pool.query('SELECT 1 FROM users WHERE email=$1', [s.email]);
@@ -68,22 +94,13 @@ async function initDB() {
         console.log(`✓ Seeded staff: ${s.email}`);
       }
     }
+
+    dbReady = true;
+    console.log('✓ DB ready — all routes now active');
   } catch (err) {
     console.error('DB init error:', err.message);
     process.exit(1);
   }
 }
 
-initDB().then(() => {
-  const server = app.listen(PORT, () => {
-    console.log(`✓ RoboQuiz API running on http://localhost:${PORT}`);
-  });
-
-  server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      console.error(`✗ Port ${PORT} is already in use. Is the server already running?`);
-      process.exit(1);
-    }
-    throw err;
-  });
-});
+initDB();
