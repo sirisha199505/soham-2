@@ -1,5 +1,5 @@
-// In dev: Vite proxies /api → http://localhost:3001 (keep VITE_API_URL empty in .env)
-// In prod: set VITE_API_URL to your deployed API base URL
+// In dev: Vite proxies /api → http://localhost:3002 (keep VITE_API_URL empty in .env)
+// In prod: VITE_API_URL is set in .env.production or the Vercel dashboard
 const BASE = import.meta.env.VITE_API_URL || '';
 
 const TOKEN_KEY = 'rqa_token';
