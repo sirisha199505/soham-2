@@ -31,22 +31,25 @@ export function LevelProvider({ children }) {
   useEffect(() => {
     if (!user) return;
 
-    // Level settings: backend returns { "1": { title, active, ... }, "2": {...} }
+    // Level settings: backend returns [{id, title, open, ...}, ...]
     api.getLevelSettings()
       .then(data => {
-        const map = toMap(
-          data,
-          (k) => Number(k),    // key → numeric level ID
-          (_k, v) => v,        // value → settings object as-is
-        );
+        const arr = Array.isArray(data) ? data : Object.values(data || {});
+        const map = {};
+        arr.forEach(lvl => { if (lvl?.id) map[lvl.id] = lvl; });
         setLevelSettings(map);
       })
       .catch(() => {});
 
-    // Global access: backend returns { "1": false, "2": true, ... }
+    // Global access: backend returns [{levelId, open}, ...]
     api.getGlobalAccess()
       .then(data => {
-        const map = toMap(data, (k) => Number(k), (_k, v) => v);
+        const arr = Array.isArray(data) ? data : Object.entries(data || {});
+        const map = {};
+        arr.forEach(item => {
+          if (Array.isArray(item)) map[Number(item[0])] = item[1];
+          else if (item?.levelId != null) map[item.levelId] = item.open;
+        });
         setGlobalAccess(map);
       })
       .catch(() => {});

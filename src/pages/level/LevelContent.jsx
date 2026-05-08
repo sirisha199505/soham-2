@@ -6,18 +6,9 @@ import { useLevel } from '../../context/LevelContext';
 import { useTheme } from '../../context/ThemeContext';
 import { LEVELS, LEVEL1_PAGES, LEVEL2_PAGES, LEVEL3_PAGES } from '../../utils/levelData';
 import { downloadLevelContentAsPDF } from '../../utils/pdfExport';
+import { api } from '../../utils/api';
 
 const STATIC_CONTENT = { 1: LEVEL1_PAGES, 2: LEVEL2_PAGES, 3: LEVEL3_PAGES };
-const CONTENT_KEY = 'rqa_custom_content';
-
-function getLevelPages(id) {
-  try {
-    const saved = JSON.parse(localStorage.getItem(CONTENT_KEY) || '{}');
-    return saved[id] || STATIC_CONTENT[id] || [];
-  } catch {
-    return STATIC_CONTENT[id] || [];
-  }
-}
 
 export default function LevelContent() {
   const { levelId }  = useParams();
@@ -28,8 +19,15 @@ export default function LevelContent() {
   const { colors }   = useTheme();
 
   const level   = LEVELS.find(l => l.id === id);
-  const pages   = getLevelPages(id);
+  const [pages, setPages] = useState(STATIC_CONTENT[id] || []);
   const total   = pages.length;
+
+  // Load from DB; fall back to static defaults if DB returns empty
+  useEffect(() => {
+    api.getContent(id).then(dbPages => {
+      if (dbPages && dbPages.length > 0) setPages(dbPages);
+    }).catch(() => {});
+  }, [id]);
 
   const [pageIndex, setPageIndex] = useState(0);
   const [read,      setRead]      = useState(new Set());

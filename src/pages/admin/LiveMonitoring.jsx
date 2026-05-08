@@ -83,8 +83,17 @@ export default function LiveMonitoring() {
 
   const loadSessions = useCallback(async () => {
     try {
-      const data = await api.getMonitoringSessions();
-      setSessions(data);
+      const raw = await api.getMonitoringSessions();
+      const mapped = (raw || []).map(a => ({
+        id:        a.id,
+        studentId: a.student?.uniqueId || `User#${a.userId}`,
+        level:     a.levelId || 1,
+        answered:  a.score   || 0,
+        total:     a.total   || 10,
+        status:    'active',
+        school:    a.student?.schoolName || '—',
+      }));
+      setSessions(mapped);
     } catch (err) {
       console.error('Failed to load sessions:', err);
     } finally {
