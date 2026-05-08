@@ -605,9 +605,20 @@ import { api } from './api';
 
 export async function loadQuestionBank() {
   try {
-    return await api.getQuestionBank();
+    const data = await api.getQuestionBank();
+    // API returns dict {category: [questions]} — handle flat array for safety
+    if (Array.isArray(data)) {
+      const result = {};
+      CATEGORIES.forEach(cat => { result[cat] = []; });
+      data.forEach(q => {
+        const cat = q.category || CATEGORIES[0];
+        if (!result[cat]) result[cat] = [];
+        result[cat].push(q);
+      });
+      return result;
+    }
+    return data;
   } catch {
-    // Fallback to defaults if API is unavailable
     const result = {};
     CATEGORIES.forEach(cat => { result[cat] = DEFAULTS[cat].map(q => ({ ...q })); });
     return result;

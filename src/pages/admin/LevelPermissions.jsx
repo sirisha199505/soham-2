@@ -21,10 +21,10 @@ function formatDate(iso) {
 function buildRows(targetLevel, apiStudents, approvals) {
   const prevLevel = targetLevel - 1;
   return apiStudents
-    .filter(s => s.levels?.[prevLevel]?.status === 'completed')
+    .filter(s => s.levels?.[String(prevLevel)]?.status === 'completed')
     .map(s => {
-      const prevData   = s.levels?.[prevLevel] || {};
-      const targetData = s.levels?.[targetLevel] || {};
+      const prevData   = s.levels?.[String(prevLevel)] || {};
+      const targetData = s.levels?.[String(targetLevel)] || {};
       const approval   = approvals[s.uniqueId]?.[targetLevel] ?? 'pending';
       return {
         id:              s.uniqueId,

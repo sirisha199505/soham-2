@@ -88,9 +88,15 @@ function loadStorage() {
 
 async function loadStorageFromAPI() {
   try {
-    const flat   = await loadQuestionBank();
-    const seeded = fromFlat(flat);
-    return seeded;
+    let flat = await loadQuestionBank();
+    // If DB is empty, seed all default questions then reload
+    const total = Object.values(flat).flat().length;
+    if (total === 0) {
+      const { ensureQuestionBankSeeded } = await import('../../utils/questionBank');
+      await ensureQuestionBankSeeded();
+      flat = await loadQuestionBank();
+    }
+    return fromFlat(flat);
   } catch {
     return { banks: [] };
   }

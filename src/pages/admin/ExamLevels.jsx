@@ -168,11 +168,13 @@ export default function ExamLevels() {
   // Load bank stats from API
   useEffect(() => {
     loadQuestionBank().then(bank => {
-      const total  = Object.values(bank).flat().filter(q => q.status === 'active').length;
+      // API returns active questions only — no status filter needed
+      const allQs = Object.values(bank).flat();
+      const total  = allQs.length;
       const perCat = Object.entries(CATEGORY_META).map(([cat, meta]) => ({
         label: meta.label,
         color: meta.color,
-        count: (bank[cat] || []).filter(q => q.status === 'active').length,
+        count: (bank[cat] || []).length,
       }));
       setBankStats({ total, perCat });
     }).catch(() => {});
