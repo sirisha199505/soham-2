@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Clock, ChevronLeft, ChevronRight, CheckCircle, Trophy, ArrowLeft, Shuffle, LayoutGrid, X } from 'lucide-react';
+import {
+  Clock, ChevronLeft, ChevronRight, CheckCircle, XCircle, Minus,
+  Trophy, Shuffle, LayoutGrid, X, BookOpen, ChevronDown, ChevronUp,
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -15,6 +18,107 @@ function timerState(t) {
   if (t <= 30)  return 'critical';
   if (t <= 120) return 'warning';
   return 'normal';
+}
+
+// ─── Inline question review (shown on result screen) ─────────────────────
+function ResultQuestionCard({ q, answer, index, levelColor }) {
+  const catMeta = CATEGORY_META[q.category] || { label: q.category, color: '#64748b', bg: '#f8fafc' };
+  const isSkipped = answer === undefined || answer === null;
+  let isCorrect = false;
+  if (!isSkipped) {
+    if (q.type === 'match') {
+      isCorrect = typeof answer === 'object' && q.pairs?.every((_, i) => answer[i] === i);
+    } else {
+      isCorrect = answer === q.correct;
+    }
+  }
+  const statusColor = isSkipped ? '#94a3b8' : isCorrect ? '#16a34a' : '#dc2626';
+  const statusBg    = isSkipped ? '#f8fafc'  : isCorrect ? '#f0fdf4' : '#fef2f2';
+
+  return (
+    <div className="bg-white rounded-2xl border overflow-hidden" style={{ borderColor: statusColor + '40' }}>
+      {/* Question header */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ background: statusBg, borderColor: statusColor + '20' }}>
+        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 text-white"
+          style={{ background: statusColor }}>
+          {index}
+        </div>
+        <div className="flex-1 min-w-0">
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full mr-1.5"
+            style={{ background: catMeta.bg, color: catMeta.color }}>{catMeta.label}</span>
+          <span className="text-sm font-semibold text-slate-800">{q.text}</span>
+        </div>
+        <div className="shrink-0 text-xs font-bold">
+          {isSkipped
+            ? <span className="flex items-center gap-1 text-slate-400"><Minus size={12}/> Skipped</span>
+            : isCorrect
+              ? <span className="flex items-center gap-1 text-green-600"><CheckCircle size={13}/> Correct</span>
+              : <span className="flex items-center gap-1 text-red-600"><XCircle size={13}/> Wrong</span>}
+        </div>
+      </div>
+
+      {/* Options / pairs */}
+      <div className="px-4 py-3 space-y-2">
+        {(q.type === 'mcq' || q.type === 'image' || q.type === 'tf') && q.options && (
+          <div className="grid gap-1.5">
+            {q.options.map((opt, i) => {
+              const text = typeof opt === 'string' ? opt : (opt?.text || '');
+              const isSelected = answer === i;
+              const isCor = i === q.correct;
+              let cls = 'border-slate-200 bg-slate-50 text-slate-500';
+              if (isCor) cls = 'border-green-300 bg-green-50 text-green-700 font-semibold';
+              if (isSelected && !isCor) cls = 'border-red-300 bg-red-50 text-red-700 font-semibold';
+              return (
+                <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs ${cls}`}>
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                    isCor ? 'bg-green-500 text-white' : isSelected ? 'bg-red-500 text-white' : 'bg-slate-200 text-slate-500'
+                  }`}>{String.fromCharCode(65 + i)}</span>
+                  <span className="flex-1">{text}</span>
+                  {isSelected && !isCor && <span className="text-[10px] text-red-400 italic">(your answer)</span>}
+                  {isCor && <CheckCircle size={12} className="text-green-500 shrink-0"/>}
+                  {isSelected && !isCor && <XCircle size={12} className="text-red-500 shrink-0"/>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {q.type === 'match' && q.pairs && (
+          <div className="space-y-1.5">
+            {q.pairs.map((pair, i) => {
+              const selIdx = answer ? answer[i] : undefined;
+              const isCor  = selIdx === i;
+              const selRight = selIdx !== undefined ? (q.pairs[selIdx]?.right || '?') : null;
+              return (
+                <div key={i} className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 border ${
+                  selIdx === undefined ? 'border-slate-200 bg-slate-50' :
+                  isCor ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+                }`}>
+                  <span className="flex-1 font-medium text-slate-700">{pair.left}</span>
+                  <span className="text-slate-400 shrink-0">→</span>
+                  <span className={`flex-1 font-semibold ${
+                    selIdx === undefined ? 'text-slate-400' : isCor ? 'text-green-700' : 'text-red-700'
+                  }`}>
+                    {selRight || <span className="text-slate-400 italic">Not answered</span>}
+                    {!isCor && selIdx !== undefined && <span className="text-green-700 ml-1 font-normal">(correct: {pair.right})</span>}
+                  </span>
+                  {selIdx !== undefined && (isCor
+                    ? <CheckCircle size={11} className="text-green-500 shrink-0"/>
+                    : <XCircle size={11} className="text-red-500 shrink-0"/>)}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {q.explanation && (
+          <div className="mt-1 bg-blue-50 rounded-xl px-3 py-2 text-xs text-blue-700 border border-blue-100">
+            <span className="font-bold">Explanation: </span>{q.explanation}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ─── Backward-compat helpers for image-enriched options/pairs ────────────
@@ -149,6 +253,7 @@ export default function LevelQuiz() {
   const [result,     setResult]     = useState(null);
   const [saved,      setSaved]      = useState(false);
   const [showMobilePanel, setShowMobilePanel] = useState(false);
+  const [showReview, setShowReview] = useState(false);
 
   const startRef = useRef(new Date());
 
@@ -205,11 +310,8 @@ export default function LevelQuiz() {
 
   const doSubmit = async (auto = false) => {
     const score = computeScore();
-    await markLevelComplete(user.uniqueId, id, score);
-    await recordUsedQuestions(user.uniqueId, questions.map(q => q.id));
 
-    // Strip base64 images before saving — prevents localStorage quota overflow
-    // which would silently drop subsequent attempts and break Quiz History.
+    // Strip base64 images — prevents quota overflow that would silently break Quiz History
     const compactQ = (q) => ({
       id:          q.id,
       category:    q.category,
@@ -221,6 +323,9 @@ export default function LevelQuiz() {
       explanation: q.explanation || '',
     });
 
+    // Save attempt FIRST while token is still valid.
+    // markLevelComplete may get a 401 on Render free-tier restarts which clears
+    // the token — so if saveQuizAttempt ran after, it would also fail.
     await saveQuizAttempt(user.uniqueId, {
       levelId:    id,
       levelTitle: level?.title || `Level ${id}`,
@@ -229,6 +334,9 @@ export default function LevelQuiz() {
       answers:    { ...answers },
       score,
     });
+
+    await markLevelComplete(user.uniqueId, id, score);
+    await recordUsedQuestions(user.uniqueId, questions.map(q => q.id));
 
     setResult({ ...score, auto });
     setShowSubmit(false);
@@ -305,68 +413,110 @@ export default function LevelQuiz() {
     const sc = perf;
 
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-xl max-w-md w-full overflow-hidden">
-          <div className="p-8 text-center text-white relative overflow-hidden"
-            style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}>
-            <div className="absolute inset-0 opacity-10">
-              <div className="absolute top-2 right-4 w-32 h-32 rounded-full bg-white blur-[50px]" />
+      <div className="min-h-screen bg-slate-50">
+        {/* Gradient header */}
+        <div className="relative overflow-hidden"
+          style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}>
+          <div className="absolute top-0 right-0 w-48 h-48 rounded-full opacity-10 blur-[60px] bg-white" />
+          <div className="relative z-10 text-center text-white px-6 pt-8 pb-6">
+            <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
+              <Trophy size={26} />
             </div>
-            <div className="relative z-10">
-              <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mx-auto mb-3">
-                <Trophy size={30} />
-              </div>
-              <h2 className="text-2xl font-bold" style={{ fontFamily: 'Space Grotesk' }}>
-                {level.title} Complete!
-              </h2>
-              <p className="text-white/70 text-sm mt-1">{questions.length} Questions · {CATEGORIES.length} Categories</p>
-            </div>
+            <h2 className="text-2xl font-bold" style={{ fontFamily: 'Space Grotesk' }}>
+              {level.title} Complete!
+            </h2>
+            <p className="text-white/70 text-sm mt-1">{questions.length} Questions · {CATEGORIES.length} Categories</p>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="max-w-2xl mx-auto px-4 py-5 space-y-4">
+
+          {/* Score */}
+          <div className="bg-white rounded-2xl shadow-sm p-5 text-center"
+            style={{ border: `1.5px solid ${sc.border}` }}>
+            <p className="text-5xl font-bold" style={{ color: sc.text, fontFamily: 'Space Grotesk' }}>
+              {result.pct}%
+            </p>
+            <p className="font-bold text-sm mt-1" style={{ color: sc.text }}>{sc.label}</p>
           </div>
 
-          <div className="p-6 space-y-5">
-            <div className="rounded-2xl p-5 text-center" style={{ background: sc.bg, border: `1px solid ${sc.border}` }}>
-              <p className="text-5xl font-bold" style={{ color: sc.text, fontFamily: 'Space Grotesk' }}>
-                {result.pct}%
-              </p>
-              <p className="font-bold text-sm mt-1" style={{ color: sc.text }}>{sc.label}</p>
-            </div>
+          {/* Correct / Wrong / Skipped */}
+          <div className="grid grid-cols-3 gap-3 text-center">
+            {[
+              { label: 'Correct', value: result.correct, color: '#16a34a', bg: '#f0fdf4' },
+              { label: 'Wrong',   value: result.wrong,   color: '#dc2626', bg: '#fef2f2' },
+              { label: 'Skipped', value: result.total - result.correct - result.wrong, color: '#64748b', bg: '#f8fafc' },
+            ].map(s => (
+              <div key={s.label} className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm" style={{ background: s.bg }}>
+                <p className="text-xl font-bold" style={{ color: s.color }}>{s.value}</p>
+                <p className="text-xs text-slate-500">{s.label}</p>
+              </div>
+            ))}
+          </div>
 
-            <div className="grid grid-cols-3 gap-3 text-center">
-              {[
-                { label: 'Correct',  value: result.correct, color: '#16a34a', bg: '#f0fdf4' },
-                { label: 'Wrong',    value: result.wrong,   color: '#dc2626', bg: '#fef2f2' },
-                { label: 'Skipped',  value: result.total - result.correct - result.wrong, color: '#64748b', bg: '#f8fafc' },
-              ].map(s => (
-                <div key={s.label} className="rounded-xl p-3" style={{ background: s.bg }}>
-                  <p className="text-xl font-bold" style={{ color: s.color }}>{s.value}</p>
-                  <p className="text-xs text-slate-500">{s.label}</p>
+          {/* Next level unlocked */}
+          {id < 3 && (
+            <div className="bg-white rounded-xl p-3.5 flex items-center gap-3 border shadow-sm"
+              style={{ borderColor: `${level.color.from}30` }}>
+              <CheckCircle size={18} style={{ color: level.color.from }} className="shrink-0" />
+              <p className="text-sm font-semibold text-slate-700">Level {id + 1} is now unlocked!</p>
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div className="flex gap-3">
+            <button onClick={() => navigate('/dashboard')}
+              className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-all">
+              Dashboard
+            </button>
+            <button onClick={() => navigate('/quiz-history')}
+              className="flex-1 py-3 rounded-xl text-white font-bold text-sm transition-all hover:scale-[1.02]"
+              style={{
+                background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`,
+                boxShadow: `0 4px 14px ${level.color.from}40`,
+              }}>
+              Quiz History
+            </button>
+          </div>
+
+          {/* Inline answer review */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <button
+              onClick={() => setShowReview(r => !r)}
+              className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <BookOpen size={16} className="text-indigo-500" />
+                <span className="font-bold text-slate-800 text-sm">Review My Answers</span>
+                <span className="text-xs text-slate-400">({questions.length} questions)</span>
+              </div>
+              {showReview
+                ? <ChevronUp size={16} className="text-slate-400" />
+                : <ChevronDown size={16} className="text-slate-400" />}
+            </button>
+
+            {showReview && (
+              <div className="border-t border-slate-100 p-4 space-y-3">
+                {/* Color key */}
+                <div className="flex flex-wrap gap-3 text-xs text-slate-500 pb-1">
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-100 border border-green-300 inline-block"/> Correct</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-100 border border-red-300 inline-block"/> Wrong</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-slate-100 border border-slate-200 inline-block"/> Skipped</span>
                 </div>
-              ))}
-            </div>
-
-            {id < 3 && (
-              <div className="rounded-xl p-3.5 flex items-center gap-3"
-                style={{ background: `${level.color.from}10`, border: `1px solid ${level.color.from}25` }}>
-                <CheckCircle size={18} style={{ color: level.color.from }} className="shrink-0" />
-                <p className="text-sm font-semibold text-slate-700">Level {id + 1} is now unlocked!</p>
+                {questions.map((q, i) => (
+                  <ResultQuestionCard
+                    key={q.id || i}
+                    q={q}
+                    answer={answers[q.id]}
+                    index={i + 1}
+                    levelColor={level.color}
+                  />
+                ))}
               </div>
             )}
-
-            <div className="flex gap-3">
-              <button onClick={() => navigate('/quiz-history')}
-                className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-all">
-                View Review
-              </button>
-              <button onClick={() => navigate('/dashboard')}
-                className="flex-1 py-3 rounded-xl text-white font-bold text-sm transition-all hover:scale-[1.02]"
-                style={{
-                  background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`,
-                  boxShadow: `0 6px 20px ${level.color.from}40`,
-                }}>
-                Dashboard
-              </button>
-            </div>
           </div>
+
         </div>
       </div>
     );
