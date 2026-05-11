@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import {
   Lock, CheckCircle, ArrowRight, Hash, Trophy, Clock,
   BookOpen, Star, ChevronRight, Zap,
@@ -294,8 +295,12 @@ function LevelPath({ statuses }) {
 /* ─────────────────────────────────────────────────────────────── */
 export default function StudentDashboard() {
   const { user }  = useAuth();
-  const { getLevelStatus, getLevel, levelSettings } = useLevel();
+  const { getLevelStatus, getLevel, levelSettings, refreshLevelSettings } = useLevel();
   const { colors } = useTheme();
+
+  // Re-fetch level settings each time the student opens their dashboard
+  // so admin active/inactive changes are reflected without a full re-login
+  useEffect(() => { refreshLevelSettings(); }, []);
 
   const displayId = user?.uniqueId ? `#${formatUniqueId(user.uniqueId)}` : '#Student';
   const hours     = new Date().getHours();

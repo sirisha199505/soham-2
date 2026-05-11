@@ -27,11 +27,7 @@ export function LevelProvider({ children }) {
   // Track which userIds we've already fetched so we don't loop
   const fetchedUsers = useRef(new Set());
 
-  // Reload whenever the logged-in user changes (login / logout)
-  useEffect(() => {
-    if (!user) return;
-
-    // Level settings: backend returns [{id, title, open, ...}, ...]
+  const refreshLevelSettings = useCallback(() => {
     api.getLevelSettings()
       .then(data => {
         const arr = Array.isArray(data) ? data : Object.values(data || {});
@@ -40,6 +36,14 @@ export function LevelProvider({ children }) {
         setLevelSettings(map);
       })
       .catch(() => {});
+  }, []);
+
+  // Reload whenever the logged-in user changes (login / logout)
+  useEffect(() => {
+    if (!user) return;
+
+    // Level settings: backend returns [{id, title, open, ...}, ...]
+    refreshLevelSettings();
 
     // Global access: backend returns [{levelId, open}, ...]
     api.getGlobalAccess()
@@ -231,6 +235,7 @@ export function LevelProvider({ children }) {
       getLevel, getLevelStatus, markContentRead, markLevelComplete, isContentRead,
       setApproval, approvals, setStudentOverride, setLevelActive,
       setGlobalAccess: setGlobalAccessFn, levelSettings, globalAccess,
+      refreshLevelSettings,
     }}>
       {children}
     </LevelContext.Provider>

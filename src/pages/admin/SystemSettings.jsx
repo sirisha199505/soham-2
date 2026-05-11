@@ -229,7 +229,17 @@ export default function SystemSettings() {
   useEffect(() => {
     api.getSettings()
       .then(data => {
-        if (data && Object.keys(data).length > 0) setSettings(data);
+        if (data && Object.keys(data).length > 0) {
+          // Deep-merge with defaults so settings.levels always has all keys
+          setSettings(prev => ({
+            ...prev,
+            ...data,
+            levels: {
+              ...prev.levels,
+              ...(data.levels || {}),
+            },
+          }));
+        }
       })
       .catch(err => console.error('Failed to load settings:', err))
       .finally(() => setLoading(false));
