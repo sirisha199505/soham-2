@@ -692,46 +692,70 @@ function QuestionRow({ q, index, onEdit, onDelete }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Category Section
 // ═══════════════════════════════════════════════════════════════════════════
-function CategorySection({ cat, levelName, pal, onRename, onDelete, onQuestionsChange }) {
+function CategorySection({ cat, levelName, pal, onRename, onDelete, onQuestionsChange, showToast }) {
   const [collapsed, setCollapsed] = useState(false);
   const [qModal,    setQModal]    = useState(null);
   const [deleteQ,   setDeleteQ]   = useState(null);
   const [renaming,  setRenaming]  = useState(false);
   const qCount = (cat.questions||[]).length;
 
+  // Normalize options to plain strings for the backend (DB stores string arrays)
+  const flattenQ = (q, apiCat) => ({
+    ...q,
+    category:      apiCat,
+    status:        'active',
+    correctAnswer: q.correct,
+    options: Array.isArray(q.options)
+      ? q.options.map(o => (typeof o === 'string' ? o : (o?.text || '')))
+      : q.options,
+    pairs: Array.isArray(q.pairs)
+      ? q.pairs.map(p => ({ left: p.left || '', right: p.right || '' }))
+      : q.pairs,
+  });
+
   const handleAdd = async (q) => {
     const apiCat = getCatFromLevelName(levelName);
-    // Call API first so we get the DB-assigned integer id
-    let savedQ = q;
+    const payload = flattenQ(q, apiCat);
     try {
-      const result = await apiAddQuestion({ ...q, category: apiCat, correctAnswer: q.correct, status: 'active' });
-      if (result?.id) savedQ = { ...q, id: result.id };
+      await apiAddQuestion(payload);
+      onQuestionsChange([...(cat.questions||[]), q]);
+      setQModal(null);
+      showToast?.('Question added successfully!');
     } catch (err) {
       console.error('Add question failed:', err.message);
+      showToast?.(`Failed to add question: ${err.message}`, 'red');
     }
-    onQuestionsChange([...(cat.questions||[]), savedQ]);
-    setQModal(null);
   };
 
   const handleEdit = async (u) => {
+    const original = (cat.questions||[]).find(q => q.id === u.id);
     onQuestionsChange((cat.questions||[]).map(q => q.id===u.id ? u : q));
     setQModal(null);
     const apiCat = getCatFromLevelName(levelName);
     try {
-      await apiUpdateQuestion({ ...u, category: apiCat, correctAnswer: u.correct });
+      await apiUpdateQuestion(flattenQ(u, apiCat));
+      showToast?.('Question updated successfully!');
     } catch (err) {
       console.error('Update question failed:', err.message);
+      // Revert the optimistic update
+      if (original) onQuestionsChange((cat.questions||[]).map(q => q.id===u.id ? original : q));
+      showToast?.(`Failed to save changes: ${err.message}`, 'red');
     }
   };
 
   const handleDel = async () => {
     const toDelete = deleteQ;
-    onQuestionsChange((cat.questions||[]).filter(q => q.id !== toDelete.id));
+    const originalQuestions = [...(cat.questions||[])];
+    onQuestionsChange(originalQuestions.filter(q => q.id !== toDelete.id));
     setDeleteQ(null);
     try {
       await apiDeleteQuestion(null, toDelete.id);
+      showToast?.('Question deleted.');
     } catch (err) {
       console.error('Delete question failed:', err.message);
+      // Revert the optimistic removal
+      onQuestionsChange(originalQuestions);
+      showToast?.(`Failed to delete question: ${err.message}`, 'red');
     }
   };
 
@@ -794,7 +818,7 @@ function CategorySection({ cat, levelName, pal, onRename, onDelete, onQuestionsC
 // ═══════════════════════════════════════════════════════════════════════════
 // Level Section
 // ═══════════════════════════════════════════════════════════════════════════
-function LevelSection({ level, index, onUpdate, onDelete }) {
+function LevelSection({ level, index, onUpdate, onDelete, showToast }) {
   const pal = levelPal(index);
   const [collapsed,   setCollapsed]   = useState(false);
   const [addingCat,   setAddingCat]   = useState(false);
@@ -869,7 +893,8 @@ function LevelSection({ level, index, onUpdate, onDelete }) {
               <CategorySection key={cat.id} cat={cat} levelName={level.name} pal={pal}
                 onRename={name=>update({categories:cats.map(c=>c.id===cat.id?{...c,name}:c)})}
                 onDelete={()=>setDeleteCat(cat)}
-                onQuestionsChange={qs=>update({categories:cats.map(c=>c.id===cat.id?{...c,questions:qs}:c)})}/>
+                onQuestionsChange={qs=>update({categories:cats.map(c=>c.id===cat.id?{...c,questions:qs}:c)})}
+                showToast={showToast}/>
             ))
           )}
           {cats.length>0&&!addingCat&&(
@@ -889,7 +914,7 @@ function LevelSection({ level, index, onUpdate, onDelete }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Bank Detail View
 // ═══════════════════════════════════════════════════════════════════════════
-function BankDetail({ bank, bankIndex, onBack, onUpdate }) {
+function BankDetail({ bank, bankIndex, onBack, onUpdate, showToast }) {
   const [addingLevel, setAddingLevel] = useState(false);
   const [renamingBank, setRenamingBank] = useState(false);
 
@@ -965,7 +990,7 @@ function BankDetail({ bank, bankIndex, onBack, onUpdate }) {
         <div className="space-y-4">
           {levels.map((level,idx)=>(
             <LevelSection key={level.id} level={level} index={idx}
-              onUpdate={u=>updateLevel(idx,u)} onDelete={()=>deleteLevel(idx)}/>
+              onUpdate={u=>updateLevel(idx,u)} onDelete={()=>deleteLevel(idx)} showToast={showToast}/>
           ))}
           {!addingLevel && (
             <button onClick={()=>setAddingLevel(true)}
@@ -1242,6 +1267,7 @@ export default function QuestionBankAdmin() {
           bankIndex={selectedBankIndex}
           onBack={()=>setSelectedBankId(null)}
           onUpdate={updateBank}
+          showToast={showToast}
         />
       ) : (
         <BanksOverview

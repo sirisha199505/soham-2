@@ -5,15 +5,24 @@ const BASE = import.meta.env.VITE_API_URL || '';
 const TOKEN_KEY = 'rqa_token';
 const USER_KEY  = 'rqa_user';
 
-// Paths that don't require a token — never clear localStorage on 401 from these
-const PUBLIC_PATHS = ['/api/auth/login', '/api/auth/register', '/api/auth/reset-password'];
+// Paths that don't send an Authorization header (no token needed)
+const NO_AUTH_PATHS = ['/api/auth/login', '/api/auth/register', '/api/auth/reset-password'];
+
+// Paths where a 401 should NOT trigger auto-logout — caller handles it manually
+const NO_AUTO_LOGOUT_PATHS = [...NO_AUTH_PATHS, '/api/auth/me'];
 
 function getToken() {
   const token = localStorage.getItem(TOKEN_KEY);
   return token && token !== 'undefined' && token !== 'null' ? token : null;
 }
 
+// Debounce flag — prevents multiple simultaneous 401s from firing repeated logout events
+let _clearPending = false;
 function clearSession() {
+  if (_clearPending) return;
+  _clearPending = true;
+  setTimeout(() => { _clearPending = false; }, 2000);
+
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
   // Notify AuthContext so React state is cleared and React Router handles
@@ -24,8 +33,9 @@ function clearSession() {
 async function request(method, path, body, attempt = 0) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();
-  const isPublicPath = PUBLIC_PATHS.some(p => path.includes(p));
-  if (token && !isPublicPath) headers['Authorization'] = `Bearer ${token}`;
+  const isNoAuth       = NO_AUTH_PATHS.some(p => path.includes(p));
+  const isNoAutoLogout = NO_AUTO_LOGOUT_PATHS.some(p => path.includes(p));
+  if (token && !isNoAuth) headers['Authorization'] = `Bearer ${token}`;
 
   // Hard 55-second timeout via AbortController.
   // Render free tier cold start can take 30-50 s; without this fetch hangs forever.
@@ -60,7 +70,7 @@ async function request(method, path, body, attempt = 0) {
     return request(method, path, body, attempt + 1);
   }
 
-  if (res.status === 401 && !isPublicPath) clearSession();
+  if (res.status === 401 && !isNoAutoLogout) clearSession();
 
   if (!res.ok || data.status === 'error') {
     throw new Error(data.data || data.error || `Request failed (${res.status})`);

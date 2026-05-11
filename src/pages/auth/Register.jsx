@@ -186,7 +186,7 @@ export default function Register() {
               style={{ ...inputStyle, ...(form.className ? inputFocusStyle : {}) }}
             >
               <option value="" disabled style={{ background: '#1e293b', color: '#64748b' }}>Select your class</option>
-              {['Class VI','Class VII','Class VIII','Class IX','Class X','Class XI','Class XII','Other'].map(c => (
+              {['VI','VII','VIII','IX','X','XI','XII','Other'].map(c => (
                 <option key={c} value={c} style={{ background: '#1e293b', color: '#fff' }}>{c}</option>
               ))}
             </select>
