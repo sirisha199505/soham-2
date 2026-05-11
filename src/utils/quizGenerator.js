@@ -87,26 +87,40 @@ export async function getStudentAttempts(studentId) {
 
   const local = localRead(studentId);
 
-  if (apiAttempts.length > 0 && local.length === 0) return apiAttempts;
   if (apiAttempts.length === 0 && local.length === 0) return [];
+  if (apiAttempts.length === 0) return local;
 
-  // Merge: prefer API records (have DB ids), fill in any local-only attempts.
-  // A local record is considered "synced" if the API already has an attempt
-  // for the same levelId on the same day (within ±60 s).
-  const synced = new Set(
-    apiAttempts.map(a => {
-      const d = new Date(a.date);
-      return `${a.levelId}_${Math.floor(d.getTime() / 60000)}`;
-    })
-  );
-
-  const unsynced = local.filter(a => {
+  // Build a minute-precision key so we can match the same quiz across local/API.
+  const minuteKey = (a) => {
     const d = new Date(a.date);
-    return !synced.has(`${a.levelId}_${Math.floor(d.getTime() / 60000)}`);
+    return `${a.levelId}_${Math.floor(d.getTime() / 60000)}`;
+  };
+
+  // Index local attempts by key for quick lookup
+  const localByKey = new Map();
+  local.forEach(a => {
+    const k = minuteKey(a);
+    // Keep the one with questions if there are multiple
+    if (!localByKey.has(k) || (localByKey.get(k).questions || []).length === 0) {
+      localByKey.set(k, a);
+    }
   });
 
-  // Combine: API first (newest from DB), then unsynced local entries
-  return [...apiAttempts, ...unsynced].sort(
+  // For each API attempt: if it has no questions, enrich from matching local copy
+  const enriched = apiAttempts.map(a => {
+    if ((a.questions || []).length > 0) return a;
+    const local = localByKey.get(minuteKey(a));
+    if (local && (local.questions || []).length > 0) {
+      return { ...a, questions: local.questions, answers: a.answers || local.answers };
+    }
+    return a;
+  });
+
+  // Include local-only attempts (API never received them — e.g. save failed)
+  const syncedKeys = new Set(apiAttempts.map(minuteKey));
+  const unsynced = local.filter(a => !syncedKeys.has(minuteKey(a)));
+
+  return [...enriched, ...unsynced].sort(
     (a, b) => new Date(b.date) - new Date(a.date)
   );
 }

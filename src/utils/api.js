@@ -16,12 +16,9 @@ function getToken() {
 function clearSession() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
-  // Redirect to login so stale/invalid tokens don't leave the user stuck on
-  // a protected page that keeps firing 401s in a loop.
-  if (!window.location.pathname.startsWith('/login') &&
-      !window.location.pathname.startsWith('/register')) {
-    window.location.replace('/login');
-  }
+  // Notify AuthContext so React state is cleared and React Router handles
+  // the redirect — avoids a hard page reload that kicks users out mid-session.
+  window.dispatchEvent(new Event('auth:logout'));
 }
 
 async function request(method, path, body, attempt = 0) {

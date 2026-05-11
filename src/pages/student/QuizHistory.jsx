@@ -34,13 +34,14 @@ const optText = (o) => (typeof o === 'string' ? o : (o?.text || ''));
 // ─── Single question review ───────────────────────────────────────────────
 function QuestionReview({ q, answer, index }) {
   const catMeta  = CATEGORY_META[q.category] || { label: q.category, color: '#64748b', bg: '#f8fafc' };
+  const correctIdx = q.correct ?? q.correctAnswer;
   const isSkipped = answer === undefined || answer === null;
   let isCorrect = false;
   if (!isSkipped) {
     if (q.type === 'match') {
-      isCorrect = typeof answer === 'object' && q.pairs.every((_, i) => answer[i] === i);
+      isCorrect = typeof answer === 'object' && (q.pairs || []).every((_, i) => answer[i] === i);
     } else {
-      isCorrect = answer === q.correct;
+      isCorrect = answer === correctIdx;
     }
   }
   const statusColor = isSkipped ? '#94a3b8' : isCorrect ? '#16a34a' : '#dc2626';
@@ -79,7 +80,7 @@ function QuestionReview({ q, answer, index }) {
           <div className="grid gap-1.5">
             {q.options.map((opt, i) => {
               const isSelected        = answer === i;
-              const isActuallyCorrect = i === q.correct;
+              const isActuallyCorrect = i === correctIdx;
               let cls = 'border-slate-200 bg-slate-50 text-slate-500';
               if (isActuallyCorrect) cls = 'border-green-300 bg-green-50 text-green-700 font-semibold';
               if (isSelected && !isActuallyCorrect) cls = 'border-red-300 bg-red-50 text-red-700 font-semibold';

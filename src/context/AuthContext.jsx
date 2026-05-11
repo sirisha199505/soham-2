@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { getDashboardRoute } from '../utils/rolePermissions';
 import { api } from '../utils/api';
 
@@ -35,6 +35,14 @@ export function AuthProvider({ children }) {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     setUser(null);
+  }, []);
+
+  // When api.js clears the session due to a 401, sync React state so
+  // ProtectedRoute redirects to /login via React Router (no hard reload).
+  useEffect(() => {
+    const handle = () => setUser(null);
+    window.addEventListener('auth:logout', handle);
+    return () => window.removeEventListener('auth:logout', handle);
   }, []);
 
   /* ── Student list (admin) ── */

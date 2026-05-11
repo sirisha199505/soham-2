@@ -317,6 +317,7 @@ export default function LevelQuiz() {
       category:    q.category,
       type:        q.type,
       text:        q.text || '',
+      imageUrl:    (q.imageUrl || '').startsWith('data:') ? '' : (q.imageUrl || ''),
       options:     q.options?.map(o => (typeof o === 'string' ? o : (o?.text || ''))),
       correct:     q.correct,
       pairs:       q.pairs?.map(p => ({ left: p.left || '', right: p.right || '' })),
