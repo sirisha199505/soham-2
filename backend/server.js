@@ -64,6 +64,12 @@ server.on('error', err => {
 // ─── 5. DB INIT runs in background after server is already listening ───────
 async function initDB() {
   try {
+    if (!process.env.JWT_SECRET) {
+      console.error('✗ JWT_SECRET is not set — auth will fail for all protected routes');
+      process.exit(1);
+    }
+    console.log('✓ JWT_SECRET loaded');
+
     const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
     await pool.query(schema);
     console.log('✓ Schema ready');

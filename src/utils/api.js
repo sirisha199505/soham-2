@@ -16,6 +16,12 @@ function getToken() {
 function clearSession() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  // Redirect to login so stale/invalid tokens don't leave the user stuck on
+  // a protected page that keeps firing 401s in a loop.
+  if (!window.location.pathname.startsWith('/login') &&
+      !window.location.pathname.startsWith('/register')) {
+    window.location.replace('/login');
+  }
 }
 
 async function request(method, path, body, attempt = 0) {
