@@ -18,9 +18,12 @@ app.use(cors({
     if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return cb(null, true);
     if (/\.vercel\.app$/.test(origin))              return cb(null, true);
     if (ALLOWED_ORIGINS.includes(origin))           return cb(null, true);
+    console.warn(`[cors] Blocked origin: ${origin}`);
     cb(new Error('Not allowed by CORS'));
   },
   credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
 app.use(express.json({ limit: '10mb' }));
 
@@ -68,7 +71,7 @@ async function initDB() {
       console.error('✗ JWT_SECRET is not set — auth will fail for all protected routes');
       process.exit(1);
     }
-    console.log('✓ JWT_SECRET loaded');
+    console.log(`✓ JWT_SECRET loaded (${process.env.JWT_SECRET.length} chars)`);
 
     const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
     await pool.query(schema);

@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Backend secrets — set these in Render dashboard, not in committed files
+backend/.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

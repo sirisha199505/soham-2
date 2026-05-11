@@ -185,9 +185,9 @@ export default function Register() {
               className={`${inputCls} pl-11 pr-4 appearance-none cursor-pointer`}
               style={{ ...inputStyle, ...(form.className ? inputFocusStyle : {}) }}
             >
-              <option value="" disabled style={{ background: '#1e293b', color: '#64748b' }}>Select your class</option>
+              <option value="" disabled style={{ ...inputStyle, ...(customClass ? inputFocusStyle : {}) }}>Select your Class</option>
               {['VI','VII','VIII','IX','X','XI','XII','Other'].map(c => (
-                <option key={c} value={c} style={{ background: '#1e293b', color: '#fff' }}>{c}</option>
+                <option key={c} value={c} style={{ background: '#1e293b' }}>{c}</option>
               ))}
             </select>
           </div>
