@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Plus, ChevronDown, ChevronUp, Edit2, Trash2, BookOpen,
-  CheckCircle, X, Save, Eye, EyeOff, AlertTriangle, Image,
+  CheckCircle, X, Save, AlertTriangle, Image,
   List, AlignLeft, Layers, Tag, HelpCircle, Check,
   FolderOpen, Folder, Upload, Download, FileSpreadsheet, AlertCircle,
   ChevronRight, Database, MoreVertical, Calendar,
@@ -420,7 +420,6 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
 function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catName }) {
   const [form, setForm]     = useState(() => initial ? { ...initial, options: initial.options?.map(normalizeOpt), pairs: initial.pairs?.map(normalizePair) } : blankMcq());
   const [errors, setErrors] = useState({});
-  const [preview, setPreview] = useState(false);
 
   const set     = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
@@ -471,17 +470,11 @@ function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catNam
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={form.id ? 'Edit Question' : 'Add New Question'} size="lg"
       footer={
-        <div className="flex items-center justify-between w-full">
-          <button onClick={() => setPreview(p => !p)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${preview ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-            {preview ? <EyeOff size={13}/> : <Eye size={13}/>} {preview ? 'Hide Preview' : 'Preview'}
+        <div className="flex gap-3 justify-end w-full">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button onClick={handleSave} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-colors">
+            <Save size={14}/>{form.id ? 'Save Changes' : 'Add Question'}
           </button>
-          <div className="flex gap-3">
-            <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
-            <button onClick={handleSave} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-colors">
-              <Save size={14}/>{form.id ? 'Save Changes' : 'Add Question'}
-            </button>
-          </div>
         </div>
       }>
       <div className="space-y-5">
@@ -616,54 +609,6 @@ function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catNam
             className={`${inp} resize-none`}/>
         </div>
 
-        {/* ── Preview ── */}
-        {preview && (
-          <div className="border border-indigo-100 rounded-2xl overflow-hidden">
-            <div className="px-4 py-2 bg-indigo-50 border-b border-indigo-100">
-              <p className="text-xs font-bold text-indigo-600">Student Preview</p>
-            </div>
-            <div className="p-4 space-y-3">
-              {form.imageUrl && <img src={form.imageUrl} alt="Question" className="w-full h-36 object-cover rounded-xl border border-slate-200"/>}
-              <p className="text-sm font-semibold text-slate-800">{form.text || <span className="italic text-slate-400">No text…</span>}</p>
-              {form.type === 'match' ? (
-                <div className="space-y-1.5">
-                  {(form.pairs || []).map((p, i) => {
-                    const pr = normalizePair(p);
-                    return (
-                      <div key={i} className="flex items-stretch gap-2 text-xs">
-                        <div className="flex-1 bg-slate-50 rounded-lg p-2 text-slate-700 font-medium">
-                          {pr.leftImage && <img src={pr.leftImage} alt="" className="w-full h-12 object-cover rounded-lg mb-1.5"/>}
-                          {pr.left && <span>{pr.left}</span>}
-                        </div>
-                        <span className="text-slate-400 font-bold self-center">↔</span>
-                        <div className="flex-1 bg-green-50 rounded-lg p-2 text-green-700 font-medium">
-                          {pr.rightImage && <img src={pr.rightImage} alt="" className="w-full h-12 object-cover rounded-lg mb-1.5"/>}
-                          {pr.right && <span>{pr.right}</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  {(form.options || []).map((opt, i) => {
-                    const o = normalizeOpt(opt);
-                    return (
-                      <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs border ${i === form.correct ? 'bg-green-50 border-green-200 text-green-800 font-semibold' : 'bg-slate-50 border-slate-100 text-slate-600'}`}>
-                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${i === form.correct ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-500'}`}>{String.fromCharCode(65 + i)}</span>
-                        {o.imageUrl && <img src={o.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0"/>}
-                        {o.text && <span>{o.text}</span>}
-                        {!o.text && !o.imageUrl && <span className="text-slate-400 italic">—</span>}
-                        {i === form.correct && <CheckCircle size={10} className="ml-auto text-green-500"/>}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {form.explanation && <div className="bg-blue-50 rounded-xl px-3 py-2 text-xs text-blue-700"><span className="font-bold">Explanation: </span>{form.explanation}</div>}
-            </div>
-          </div>
-        )}
       </div>
     </Modal>
   );
@@ -754,9 +699,41 @@ function CategorySection({ cat, levelName, pal, onRename, onDelete, onQuestionsC
   const [renaming,  setRenaming]  = useState(false);
   const qCount = (cat.questions||[]).length;
 
-  const handleAdd  = (q) => { onQuestionsChange([...(cat.questions||[]),q]); setQModal(null); };
-  const handleEdit = (u) => { onQuestionsChange((cat.questions||[]).map(q=>q.id===u.id?u:q)); setQModal(null); };
-  const handleDel  = () =>  { onQuestionsChange((cat.questions||[]).filter(q=>q.id!==deleteQ.id)); setDeleteQ(null); };
+  const handleAdd = async (q) => {
+    const apiCat = getCatFromLevelName(levelName);
+    // Call API first so we get the DB-assigned integer id
+    let savedQ = q;
+    try {
+      const result = await apiAddQuestion({ ...q, category: apiCat, correctAnswer: q.correct, status: 'active' });
+      if (result?.id) savedQ = { ...q, id: result.id };
+    } catch (err) {
+      console.error('Add question failed:', err.message);
+    }
+    onQuestionsChange([...(cat.questions||[]), savedQ]);
+    setQModal(null);
+  };
+
+  const handleEdit = async (u) => {
+    onQuestionsChange((cat.questions||[]).map(q => q.id===u.id ? u : q));
+    setQModal(null);
+    const apiCat = getCatFromLevelName(levelName);
+    try {
+      await apiUpdateQuestion({ ...u, category: apiCat, correctAnswer: u.correct });
+    } catch (err) {
+      console.error('Update question failed:', err.message);
+    }
+  };
+
+  const handleDel = async () => {
+    const toDelete = deleteQ;
+    onQuestionsChange((cat.questions||[]).filter(q => q.id !== toDelete.id));
+    setDeleteQ(null);
+    try {
+      await apiDeleteQuestion(null, toDelete.id);
+    } catch (err) {
+      console.error('Delete question failed:', err.message);
+    }
+  };
 
   return (
     <div className={`rounded-2xl border-2 ${pal.border} overflow-hidden`}>

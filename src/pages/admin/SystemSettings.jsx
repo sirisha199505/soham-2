@@ -248,9 +248,22 @@ export default function SystemSettings() {
   const update = (key, val) => setSettings(p => ({ ...p, [key]: val }));
   const updateLevel = (lvl, cfg) => setSettings(p => ({ ...p, levels: { ...p.levels, [lvl]: cfg } }));
 
+  const syncLevelsTable = async (levelsCfg) => {
+    // Push per-level timer and locked state into the levels table so student UI picks them up
+    await Promise.all(
+      Object.entries(levelsCfg).map(([lvlId, cfg]) =>
+        api.saveLevelSettings(Number(lvlId), {
+          timeLimit: cfg.timerMinutes,
+          active:    !cfg.locked,
+        }).catch(err => console.error(`Failed to sync level ${lvlId}:`, err))
+      )
+    );
+  };
+
   const handleSave = async () => {
     try {
       await api.saveSettings(settings);
+      await syncLevelsTable(settings.levels);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
@@ -259,9 +272,11 @@ export default function SystemSettings() {
   };
 
   const handleReset = async () => {
-    setSettings({ ...DEFAULT_SETTINGS });
+    const defaults = { ...DEFAULT_SETTINGS };
+    setSettings(defaults);
     try {
-      await api.saveSettings({ ...DEFAULT_SETTINGS });
+      await api.saveSettings(defaults);
+      await syncLevelsTable(defaults.levels);
     } catch (err) {
       console.error('Failed to reset settings:', err);
     }

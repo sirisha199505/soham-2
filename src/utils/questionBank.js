@@ -651,7 +651,7 @@ export async function saveCategoryQuestions(category, questions) {
 }
 
 export async function addQuestion(question) {
-  await api.addQuestion(question);
+  return await api.addQuestion(question);
 }
 
 export async function updateQuestion(question) {

@@ -504,15 +504,18 @@ export default function LevelQuiz() {
                   <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-100 border border-red-300 inline-block"/> Wrong</span>
                   <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-slate-100 border border-slate-200 inline-block"/> Skipped</span>
                 </div>
-                {questions.map((q, i) => (
-                  <ResultQuestionCard
-                    key={q.id || i}
-                    q={q}
-                    answer={answers[q.id]}
-                    index={i + 1}
-                    levelColor={level.color}
-                  />
-                ))}
+                {questions.map((q, i) => {
+                  const ans = answers[q.id] ?? answers[String(q.id)] ?? answers[Number(q.id)];
+                  return (
+                    <ResultQuestionCard
+                      key={q.id || i}
+                      q={q}
+                      answer={ans}
+                      index={i + 1}
+                      levelColor={level.color}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>

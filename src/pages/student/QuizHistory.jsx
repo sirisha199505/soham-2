@@ -228,11 +228,21 @@ function AttemptCard({ attempt }) {
               <BookOpen size={15}/> Detailed Question Review
               <span className="text-xs font-normal text-slate-400">({(attempt.questions || []).length} questions)</span>
             </h4>
-            <div className="space-y-3">
-              {(attempt.questions || []).map((q, i) => (
-                <QuestionReview key={q.id || i} q={q} answer={attempt.answers?.[q.id]} index={i + 1}/>
-              ))}
-            </div>
+            {(attempt.questions || []).length === 0 ? (
+              <div className="bg-slate-50 rounded-xl p-5 text-center border border-dashed border-slate-200">
+                <BookOpen size={24} className="text-slate-300 mx-auto mb-2"/>
+                <p className="text-sm font-semibold text-slate-400">Question details not available</p>
+                <p className="text-xs text-slate-400 mt-1">Detailed review is available for quizzes taken after the latest update.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {(attempt.questions || []).map((q, i) => {
+                  // Support both string and number question ids in the answers map
+                  const ans = attempt.answers?.[q.id] ?? attempt.answers?.[String(q.id)] ?? attempt.answers?.[Number(q.id)];
+                  return <QuestionReview key={q.id || i} q={q} answer={ans} index={i + 1}/>;
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
