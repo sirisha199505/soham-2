@@ -7,18 +7,18 @@ import { formatUniqueId } from '../../utils/uniqueId';
 
 export default function Register() {
   const { register } = useAuth();
-  const { colors }   = useTheme();
-  const navigate     = useNavigate();
+  const { colors } = useTheme();
+  const navigate = useNavigate();
 
-  const [form, setForm]               = useState({ schoolName: '', className: '', password: '', confirm: '' });
+  const [form, setForm] = useState({ schoolName: '', className: '', password: '', confirm: '' });
   const [customClass, setCustomClass] = useState('');
-  const [showPass, setShowPass]       = useState(false);
+  const [showPass, setShowPass] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [loading, setLoading]         = useState(false);
-  const [waitSec, setWaitSec]         = useState(0);
-  const [error, setError]             = useState('');
+  const [loading, setLoading] = useState(false);
+  const [waitSec, setWaitSec] = useState(0);
+  const [error, setError] = useState('');
   const [generatedId, setGeneratedId] = useState(null);
-  const [copied, setCopied]           = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // Count seconds while loading so user sees a live timer
   useEffect(() => {
@@ -50,7 +50,7 @@ export default function Register() {
   };
 
   const copyId = () => {
-    navigator.clipboard.writeText(generatedId).catch(() => {});
+    navigator.clipboard.writeText(generatedId).catch(() => { });
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -174,36 +174,34 @@ export default function Register() {
         </div>
 
         {/* Class */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-            Class
-          </label>
-          <div className="relative">
-            <BookOpen size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
-            <select
-              value={form.className} onChange={set('className')} required
-              className={`${inputCls} pl-11 pr-4 appearance-none cursor-pointer`}
-              style={{ ...inputStyle, ...(form.className ? inputFocusStyle : {}) }}
-            >
-              <option value="" disabled style={{ ...inputStyle, ...(customClass ? inputFocusStyle : {}) }}>Select your Class</option>
-              {['VI','VII','VIII','IX','X','XI','XII','Other'].map(c => (
-                <option key={c} value={c} style={{ background: '#1e293b' }}>{c}</option>
-              ))}
-            </select>
-          </div>
-          {form.className === 'Other' && (
-            <div className="relative mt-2">
-              <input
-                type="text"
-                placeholder="e.g. Intermediate, Degree, B.Tech…"
-                value={customClass}
-                onChange={e => setCustomClass(e.target.value)}
-                required
-                className={`${inputCls} px-4`}
-                style={{ ...inputStyle, ...(customClass ? inputFocusStyle : {}) }}
-              />
-            </div>
-          )}
+        <div className="relative">
+          <BookOpen
+            size={15}
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"
+          />
+
+          <select
+            value={form.className || ""}
+            onChange={set('className')}
+            required
+            className={`${inputCls} pl-11 pr-4 appearance-none cursor-pointer ${!form.className ? 'text-white' : 'text-slate-500'
+              }`}
+            style={{ ...inputStyle, ...(form.className ? inputFocusStyle : {}) }}
+          >
+            <option >
+              Select your Class
+            </option>
+
+            {['VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'Other'].map((c) => (
+              <option
+                key={c}
+                value={c}
+                className="text-white bg-slate-800"
+              >
+                {c}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Password */}

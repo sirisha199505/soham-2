@@ -5,36 +5,24 @@ const BASE = import.meta.env.VITE_API_URL || '';
 const TOKEN_KEY = 'rqa_token';
 const USER_KEY  = 'rqa_user';
 
-// Paths that don't send an Authorization header (no token needed)
+// Paths that don't need an Authorization header
 const NO_AUTH_PATHS = ['/api/auth/login', '/api/auth/register', '/api/auth/reset-password'];
-
-// Paths where a 401 should NOT trigger auto-logout — caller handles it manually
-const NO_AUTO_LOGOUT_PATHS = [...NO_AUTH_PATHS, '/api/auth/me'];
 
 function getToken() {
   const token = localStorage.getItem(TOKEN_KEY);
   return token && token !== 'undefined' && token !== 'null' ? token : null;
 }
 
-// Debounce flag — prevents multiple simultaneous 401s from firing repeated logout events
-let _clearPending = false;
-function clearSession() {
-  if (_clearPending) return;
-  _clearPending = true;
-  setTimeout(() => { _clearPending = false; }, 2000);
-
+export function clearSession() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
-  // Notify AuthContext so React state is cleared and React Router handles
-  // the redirect — avoids a hard page reload that kicks users out mid-session.
   window.dispatchEvent(new Event('auth:logout'));
 }
 
 async function request(method, path, body, attempt = 0) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();
-  const isNoAuth       = NO_AUTH_PATHS.some(p => path.includes(p));
-  const isNoAutoLogout = NO_AUTO_LOGOUT_PATHS.some(p => path.includes(p));
+  const isNoAuth = NO_AUTH_PATHS.some(p => path.includes(p));
   if (token && !isNoAuth) headers['Authorization'] = `Bearer ${token}`;
 
   // Hard 55-second timeout via AbortController.
@@ -69,8 +57,6 @@ async function request(method, path, body, attempt = 0) {
     await new Promise(r => setTimeout(r, 4000));
     return request(method, path, body, attempt + 1);
   }
-
-  if (res.status === 401 && !isNoAutoLogout) clearSession();
 
   if (!res.ok || data.status === 'error') {
     throw new Error(data.data || data.error || `Request failed (${res.status})`);
