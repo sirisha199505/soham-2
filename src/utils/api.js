@@ -59,7 +59,10 @@ async function request(method, path, body, attempt = 0) {
   }
 
   if (!res.ok || data.status === 'error') {
-    throw new Error(data.data || data.error || `Request failed (${res.status})`);
+    const msg = data.data || data.error || data.message || `Request failed (${res.status})`;
+    const err = new Error(msg);
+    err.status = res.status;  // expose HTTP status so callers can distinguish 401 vs 404
+    throw err;
   }
   return data?.status === 'success' ? data.data : data;
 }

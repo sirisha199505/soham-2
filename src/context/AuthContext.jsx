@@ -23,9 +23,9 @@ export function AuthProvider({ children }) {
   // While we're verifying a stored token on page load, don't render protected routes yet.
   const [initializing, setInitializing] = useState(() => !!hasStoredToken());
 
-  // On mount: if a stored token exists, verify it with the server ONCE before
-  // rendering any protected route. Catches stale tokens without racing against
-  // a dozen parallel dashboard API calls.
+  // On mount: if a stored token exists, try to refresh user data from the server.
+  // Only clear the session if we get a definitive 401 (token explicitly rejected).
+  // 404 (endpoint doesn't exist on this backend) or network errors keep the user logged in.
   useEffect(() => {
     if (!hasStoredToken()) {
       setInitializing(false);
@@ -36,10 +36,14 @@ export function AuthProvider({ children }) {
         localStorage.setItem(USER_KEY, JSON.stringify(freshUser));
         setUser(freshUser);
       })
-      .catch(() => {
-        // Token rejected by server (expired / JWT_SECRET changed) — clear silently
-        clearSession();
-        setUser(null);
+      .catch((err) => {
+        if (err?.status === 401) {
+          // Token explicitly rejected by server — it's expired or the secret changed
+          clearSession();
+          setUser(null);
+        }
+        // 404 (endpoint not on this backend), 500, or network error:
+        // keep the stored user — don't punish them for a missing endpoint
       })
       .finally(() => setInitializing(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -61,24 +65,10 @@ export function AuthProvider({ children }) {
   /* ── Login ── */
   const login = useCallback(async (identifier, password) => {
     const data = await api.login(identifier, password);
-    // Store token first so api.me() can pick it up
     localStorage.setItem(TOKEN_KEY, data.token);
     localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-
-    // Immediately verify the token works on this server before navigating.
-    // If JWT_SECRET is misconfigured, me() returns 401 here rather than
-    // after the user reaches the dashboard and fires multiple API calls.
-    try {
-      const freshUser = await api.me();
-      localStorage.setItem(USER_KEY, JSON.stringify(freshUser));
-      setUser(freshUser);
-      return getDashboardRoute(freshUser.role);
-    } catch {
-      // me() failed — token was issued but can't be verified (server mismatch)
-      // Fall back to the login-response user so the session still works
-      setUser(data.user);
-      return getDashboardRoute(data.user.role);
-    }
+    setUser(data.user);
+    return getDashboardRoute(data.user.role);
   }, []);
 
   const logout = useCallback(() => {
