@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import {
   Layers, Edit2, CheckCircle, Lock, Users, Clock,
   BookOpen, X, Save, ToggleLeft, ToggleRight, Zap,
@@ -147,6 +148,7 @@ function LevelCard({ level, settings, stats, onEdit }) {
 
 /* ── MAIN ── */
 export default function ExamLevels() {
+  const { user } = useAuth();
   const { setLevelActive, levelSettings } = useLevel();
   const [editing,   setEditing]  = useState(null);
   const [saved,     setSaved]    = useState(false);
@@ -167,6 +169,7 @@ export default function ExamLevels() {
 
   // Load bank stats from API
   useEffect(() => {
+    if (!user?.id) return;
     loadQuestionBank().then(bank => {
       // API returns active questions only — no status filter needed
       const allQs = Object.values(bank).flat();
@@ -178,7 +181,7 @@ export default function ExamLevels() {
       }));
       setBankStats({ total, perCat });
     }).catch(() => {});
-  }, []);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSave = async (levelId, form) => {
     // Pass the full form so title, subtitle, description, timeLimit, and active all persist

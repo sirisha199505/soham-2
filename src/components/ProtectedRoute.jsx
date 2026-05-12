@@ -3,8 +3,12 @@ import { useAuth } from '../context/AuthContext';
 import { hasPermission } from '../utils/rolePermissions';
 
 export default function ProtectedRoute({ children, requiredPermission }) {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, initializing } = useAuth();
   const location = useLocation();
+
+  // AuthProvider already shows a spinner while verifying the session; this is
+  // a safety net in case a ProtectedRoute renders before that gate resolves.
+  if (initializing) return null;
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;

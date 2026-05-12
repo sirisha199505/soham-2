@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import {
   BarChart2, Download, TrendingUp, Users,
   CheckCircle, Trophy, RefreshCw,
@@ -91,6 +92,7 @@ function StatTile({ label, value, icon, color, sub }) {
 
 /* ── MAIN ── */
 export default function AdminReports() {
+  const { user } = useAuth();
   const [data,    setData]    = useState(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -103,7 +105,7 @@ export default function AdminReports() {
     fetchReportData().then(setData).catch(() => {}).finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { if (!user?.id) return; loadData(); }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = loadData;
 

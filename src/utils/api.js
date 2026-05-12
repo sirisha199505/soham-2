@@ -61,7 +61,16 @@ async function request(method, path, body, attempt = 0) {
   if (!res.ok || data.status === 'error') {
     const msg = data.data || data.error || data.message || `Request failed (${res.status})`;
     const err = new Error(msg);
-    err.status = res.status;  // expose HTTP status so callers can distinguish 401 vs 404
+    err.status = res.status;
+
+    // Global 401 guard: any authenticated endpoint returning 401 means the
+    // session is no longer valid (token expired, server restarted, SSL drop
+    // caused a false auth failure). Clear immediately so protected routes
+    // redirect to login instead of showing a broken page.
+    if (res.status === 401 && !isNoAuth) {
+      clearSession();
+    }
+
     throw err;
   }
   return data?.status === 'success' ? data.data : data;

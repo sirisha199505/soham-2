@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import {
   Activity, RefreshCw, Pause, Play, StopCircle, RotateCcw,
   AlertTriangle, CheckCircle, Users, Hash, Wifi,
@@ -69,6 +70,7 @@ function ActionModal({ action, session, onConfirm, onClose }) {
 
 // ─── MAIN ─────────────────────────────────────────────────────────────────
 export default function LiveMonitoring() {
+  const { user } = useAuth();
   const [sessions,     setSessions]     = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [filter,       setFilter]       = useState('all');
@@ -101,7 +103,7 @@ export default function LiveMonitoring() {
     }
   }, []);
 
-  useEffect(() => { loadSessions(); }, [loadSessions]);
+  useEffect(() => { if (!user?.id) return; loadSessions(); }, [user?.id, loadSessions]);
 
   const refresh = async () => {
     setLoading(true);

@@ -103,7 +103,10 @@ export default function AdminDashboard() {
     }).catch(() => {});
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchData();
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = () => {
     fetchData();

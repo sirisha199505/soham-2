@@ -4,6 +4,7 @@ import {
   ChevronDown, Eye, Unlock, RotateCcw, UserX, UserCheck,
   Hash, X, AlertTriangle, Info, Zap,
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
 
@@ -151,6 +152,7 @@ function ActionsMenu({ student, onAction }) {
 
 /* ── MAIN ── */
 export default function StudentManagement() {
+  const { user } = useAuth();
   const { setStudentOverride } = useLevel();
   const [data, setData] = useState([]);
   const [search, setSearch] = useState('');
@@ -184,7 +186,7 @@ export default function StudentManagement() {
     } catch {}
   };
 
-  useEffect(() => { fetchStudents(); }, []);
+  useEffect(() => { if (!user?.id) return; fetchStudents(); }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = () => fetchStudents();
 

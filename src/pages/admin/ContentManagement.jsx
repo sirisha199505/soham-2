@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import {
   FileText, Plus, Edit2, Trash2, X, Save, CheckCircle,
   BookOpen, ChevronDown, ChevronUp, Info, Upload, Eye, Loader2,
@@ -237,6 +238,7 @@ function LevelSection({ levelId, pages, onEdit, onDelete, onAdd }) {
 
 /* ── MAIN ── */
 export default function ContentManagement() {
+  const { user } = useAuth();
   const [content, setContent] = useState({ 1: [], 2: [], 3: [] });
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
@@ -245,6 +247,7 @@ export default function ContentManagement() {
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(''), 2500); };
 
   useEffect(() => {
+    if (!user?.id) return;
     Promise.all([
       api.getContent(1),
       api.getContent(2),
@@ -265,7 +268,7 @@ export default function ContentManagement() {
     }).catch(err => {
       console.error('Failed to load content:', err);
     }).finally(() => setLoading(false));
-  }, []);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const persistLevel = async (levelId, pages) => {
     try {

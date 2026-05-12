@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import {
   Settings, Save, CheckCircle, RotateCcw, Clock, Target,
   RefreshCw, Eye, Shuffle, Users, Lock, Unlock,
@@ -220,6 +221,7 @@ function LevelSettingsPanel({ lvl, cfg, onChange }) {
 
 /* ── MAIN ── */
 export default function SystemSettings() {
+  const { user } = useAuth();
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [loading,    setLoading]    = useState(true);
   const [saved,      setSaved]      = useState(false);
@@ -227,6 +229,7 @@ export default function SystemSettings() {
   const [activeTab,  setActiveTab]  = useState('global');
 
   useEffect(() => {
+    if (!user?.id) return;
     api.getSettings()
       .then(data => {
         if (data && Object.keys(data).length > 0) {
@@ -243,7 +246,7 @@ export default function SystemSettings() {
       })
       .catch(err => console.error('Failed to load settings:', err))
       .finally(() => setLoading(false));
-  }, []);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const update = (key, val) => setSettings(p => ({ ...p, [key]: val }));
   const updateLevel = (lvl, cfg) => setSettings(p => ({ ...p, levels: { ...p.levels, [lvl]: cfg } }));
