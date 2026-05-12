@@ -1,46 +1,37 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  BookOpen, ChevronLeft, ChevronRight, FileText, ExternalLink, Clock, Download,
+  BookOpen, ChevronLeft, ChevronRight, FileText,
+  ExternalLink, Clock, Download, Loader2,
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { LEVELS, LEVEL1_PAGES, LEVEL2_PAGES, LEVEL3_PAGES } from '../../utils/levelData';
+import { LEVELS } from '../../utils/levelData';
+import { api } from '../../utils/api';
 import { downloadLevelContentAsPDF } from '../../utils/pdfExport';
 
-const STATIC_CONTENT = { 1: LEVEL1_PAGES, 2: LEVEL2_PAGES, 3: LEVEL3_PAGES };
-const CONTENT_KEY = 'rqa_custom_content';
-
-function getLevelPages(id) {
-  try {
-    const saved = JSON.parse(localStorage.getItem(CONTENT_KEY) || '{}');
-    return saved[id] || STATIC_CONTENT[id] || [];
-  } catch {
-    return STATIC_CONTENT[id] || [];
-  }
-}
-
 export default function StudentContent() {
+  const { user }   = useAuth();
   const { colors } = useTheme();
+
+  const [allContent,    setAllContent]    = useState({ 1: [], 2: [], 3: [] });
+  const [loading,       setLoading]       = useState(true);
   const [activeLevelId, setActiveLevelId] = useState(1);
-  const [pageIndex, setPageIndex]         = useState(0);
-  const [pdfOpened, setPdfOpened]         = useState(false);
+  const [pageIndex,     setPageIndex]     = useState(0);
+  const [pdfOpened,     setPdfOpened]     = useState(false);
 
-  const openPdf = (dataUrl) => {
-    try {
-      const arr  = dataUrl.split(',');
-      const mime = arr[0].match(/:(.*?);/)[1];
-      const bstr = atob(arr[1]);
-      const u8   = new Uint8Array(bstr.length);
-      for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
-      const url = URL.createObjectURL(new Blob([u8], { type: mime }));
-      window.open(url, '_blank');
-      setPdfOpened(true);
-    } catch { window.open(dataUrl, '_blank'); }
-  };
+  useEffect(() => {
+    if (!user?.id) return;
+    setLoading(true);
+    Promise.all([api.getContent(1), api.getContent(2), api.getContent(3)])
+      .then(([c1, c2, c3]) => setAllContent({ 1: c1 || [], 2: c2 || [], 3: c3 || [] }))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [user?.id]);
 
-  const level = LEVELS.find(l => l.id === activeLevelId);
-  const pages = getLevelPages(activeLevelId);
-  const total = pages.length;
+  const pages   = allContent[activeLevelId] || [];
+  const total   = pages.length;
   const current = pages[pageIndex];
+  const level   = LEVELS.find(l => l.id === activeLevelId);
 
   const handleLevelChange = (id) => {
     setActiveLevelId(id);
@@ -54,6 +45,19 @@ export default function StudentContent() {
 
   const handlePrev = () => {
     if (pageIndex > 0) { setPageIndex(p => p - 1); window.scrollTo(0, 0); }
+  };
+
+  const openPdf = (dataUrl) => {
+    try {
+      const arr  = dataUrl.split(',');
+      const mime = arr[0].match(/:(.*?);/)[1];
+      const bstr = atob(arr[1]);
+      const u8   = new Uint8Array(bstr.length);
+      for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
+      const url  = URL.createObjectURL(new Blob([u8], { type: mime }));
+      window.open(url, '_blank');
+      setPdfOpened(true);
+    } catch { window.open(dataUrl, '_blank'); }
   };
 
   return (
@@ -81,7 +85,8 @@ export default function StudentContent() {
       {/* Level tabs */}
       <div className="flex gap-2 flex-wrap">
         {LEVELS.map(l => {
-          const isActive = l.id === activeLevelId;
+          const isActive  = l.id === activeLevelId;
+          const pageCount = (allContent[l.id] || []).length;
           return (
             <button
               key={l.id}
@@ -89,13 +94,10 @@ export default function StudentContent() {
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all"
               style={isActive ? {
                 background: `linear-gradient(135deg, ${l.color.from}, ${l.color.to})`,
-                color: '#fff',
-                border: 'none',
+                color: '#fff', border: 'none',
                 boxShadow: `0 4px 14px ${l.color.from}40`,
               } : {
-                background: '#fff',
-                color: '#64748b',
-                border: '1px solid #e2e8f0',
+                background: '#fff', color: '#64748b', border: '1px solid #e2e8f0',
               }}
             >
               <BookOpen size={14} />
@@ -106,21 +108,28 @@ export default function StudentContent() {
                   ? { background: 'rgba(255,255,255,0.25)', color: '#fff' }
                   : { background: '#f1f5f9', color: '#94a3b8' }}
               >
-                {getLevelPages(l.id).length}p
+                {loading ? '…' : `${pageCount}p`}
               </span>
             </button>
           );
         })}
       </div>
 
-      {total === 0 || !current ? (
+      {/* Loading */}
+      {loading ? (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm py-20 flex flex-col items-center gap-3">
+          <Loader2 size={32} className="animate-spin text-indigo-400" />
+          <p className="text-slate-400 text-sm">Loading content…</p>
+        </div>
+      ) : total === 0 || !current ? (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm py-20 text-center">
           <BookOpen size={40} className="mx-auto text-slate-200 mb-3" />
-          <p className="text-slate-400 text-sm">No content available for this level yet</p>
+          <p className="text-slate-500 text-sm font-medium">No content yet for this level</p>
+          <p className="text-slate-400 text-xs mt-1">Check back after your teacher adds study material.</p>
         </div>
       ) : (
         <>
-          {/* Progress bar + page info */}
+          {/* Progress bar */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-3 flex items-center gap-4">
             <span className="text-xs font-semibold text-slate-500 shrink-0">
               Page {pageIndex + 1} of {total}
@@ -141,8 +150,7 @@ export default function StudentContent() {
                   onClick={() => { setPageIndex(i); setPdfOpened(false); }}
                   className="rounded-full transition-all duration-200"
                   style={{
-                    width: i === pageIndex ? 20 : 7,
-                    height: 7,
+                    width: i === pageIndex ? 20 : 7, height: 7,
                     background: i === pageIndex ? level.color.from : '#e2e8f0',
                   }}
                 />

@@ -1,14 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, BookOpen, CheckCircle, ArrowRight, Clock, FileText, ExternalLink, Download } from 'lucide-react';
+import { ChevronLeft, ChevronRight, BookOpen, CheckCircle, ArrowRight, Clock, FileText, ExternalLink, Download, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { useTheme } from '../../context/ThemeContext';
-import { LEVELS, LEVEL1_PAGES, LEVEL2_PAGES, LEVEL3_PAGES } from '../../utils/levelData';
+import { LEVELS } from '../../utils/levelData';
 import { downloadLevelContentAsPDF } from '../../utils/pdfExport';
 import { api } from '../../utils/api';
-
-const STATIC_CONTENT = { 1: LEVEL1_PAGES, 2: LEVEL2_PAGES, 3: LEVEL3_PAGES };
 
 export default function LevelContent() {
   const { levelId }  = useParams();
@@ -19,15 +17,18 @@ export default function LevelContent() {
   const { colors }   = useTheme();
 
   const level   = LEVELS.find(l => l.id === id);
-  const [pages, setPages] = useState(STATIC_CONTENT[id] || []);
-  const total   = pages.length;
+  const [pages,   setPages]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const total = pages.length;
 
-  // Load from DB; fall back to static defaults if DB returns empty
   useEffect(() => {
-    api.getContent(id).then(dbPages => {
-      if (dbPages && dbPages.length > 0) setPages(dbPages);
-    }).catch(() => {});
-  }, [id]);
+    if (!user?.id) return;
+    setLoading(true);
+    api.getContent(id)
+      .then(dbPages => setPages(Array.isArray(dbPages) ? dbPages : []))
+      .catch(() => setPages([]))
+      .finally(() => setLoading(false));
+  }, [id, user?.id]);
 
   const [pageIndex, setPageIndex] = useState(0);
   const [read,      setRead]      = useState(new Set());
@@ -48,11 +49,6 @@ export default function LevelContent() {
 
   const current = pages[pageIndex];
   const isLast  = pageIndex === total - 1;
-  const allRead = read.size === total;
-
-  useEffect(() => {
-    if (level && total === 0) navigate(`/level/${id}/quiz`, { replace: true });
-  }, []);
 
   const markRead = () => setRead(prev => new Set([...prev, pageIndex]));
 
@@ -67,7 +63,36 @@ export default function LevelContent() {
     navigate(`/level/${id}/quiz`);
   };
 
-  if (!level || total === 0 || !current) return null;
+  if (!level) return null;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 size={36} className="animate-spin text-indigo-400" />
+          <p className="text-slate-400 text-sm">Loading content…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (total === 0 || !current) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-10 text-center max-w-sm">
+          <BookOpen size={40} className="mx-auto text-slate-200 mb-3" />
+          <p className="text-slate-700 font-semibold text-base mb-1">No content available yet</p>
+          <p className="text-slate-400 text-sm mb-5">Your teacher hasn't added study material for this level yet. Check back soon.</p>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center gap-2 mx-auto px-5 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            <ChevronLeft size={15} /> Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
