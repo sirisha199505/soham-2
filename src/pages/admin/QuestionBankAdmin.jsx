@@ -4,7 +4,7 @@ import {
   CheckCircle, X, Save, AlertTriangle, Image,
   List, AlignLeft, Layers, Tag, HelpCircle, Check,
   FolderOpen, Folder, Upload, Download, FileSpreadsheet, AlertCircle,
-  ChevronRight, Database, MoreVertical, Calendar,
+  ChevronRight, Database, MoreVertical, Calendar, ToggleLeft,
 } from 'lucide-react';
 import Modal from '../../components/ui/Modal';
 import { loadQuestionBank, CATEGORIES, CATEGORY_META, addQuestion as apiAddQuestion, updateQuestion as apiUpdateQuestion, deleteQuestion as apiDeleteQuestion } from '../../utils/questionBank';
@@ -144,9 +144,10 @@ const levelPal = (idx) => LEVEL_PALETTE[idx % LEVEL_PALETTE.length];
 
 // ─── Question-type config ──────────────────────────────────────────────────
 const Q_TYPES = [
-  { value:'mcq',   label:'MCQ',                icon:List,      sub:'4 options · text or image'     },
-  { value:'match', label:'Match the Following', icon:AlignLeft, sub:'Pair matching · text or image'  },
-  { value:'image', label:'Image-Based',         icon:Image,     sub:'Question image + options'       },
+  { value:'mcq',       label:'MCQ',                icon:List,       sub:'4 options · text or image'     },
+  { value:'match',     label:'Match the Following', icon:AlignLeft,  sub:'Pair matching · text or image'  },
+  { value:'image',     label:'Image-Based',         icon:Image,      sub:'Question image + options'       },
+  { value:'truefalse', label:'True / False',        icon:ToggleLeft, sub:'2 options · True or False'      },
 ];
 const DIFF_CFG = {
   easy:   { label:'Easy',   cls:'bg-green-100 text-green-700' },
@@ -157,10 +158,11 @@ const DIFF_CFG = {
 // ─── Blank question factories ─────────────────────────────────────────────
 const blankOpt  = () => ({ text: '', imageUrl: '' });
 const blankPair = () => ({ left: '', leftImage: '', right: '', rightImage: '' });
-const blankMcq   = () => ({ type:'mcq',   text:'', imageUrl:'', difficulty:'easy', options:[blankOpt(),blankOpt(),blankOpt(),blankOpt()], correct:0, explanation:'' });
-const blankMatch = () => ({ type:'match', text:'', imageUrl:'', difficulty:'easy', pairs:[blankPair(),blankPair(),blankPair(),blankPair()], explanation:'' });
-const blankImage = () => ({ type:'image', text:'', imageUrl:'', difficulty:'easy', options:[blankOpt(),blankOpt(),blankOpt(),blankOpt()], correct:0, explanation:'' });
-const blankForType = (t) => t==='match'?blankMatch():t==='image'?blankImage():blankMcq();
+const blankMcq       = () => ({ type:'mcq',       text:'', imageUrl:'', difficulty:'easy', options:[blankOpt(),blankOpt(),blankOpt(),blankOpt()], correct:null, explanation:'' });
+const blankMatch     = () => ({ type:'match',     text:'', imageUrl:'', difficulty:'easy', pairs:[blankPair(),blankPair(),blankPair(),blankPair()], explanation:'' });
+const blankImage     = () => ({ type:'image',     text:'', imageUrl:'', difficulty:'easy', options:[blankOpt(),blankOpt(),blankOpt(),blankOpt()], correct:null, explanation:'' });
+const blankTrueFalse = () => ({ type:'truefalse', text:'', imageUrl:'', difficulty:'easy', options:[{text:'True',imageUrl:''},{text:'False',imageUrl:''}], correct:null, explanation:'' });
+const blankForType   = (t) => t==='match'?blankMatch():t==='image'?blankImage():t==='truefalse'?blankTrueFalse():blankMcq();
 
 // ─── CSV parser ───────────────────────────────────────────────────────────
 const CSV_TEMPLATE = [
@@ -449,11 +451,16 @@ function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catNam
         if ((!pr.left.trim() && !pr.leftImage) || (!pr.right.trim() && !pr.rightImage))
           e[`pair${i}`] = 'Both sides need text or image';
       });
+    } else if (form.type === 'truefalse') {
+      if (form.correct === null || form.correct === undefined)
+        e.correct = 'Please select True or False as the correct answer';
     } else {
       (form.options || []).forEach((o, i) => {
         const opt = normalizeOpt(o);
         if (!opt.text.trim() && !opt.imageUrl) e[`opt${i}`] = 'Fill all options';
       });
+      if (form.correct === null || form.correct === undefined)
+        e.correct = 'Please select the correct answer by clicking a letter button';
     }
     setErrors(e);
     return !Object.keys(e).length;
@@ -489,7 +496,7 @@ function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catNam
         {/* ── Question Type ── */}
         <div>
           <label className={lbl}>Question Type</label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {Q_TYPES.map(qt => { const Icon = qt.icon; return (
               <button key={qt.value} type="button" onClick={() => handleTypeChange(qt.value)}
                 className={`p-3 rounded-xl border-2 text-left transition-all ${form.type === qt.value ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-indigo-200 hover:bg-slate-50'}`}>
@@ -545,6 +552,47 @@ function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catNam
                 );
               })}
             </div>
+            {errors.correct && (
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-red-500 font-semibold">
+                <AlertCircle size={12}/>{errors.correct}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* ── True / False ── */}
+        {form.type === 'truefalse' && (
+          <div>
+            <label className={lbl}>
+              Correct Answer <span className="text-red-400">*</span>
+              <span className="normal-case font-normal text-slate-400 ml-1">Click to select the correct option</span>
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              {[{label:'True', idx:0, color:'emerald'}, {label:'False', idx:1, color:'rose'}].map(({label, idx, color}) => {
+                const selected = form.correct === idx;
+                return (
+                  <button key={label} type="button" onClick={() => set('correct', idx)}
+                    className={`py-6 rounded-2xl border-2 font-bold text-lg transition-all ${
+                      selected
+                        ? color === 'emerald'
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                          : 'border-rose-500 bg-rose-50 text-rose-700'
+                        : errors.correct
+                          ? 'border-red-300 text-slate-500 hover:border-slate-300'
+                          : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50'
+                    }`}>
+                    {selected && <Check size={16} className="mx-auto mb-1"/>}
+                    {label}
+                    {selected && <p className="text-[10px] font-semibold mt-1 opacity-70">Correct Answer</p>}
+                  </button>
+                );
+              })}
+            </div>
+            {errors.correct && (
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-red-500 font-semibold">
+                <AlertCircle size={12}/>{errors.correct}
+              </p>
+            )}
           </div>
         )}
 
@@ -664,6 +712,15 @@ function QuestionRow({ q, index, onEdit, onDelete }) {
                   </div>
                 );
               })}
+            </div>
+          ) : q.type === 'truefalse' ? (
+            <div className="flex gap-2">
+              {[{label:'True',idx:0},{label:'False',idx:1}].map(({label,idx}) => (
+                <div key={label} className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs border font-semibold ${idx === q.correct ? 'bg-green-50 border-green-200 text-green-800' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
+                  {idx === q.correct && <CheckCircle size={10} className="text-green-500"/>}
+                  {label}
+                </div>
+              ))}
             </div>
           ) : (
             <div className="space-y-1.5">
