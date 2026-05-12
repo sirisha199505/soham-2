@@ -126,7 +126,17 @@ function PageModal({ levelId, page, onSave, onClose }) {
                     <p className="text-xs text-slate-500 mt-0.5">PDF ready · click Preview to verify</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <button onClick={() => window.open(form.pdfData, '_blank')}
+                    <button onClick={() => {
+                      try {
+                        const arr  = form.pdfData.split(',');
+                        const mime = arr[0].match(/:(.*?);/)[1];
+                        const bstr = atob(arr[1]);
+                        const u8   = new Uint8Array(bstr.length);
+                        for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
+                        const url  = URL.createObjectURL(new Blob([u8], { type: mime }));
+                        window.open(url, '_blank');
+                      } catch { window.open(form.pdfData, '_blank'); }
+                    }}
                       className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 px-2 py-1 rounded-lg hover:bg-blue-100 transition-colors">
                       <Eye size={12} /> Preview
                     </button>
@@ -273,9 +283,11 @@ export default function ContentManagement() {
   const persistLevel = async (levelId, pages) => {
     try {
       await api.saveContent(levelId, pages);
+      return true;
     } catch (err) {
       console.error('Failed to save content:', err);
       showToast('Save failed — check connection');
+      return false;
     }
   };
 
@@ -289,17 +301,17 @@ export default function ContentManagement() {
       next[levelId] = [...(next[levelId] || []), { page: (next[levelId]?.length || 0) + 1, ...form }];
     }
     setContent(next);
-    await persistLevel(levelId, next[levelId]);
+    const saved = await persistLevel(levelId, next[levelId]);
     setModal(null);
-    showToast('Content page saved');
+    if (saved) showToast('Content page saved');
   };
 
   const handleDelete = async (levelId, idx) => {
     const next = { ...content };
     next[levelId] = next[levelId].filter((_, i) => i !== idx);
     setContent(next);
-    await persistLevel(levelId, next[levelId]);
-    showToast('Page deleted');
+    const saved = await persistLevel(levelId, next[levelId]);
+    if (saved) showToast('Page deleted');
   };
 
   if (loading) return (
