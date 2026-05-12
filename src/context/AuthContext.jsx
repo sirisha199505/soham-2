@@ -18,8 +18,15 @@ function hasStoredToken() {
   return t && t !== 'undefined' && t !== 'null';
 }
 
+const ROLE_MAP_INIT = { 0: 'student', 1: 'admin', 2: 'teacher' };
+function normalizeStoredUser(raw) {
+  if (!raw) return raw;
+  const role = typeof raw.role === 'number' ? (ROLE_MAP_INIT[raw.role] || 'student') : (raw.role || 'student');
+  return { ...raw, role, name: raw.name || raw.full_name || '', full_name: raw.full_name || raw.name || '' };
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(readStoredUser);
+  const [user, setUser] = useState(() => normalizeStoredUser(readStoredUser()));
   // While we're verifying a stored token on page load, don't render protected routes yet.
   const [initializing, setInitializing] = useState(() => !!hasStoredToken());
 
@@ -33,8 +40,9 @@ export function AuthProvider({ children }) {
     }
     api.me()
       .then((freshUser) => {
-        localStorage.setItem(USER_KEY, JSON.stringify(freshUser));
-        setUser(freshUser);
+        const normalized = normalizeStoredUser(freshUser);
+        localStorage.setItem(USER_KEY, JSON.stringify(normalized));
+        setUser(normalized);
       })
       .catch((err) => {
         if (err?.status === 401) {
@@ -65,11 +73,12 @@ export function AuthProvider({ children }) {
   /* ── Login ── */
   const login = useCallback(async (identifier, password) => {
     const data = await api.login(identifier, password);
+    const normalized = normalizeStoredUser(data.user);
     localStorage.setItem(TOKEN_KEY, data.token);
-    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-    setUser(data.user);
-    return getDashboardRoute(data.user.role);
-  }, []);
+    localStorage.setItem(USER_KEY, JSON.stringify(normalized));
+    setUser(normalized);
+    return getDashboardRoute(normalized.role);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const logout = useCallback(() => {
     clearSession();
