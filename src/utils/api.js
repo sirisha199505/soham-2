@@ -23,6 +23,9 @@ async function request(method, path, body, attempt = 0) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();
   const isNoAuth = NO_AUTH_PATHS.some(p => path.includes(p));
+  if (!isNoAuth && !token) {
+    console.warn(`[RQA] No auth token — ${path} will be unauthenticated`);
+  }
   if (token && !isNoAuth) headers['Authorization'] = `Bearer ${token}`;
 
   // Hard 55-second timeout via AbortController.
@@ -63,12 +66,11 @@ async function request(method, path, body, attempt = 0) {
     const err = new Error(msg);
     err.status = res.status;
 
-    // Global 401 guard: any authenticated endpoint returning 401 means the
-    // session is no longer valid (token expired, server restarted, SSL drop
-    // caused a false auth failure). Clear immediately so protected routes
-    // redirect to login instead of showing a broken page.
-    if (res.status === 401 && !isNoAuth) {
-      clearSession();
+    // Do NOT call clearSession() here. A 401 from any endpoint other than
+    // /api/auth/me could be transient (Neon cold start, race condition). Only
+    // AuthContext — which calls api.me() — should decide to wipe the session.
+    if (res.status === 401) {
+      console.warn(`[RQA] 401 from ${path} — session may need re-validation`);
     }
 
     throw err;
