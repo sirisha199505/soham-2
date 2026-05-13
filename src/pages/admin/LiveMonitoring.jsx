@@ -37,7 +37,7 @@ const LEVEL_COLORS = { 1: '#3BC0EF', 2: '#8B5CF6', 3: '#10B981' };
 // ─── Action confirm modal ─────────────────────────────────────────────────
 function ActionModal({ action, session, onConfirm, onClose }) {
   const cfg = {
-    pause:    { title:'Pause Session',   desc:`Pause the active session for ${session?.studentId}?`,                              color:'#F59E0B', btn:'Pause'       },
+    // pause:    { title:'Pause Session',   desc:`Pause the active session for ${session?.studentId}?`,                              color:'#F59E0B', btn:'Pause'       },
     resume:   { title:'Resume Session',  desc:`Resume the paused session for ${session?.studentId}?`,                            color:'#10B981', btn:'Resume'      },
     submit:   { title:'Force Submit',    desc:`Force submit the quiz for ${session?.studentId}? Current answers will be graded.`, color:'#EF4444', btn:'Force Submit' },
     reset:    { title:'Reset Attempt',   desc:`Reset the quiz attempt for ${session?.studentId}? They can retake from start.`,   color:'#8B5CF6', btn:'Reset'       },
@@ -115,7 +115,7 @@ export default function LiveMonitoring() {
     const { action, session } = actionModal;
     setSessions(prev => prev.map(s => {
       if (s.id !== session.id) return s;
-      if (action === 'pause')          return { ...s, status: 'progress' };
+      // if (action === 'pause')          return { ...s, status: 'progress' };
       if (action === 'resume')         return { ...s, status: 'active' };
       if (action === 'submit')         return { ...s, status: 'progress', answered: s.total };
       if (action === 'reset')          return { ...s, status: 'active', answered: 0, elapsed: 0 };
