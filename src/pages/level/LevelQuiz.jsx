@@ -59,7 +59,7 @@ function ResultQuestionCard({ q, answer, index, levelColor }) {
 
       {/* Options / pairs */}
       <div className="px-4 py-3 space-y-2">
-        {(q.type === 'mcq' || q.type === 'image' || q.type === 'tf') && q.options && (
+        {(q.type === 'mcq' || q.type === 'image' || q.type === 'tf') && Array.isArray(q.options) && (
           <div className="grid gap-1.5">
             {q.options.map((opt, i) => {
               const text = typeof opt === 'string' ? opt : (opt?.text || '');
@@ -630,7 +630,7 @@ export default function LevelQuiz() {
               )}
 
               {/* MCQ / Image type */}
-              {(q.type === 'mcq' || q.type === 'image' || q.type === 'tf') && q.options && (
+              {(q.type === 'mcq' || q.type === 'image' || q.type === 'tf') && Array.isArray(q.options) && (
                 <div className={`grid gap-3 ${q.type === 'tf' ? 'grid-cols-2' : 'grid-cols-1'}`}>
                   {q.options.map((opt, i) => {
                     const selected   = answers[q.id] === i;

@@ -426,7 +426,7 @@ function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catNam
   const set     = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const setOpt = (i, field, val) => setForm(p => {
-    const opts = p.options.map(normalizeOpt);
+    const opts = (Array.isArray(p.options) ? p.options : []).map(normalizeOpt);
     opts[i] = { ...opts[i], [field]: val };
     return { ...p, options: opts };
   });

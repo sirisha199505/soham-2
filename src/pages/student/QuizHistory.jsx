@@ -76,7 +76,7 @@ function QuestionReview({ q, answer, index }) {
           <img src={q.imageUrl} alt="question" className="w-full h-32 object-cover rounded-xl border border-slate-100 mb-2"/>
         )}
 
-        {(q.type === 'mcq' || q.type === 'image' || q.type === 'tf') && q.options && (
+        {(q.type === 'mcq' || q.type === 'image' || q.type === 'tf') && Array.isArray(q.options) && (
           <div className="grid gap-1.5">
             {q.options.map((opt, i) => {
               const isSelected        = answer === i;

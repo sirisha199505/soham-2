@@ -196,7 +196,7 @@ export default function QuizResultCard({ quiz, result }) {
 
                 {/* Options — pointer-events-none prevents any interaction */}
                 <div className={`p-3 grid gap-2 pointer-events-none ${isTF ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                  {q.options.map((opt, i) => {
+                  {(Array.isArray(q.options) ? q.options : []).map((opt, i) => {
                     const isCorrect   = i === q.correct;
                     const isSelected  = i === userAns;
                     const isWrongPick = isSelected && !isCorrect;

@@ -243,7 +243,7 @@ export default function QuizAttempt() {
               </div>
 
               <div className={`grid gap-3 ${q.type === 'true_false' ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                {q.options.map((opt, i) => {
+                {(Array.isArray(q.options) ? q.options : []).map((opt, i) => {
                   const selected = answers[q.id] === i;
                   const isTF     = q.type === 'true_false';
                   return (

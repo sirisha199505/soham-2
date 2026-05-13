@@ -352,7 +352,7 @@ export default function QuestionBank() {
 
                       {/* Options grid */}
                       <div className={`grid gap-1.5 mb-3 ${qType === 'true_false' ? 'grid-cols-2' : 'grid-cols-2'}`}>
-                        {q.options.map((opt, j) => {
+                        {(Array.isArray(q.options) ? q.options : []).map((opt, j) => {
                           const correct = isDisplayCorrect(q, j);
                           return (
                             <div key={j} className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg ${
