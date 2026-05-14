@@ -53,7 +53,7 @@ function SectionEditor({ sections, onChange }) {
 }
 
 /* ── Page Modal ── */
-function PageModal({ levelId, page, onSave, onClose }) {
+function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
   const [form, setForm] = useState(page
     ? {
         title:   page.title,
@@ -164,7 +164,7 @@ function PageModal({ levelId, page, onSave, onClose }) {
         </div>
         <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button onClick={() => canSave && onSave(levelId, form, page)}
+          <button onClick={() => canSave && onSave(levelId, form, pageIdx)}
             disabled={!canSave}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
             <Save size={14} /> Save Page
@@ -291,12 +291,12 @@ export default function ContentManagement() {
     }
   };
 
-  const handleSave = async (levelId, form, existingPage) => {
+  const handleSave = async (levelId, form, pageIdx) => {
     const next = { ...content };
-    if (existingPage !== null && existingPage !== undefined) {
-      const idx = next[levelId].findIndex(p => p.title === existingPage.title);
-      if (idx >= 0) next[levelId][idx] = { ...existingPage, ...form };
-      else next[levelId].push({ page: next[levelId].length + 1, ...form });
+    if (pageIdx !== null && pageIdx !== undefined && pageIdx >= 0) {
+      const pages = [...(next[levelId] || [])];
+      pages[pageIdx] = { ...pages[pageIdx], ...form };
+      next[levelId] = pages;
     } else {
       next[levelId] = [...(next[levelId] || []), { page: (next[levelId]?.length || 0) + 1, ...form }];
     }
@@ -351,14 +351,14 @@ export default function ContentManagement() {
             levelId={lvl}
             pages={content[lvl] || []}
             onAdd={levelId => setModal({ type: 'add', levelId })}
-            onEdit={(levelId, page) => setModal({ type: 'edit', levelId, page })}
+            onEdit={(levelId, page, pageIdx) => setModal({ type: 'edit', levelId, page, pageIdx })}
             onDelete={handleDelete}
           />
         ))}
       </div>
 
-      {modal?.type === 'add'  && <PageModal levelId={modal.levelId} page={null}       onSave={handleSave} onClose={() => setModal(null)} />}
-      {modal?.type === 'edit' && <PageModal levelId={modal.levelId} page={modal.page} onSave={handleSave} onClose={() => setModal(null)} />}
+      {modal?.type === 'add'  && <PageModal levelId={modal.levelId} page={null}       pageIdx={null}           onSave={handleSave} onClose={() => setModal(null)} />}
+      {modal?.type === 'edit' && <PageModal levelId={modal.levelId} page={modal.page} pageIdx={modal.pageIdx}   onSave={handleSave} onClose={() => setModal(null)} />}
     </div>
   );
 }

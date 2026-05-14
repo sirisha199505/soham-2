@@ -604,25 +604,19 @@ import { api } from './api';
 // ─── API-backed functions ────────────────────────────────────────────────────
 
 export async function loadQuestionBank() {
-  try {
-    const data = await api.getQuestionBank();
-    // API returns dict {category: [questions]} — handle flat array for safety
-    if (Array.isArray(data)) {
-      const result = {};
-      CATEGORIES.forEach(cat => { result[cat] = []; });
-      data.forEach(q => {
-        const cat = q.category || CATEGORIES[0];
-        if (!result[cat]) result[cat] = [];
-        result[cat].push(q);
-      });
-      return result;
-    }
-    return data;
-  } catch {
+  const data = await api.getQuestionBank();
+  // API returns dict {category: [questions]} — handle flat array for safety
+  if (Array.isArray(data)) {
     const result = {};
-    CATEGORIES.forEach(cat => { result[cat] = DEFAULTS[cat].map(q => ({ ...q })); });
+    CATEGORIES.forEach(cat => { result[cat] = []; });
+    data.forEach(q => {
+      const cat = q.category || CATEGORIES[0];
+      if (!result[cat]) result[cat] = [];
+      result[cat].push(q);
+    });
     return result;
   }
+  return data;
 }
 
 export function saveQuestionBank() {}

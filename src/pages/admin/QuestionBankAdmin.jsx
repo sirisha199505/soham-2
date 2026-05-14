@@ -88,14 +88,7 @@ function loadStorage() {
 
 async function loadStorageFromAPI() {
   try {
-    let flat = await loadQuestionBank();
-    // If DB is empty, seed all default questions then reload
-    const total = Object.values(flat).flat().length;
-    if (total === 0) {
-      const { ensureQuestionBankSeeded } = await import('../../utils/questionBank');
-      await ensureQuestionBankSeeded();
-      flat = await loadQuestionBank();
-    }
+    const flat = await loadQuestionBank();
     return fromFlat(flat);
   } catch {
     return { banks: [] };
@@ -313,12 +306,13 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
     a.download = 'question_bank_template.csv'; a.click();
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     setImporting(true);
-    setTimeout(() => {
-      onImport(parsed, catId==='__new__' ? null : catId, catId==='__new__' ? newCatName.trim()||'Imported' : null);
-      setImporting(false); setStep('done');
-    }, 600);
+    try {
+      await onImport(parsed, catId==='__new__' ? null : catId, catId==='__new__' ? newCatName.trim()||'Imported' : null);
+    } catch {}
+    setImporting(false);
+    setStep('done');
   };
 
   const typeLabel = (t) => Q_TYPES.find(q=>q.value===t)?.label||t;
@@ -774,8 +768,10 @@ function CategorySection({ cat, levelName, pal, onRename, onDelete, onQuestionsC
     const apiCat = getCatFromLevelName(levelName);
     const payload = flattenQ(q, apiCat);
     try {
-      await apiAddQuestion(payload);
-      onQuestionsChange([...(cat.questions||[]), q]);
+      const saved = await apiAddQuestion(payload);
+      // Use the DB-assigned ID so subsequent edits/deletes work correctly
+      const savedQ = saved?.id ? { ...q, id: saved.id } : q;
+      onQuestionsChange([...(cat.questions||[]), savedQ]);
       setQModal(null);
       showToast?.('Question added successfully!');
     } catch (err) {
@@ -888,11 +884,31 @@ function LevelSection({ level, index, onUpdate, onDelete, showToast }) {
   const qTotal = cats.reduce((s,c)=>s+(c.questions||[]).length,0);
   const update = useCallback((patch)=>onUpdate({...level,...patch}),[level,onUpdate]);
 
-  const handleImport = (questions, catId, newCatName) => {
+  const handleImport = async (questions, catId, newCatName) => {
+    // Persist each imported question to the backend and collect DB-assigned IDs
+    const apiCat = getCatFromLevelName(level.name);
+    const savedQuestions = [];
+    for (const q of questions) {
+      try {
+        const saved = await apiAddQuestion({
+          ...q,
+          category: apiCat,
+          status: 'active',
+          options: Array.isArray(q.options) ? q.options.map(o => (typeof o === 'string' ? o : (o?.text || ''))) : q.options,
+          pairs: Array.isArray(q.pairs) ? q.pairs.map(p => ({ left: p.left || '', right: p.right || '' })) : q.pairs,
+          correctAnswer: q.correct,
+        });
+        savedQuestions.push(saved?.id ? { ...q, id: saved.id } : q);
+      } catch (err) {
+        console.error('Import: failed to save question:', err.message);
+        savedQuestions.push(q);
+      }
+    }
     const newCats = catId
-      ? cats.map(c=>c.id===catId?{...c,questions:[...(c.questions||[]),...questions]}:c)
-      : [...cats,{id:uid('cat'),name:newCatName||'Imported',questions}];
+      ? cats.map(c=>c.id===catId?{...c,questions:[...(c.questions||[]),...savedQuestions]}:c)
+      : [...cats,{id:uid('cat'),name:newCatName||'Imported',questions:savedQuestions}];
     update({categories:newCats});
+    showToast?.(`${savedQuestions.length} questions imported and saved!`);
   };
 
   return (
@@ -961,7 +977,7 @@ function LevelSection({ level, index, onUpdate, onDelete, showToast }) {
           )}
         </div>
       )}
-      {importOpen&&<ImportModal isOpen levelName={level.name} categories={cats} onClose={()=>setImportOpen(false)} onImport={(qs,catId,newCatName)=>{handleImport(qs,catId,newCatName);setImportOpen(false);}}/>}
+      {importOpen&&<ImportModal isOpen levelName={level.name} categories={cats} onClose={()=>setImportOpen(false)} onImport={async (qs,catId,newCatName)=>{await handleImport(qs,catId,newCatName);setImportOpen(false);}}/>}
       <DeleteModal isOpen={deleteLevel} onClose={()=>setDeleteLevel(false)} onConfirm={()=>{setDeleteLevel(false);onDelete();}} title={`Delete ${level.name}?`} message={`"${level.name}" and all its ${cats.length} categories and ${qTotal} questions will be permanently deleted.`}/>
       <DeleteModal isOpen={!!deleteCat} onClose={()=>setDeleteCat(null)} onConfirm={()=>{update({categories:cats.filter(c=>c.id!==deleteCat.id)});setDeleteCat(null);}} title={`Delete "${deleteCat?.name}"?`} message={`This category and its ${(deleteCat?.questions||[]).length} questions will be permanently removed.`}/>
     </div>

@@ -10,7 +10,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { LEVELS } from '../../utils/levelData';
 import { formatDuration } from '../../utils/helpers';
 import { generateLevelQuiz, recordUsedQuestions, saveQuizAttempt } from '../../utils/quizGenerator';
-import { ensureQuestionBankSeeded, CATEGORY_META, CATEGORIES } from '../../utils/questionBank';
+import { CATEGORY_META, CATEGORIES } from '../../utils/questionBank';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 
