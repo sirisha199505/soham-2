@@ -28,12 +28,48 @@ function localRead(studentId) {
   }
 }
 
+// ── Shuffle helpers ──────────────────────────────────────────────────────────
+
+function fisherYates(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Shuffle the option positions for a single question and remap the correct index.
+// Only applies to mcq/image types — tf (True/False) and match are left unchanged.
+function shuffleOptions(q) {
+  if (q.type !== 'mcq' && q.type !== 'image') return q;
+  if (!Array.isArray(q.options) || q.options.length < 2) return q;
+
+  // Build a shuffled mapping of original indices
+  const shuffledIndices = fisherYates(q.options.map((_, i) => i));
+  const shuffledOptions = shuffledIndices.map(i => q.options[i]);
+  // The correct answer was at index q.correct; find its new position
+  const newCorrect = shuffledIndices.indexOf(Number(q.correct));
+
+  return {
+    ...q,
+    options:       shuffledOptions,
+    correct:       newCorrect,
+    correctAnswer: newCorrect,
+  };
+}
+
 // ── Public API ───────────────────────────────────────────────────────────────
 
-// Generate a quiz for the student via the backend (filtered by level)
+// Generate a quiz for the student via the backend (filtered by level), then
+// shuffle option positions client-side so each student sees a unique arrangement.
 export async function generateLevelQuiz(studentId, levelId) {
   try {
-    return await api.generateQuiz(studentId, levelId);
+    const questions = await api.generateQuiz(studentId, levelId);
+    // Backend already randomizes question order via SQL RANDOM() + .shuffle.
+    // We additionally randomize option positions here so no two students see
+    // the same option layout even if they receive the same question set.
+    return questions.map(shuffleOptions);
   } catch (err) {
     console.error('generateLevelQuiz failed:', err.message);
     return [];
