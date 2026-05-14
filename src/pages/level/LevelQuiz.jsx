@@ -237,7 +237,8 @@ export default function LevelQuiz() {
   const [loading,   setLoading]   = useState(true);
   useEffect(() => {
     generateLevelQuiz(user?.uniqueId, id).then(qs => {
-      setQuestions(qs);
+      // Normalize 'truefalse' → 'tf' so the renderer handles both admin-saved and legacy questions
+      setQuestions(qs.map(q => q.type === 'truefalse' ? { ...q, type: 'tf' } : q));
       setLoading(false);
     }).catch(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps

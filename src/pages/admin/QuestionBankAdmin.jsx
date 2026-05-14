@@ -82,7 +82,13 @@ function toFlat(storage) {
 }
 
 function loadStorage() {
-  // Returns default empty structure; data is loaded async via useEffect
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed?.banks) && parsed.banks.length > 0) return parsed;
+    }
+  } catch {}
   return { banks: [] };
 }
 
@@ -90,8 +96,9 @@ async function loadStorageFromAPI() {
   try {
     const flat = await loadQuestionBank();
     return fromFlat(flat);
-  } catch {
-    return { banks: [] };
+  } catch (err) {
+    console.warn('QuestionBank: API load failed:', err?.message);
+    return fromFlat({ robotics: [], chemistry: [], physics: [], mathematics: [] });
   }
 }
 
@@ -107,8 +114,10 @@ async function persistQuestion(op, q, cat) {
   }
 }
 
-function persist() {
-  // No-op: operations are persisted individually via persistQuestion
+function persist(data) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch {}
 }
 
 let _seq = Date.now();
@@ -1270,13 +1279,20 @@ export default function QuestionBankAdmin() {
   const [selectedBankId, setSelectedBankId] = useState(null);
   const [toast, setToast]             = useState('');
 
-  // Load question bank from API on mount
+  // Load question bank: show cache immediately, then refresh from API
   useEffect(() => {
+    const cached = loadStorage();
+    if (cached.banks.length > 0) {
+      setStorage(cached);
+      setSelectedBankId(cached.banks[0]?.id || null);
+    }
     loadStorageFromAPI().then(data => {
-      if (data.banks.length > 0) {
-        setStorage(data);
-        if (!selectedBankId) setSelectedBankId(data.banks[0].id);
-      }
+      setStorage(data);
+      persist(data);
+      setSelectedBankId(prev => {
+        if (data.banks.some(b => b.id === prev)) return prev;
+        return data.banks[0]?.id || null;
+      });
     }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
