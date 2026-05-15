@@ -237,8 +237,8 @@ export default function AdminReports() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <h3 className="font-bold text-slate-800 mb-4" style={{ fontFamily: 'Space Grotesk' }}>Pass vs Fail by Level</h3>
-          <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-52 min-w-0">
+            <ResponsiveContainer width="100%" height="100%" debounce={50}>
               <BarChart data={levelChartData} margin={{ left: -10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="level" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
@@ -254,8 +254,8 @@ export default function AdminReports() {
 
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <h3 className="font-bold text-slate-800 mb-4" style={{ fontFamily: 'Space Grotesk' }}>Overall Pass/Fail Ratio</h3>
-          <div className="h-44">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-44 min-w-0">
+            <ResponsiveContainer width="100%" height="100%" debounce={50}>
               <PieChart>
                 <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={72} paddingAngle={4} dataKey="value">
                   {pieData.map((_, i) => <Cell key={i} fill={DIFF_COLORS[i]} />)}
