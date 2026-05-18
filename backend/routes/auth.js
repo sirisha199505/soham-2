@@ -72,13 +72,21 @@ router.post('/login', async (req, res) => {
       // Try student unique_id
       const idRes = await pool.query('SELECT * FROM users WHERE unique_id=$1', [identifier.trim()]);
       if (idRes.rowCount === 0) {
-        return res.status(401).json({ error: 'Invalid ID or password.' });
+        const errMsg = key.includes('@')
+          ? 'Invalid admin email or password.'
+          : 'Invalid Student ID or password.';
+        return res.status(401).json({ error: errMsg });
       }
       user = idRes.rows[0];
     }
 
     const match = await bcrypt.compare(password, user.password_hash);
-    if (!match) return res.status(401).json({ error: 'Incorrect password.' });
+    if (!match) {
+      const isStudent = user.role === 'student' || user.role === 0;
+      return res.status(401).json({
+        error: isStudent ? 'Invalid Student ID or password.' : 'Invalid admin email or password.',
+      });
+    }
 
     const token = makeToken(user);
     res.json({

@@ -43,7 +43,13 @@ export default function Login() {
       const route = await login(id, form.password);
       navigate(route, { replace: true });
     } catch (err) {
-      setError(err.message);
+      if (err.status === 401) {
+        setError(tab === 'admin'
+          ? 'Invalid admin email or password.'
+          : 'Invalid Student ID or password.');
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
