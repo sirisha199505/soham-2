@@ -35,33 +35,38 @@ function normalizePair(pair) {
   };
 }
 
-// Convert flat rqa_question_bank → hierarchical bank format used by this UI
+// Convert flat rqa_question_bank → hierarchical bank format used by this UI.
+// Only creates levels that have at least one question so that deleted levels
+// do not reappear on refresh (the DB is the source of truth).
 function fromFlat(flat) {
+  const levels = CATEGORIES
+    .filter(cat => (flat[cat] || []).length > 0)
+    .map(cat => ({
+      id: `level-${cat}`,
+      name: CATEGORY_META[cat].label,
+      categories: [{
+        id: `cat-${cat}-general`,
+        name: 'General',
+        questions: (flat[cat] || []).map(q => ({
+          id: q.id || uid('q'),
+          type: q.type || 'mcq',
+          text: q.text || '',
+          imageUrl: q.imageUrl || '',
+          difficulty: q.difficulty || 'easy',
+          options: q.options ? q.options.map(normalizeOpt) : undefined,
+          correct: q.correct,
+          pairs: q.pairs ? q.pairs.map(normalizePair) : undefined,
+          explanation: q.explanation || '',
+        })),
+      }],
+    }));
   return {
-    banks: [{
+    banks: levels.length > 0 ? [{
       id: 'bank-default',
       name: 'Question Bank',
       createdAt: Date.now(),
-      levels: CATEGORIES.map(cat => ({
-        id: `level-${cat}`,
-        name: CATEGORY_META[cat].label,
-        categories: [{
-          id: `cat-${cat}-general`,
-          name: 'General',
-          questions: (flat[cat] || []).map(q => ({
-            id: q.id || uid('q'),
-            type: q.type || 'mcq',
-            text: q.text || '',
-            imageUrl: q.imageUrl || '',
-            difficulty: q.difficulty || 'easy',
-            options: q.options ? q.options.map(normalizeOpt) : undefined,
-            correct: q.correct,
-            pairs: q.pairs ? q.pairs.map(normalizePair) : undefined,
-            explanation: q.explanation || '',
-          })),
-        }],
-      })),
-    }],
+      levels,
+    }] : [],
   };
 }
 
@@ -880,7 +885,7 @@ function CategorySection({ cat, levelName, pal, onRename, onDelete, onQuestionsC
 // ═══════════════════════════════════════════════════════════════════════════
 // Level Section
 // ═══════════════════════════════════════════════════════════════════════════
-function LevelSection({ level, index, onUpdate, onDelete, showToast }) {
+function LevelSection({ level, index, onUpdate, onDelete, onReload, showToast }) {
   const pal = levelPal(index);
   const [collapsed,   setCollapsed]   = useState(false);
   const [addingCat,   setAddingCat]   = useState(false);
@@ -987,8 +992,26 @@ function LevelSection({ level, index, onUpdate, onDelete, showToast }) {
         </div>
       )}
       {importOpen&&<ImportModal isOpen levelName={level.name} categories={cats} onClose={()=>setImportOpen(false)} onImport={async (qs,catId,newCatName)=>{await handleImport(qs,catId,newCatName);setImportOpen(false);}}/>}
-      <DeleteModal isOpen={deleteLevel} onClose={()=>setDeleteLevel(false)} onConfirm={()=>{setDeleteLevel(false);onDelete();}} title={`Delete ${level.name}?`} message={`"${level.name}" and all its ${cats.length} categories and ${qTotal} questions will be permanently deleted.`}/>
-      <DeleteModal isOpen={!!deleteCat} onClose={()=>setDeleteCat(null)} onConfirm={()=>{update({categories:cats.filter(c=>c.id!==deleteCat.id)});setDeleteCat(null);}} title={`Delete "${deleteCat?.name}"?`} message={`This category and its ${(deleteCat?.questions||[]).length} questions will be permanently removed.`}/>
+      <DeleteModal isOpen={deleteLevel} onClose={()=>setDeleteLevel(false)} onConfirm={async () => {
+        setDeleteLevel(false);
+        const allQs = cats.flatMap(c => c.questions || []);
+        for (const q of allQs) {
+          try { await apiDeleteQuestion(null, q.id); } catch {}
+        }
+        onDelete();
+        await onReload?.();
+        showToast?.(`${level.name} deleted permanently.`);
+      }} title={`Delete ${level.name}?`} message={`"${level.name}" and all its ${cats.length} categories and ${qTotal} questions will be permanently deleted.`}/>
+      <DeleteModal isOpen={!!deleteCat} onClose={()=>setDeleteCat(null)} onConfirm={async () => {
+        const cat = deleteCat;
+        setDeleteCat(null);
+        for (const q of (cat.questions || [])) {
+          try { await apiDeleteQuestion(null, q.id); } catch {}
+        }
+        update({ categories: cats.filter(c => c.id !== cat.id) });
+        await onReload?.();
+        showToast?.(`"${cat.name}" deleted permanently.`);
+      }} title={`Delete "${deleteCat?.name}"?`} message={`This category and its ${(deleteCat?.questions||[]).length} questions will be permanently removed.`}/>
     </div>
   );
 }
@@ -996,7 +1019,7 @@ function LevelSection({ level, index, onUpdate, onDelete, showToast }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Bank Detail View
 // ═══════════════════════════════════════════════════════════════════════════
-function BankDetail({ bank, bankIndex, onBack, onUpdate, showToast }) {
+function BankDetail({ bank, bankIndex, onBack, onUpdate, onReload, showToast }) {
   const [addingLevel, setAddingLevel] = useState(false);
   const [renamingBank, setRenamingBank] = useState(false);
 
@@ -1072,7 +1095,7 @@ function BankDetail({ bank, bankIndex, onBack, onUpdate, showToast }) {
         <div className="space-y-4">
           {levels.map((level,idx)=>(
             <LevelSection key={level.id} level={level} index={idx}
-              onUpdate={u=>updateLevel(idx,u)} onDelete={()=>deleteLevel(idx)} showToast={showToast}/>
+              onUpdate={u=>updateLevel(idx,u)} onDelete={()=>deleteLevel(idx)} onReload={onReload} showToast={showToast}/>
           ))}
           {!addingLevel && (
             <button onClick={()=>setAddingLevel(true)}
@@ -1299,6 +1322,19 @@ export default function QuestionBankAdmin() {
 
   const showToast = (msg, color='green') => { setToast({msg,color}); setTimeout(()=>setToast(''),2500); };
 
+  // Re-fetch from API and sync localStorage — called after any delete operation
+  // so the DB is the authoritative source and stale cached data cannot resurface.
+  const reloadFromAPI = useCallback(() => {
+    return loadStorageFromAPI().then(data => {
+      setStorage(data);
+      persist(data);
+      setSelectedBankId(prev => {
+        if (data.banks.some(b => b.id === prev)) return prev;
+        return data.banks[0]?.id || null;
+      });
+    }).catch(() => {});
+  }, []);
+
   const mutate = useCallback((updater) => {
     setStorage(prev => {
       const next = updater(prev);
@@ -1356,6 +1392,7 @@ export default function QuestionBankAdmin() {
           bankIndex={selectedBankIndex}
           onBack={()=>setSelectedBankId(null)}
           onUpdate={updateBank}
+          onReload={reloadFromAPI}
           showToast={showToast}
         />
       ) : (
