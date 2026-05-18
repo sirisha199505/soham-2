@@ -4,10 +4,8 @@ import {
   FileText, Plus, Edit2, Trash2, X, Save, CheckCircle,
   BookOpen, ChevronDown, ChevronUp, Info, Upload, Eye, Loader2,
 } from 'lucide-react';
-import { LEVELS, LEVEL1_PAGES, LEVEL2_PAGES, LEVEL3_PAGES } from '../../utils/levelData';
+import { LEVELS } from '../../utils/levelData';
 import { api } from '../../utils/api';
-
-const STATIC_DEFAULTS = { 1: LEVEL1_PAGES, 2: LEVEL2_PAGES, 3: LEVEL3_PAGES };
 
 const LEVEL_COLORS = {
   1: { from: '#3BC0EF', to: '#1E3A8A' },
@@ -258,26 +256,10 @@ export default function ContentManagement() {
 
   useEffect(() => {
     if (!user?.id) return;
-    Promise.all([
-      api.getContent(1),
-      api.getContent(2),
-      api.getContent(3),
-    ]).then(async ([p1, p2, p3]) => {
-      // If DB is completely empty, seed from static defaults then reload
-      if (!p1.length && !p2.length && !p3.length) {
-        await Promise.all([1, 2, 3].map(lvl =>
-          api.saveContent(lvl, STATIC_DEFAULTS[lvl]).catch(() => {})
-        ));
-        const [s1, s2, s3] = await Promise.all([
-          api.getContent(1), api.getContent(2), api.getContent(3),
-        ]);
-        setContent({ 1: s1, 2: s2, 3: s3 });
-      } else {
-        setContent({ 1: p1, 2: p2, 3: p3 });
-      }
-    }).catch(err => {
-      console.error('Failed to load content:', err);
-    }).finally(() => setLoading(false));
+    Promise.all([api.getContent(1), api.getContent(2), api.getContent(3)])
+      .then(([p1, p2, p3]) => setContent({ 1: p1, 2: p2, 3: p3 }))
+      .catch(err => console.error('Failed to load content:', err))
+      .finally(() => setLoading(false));
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const persistLevel = async (levelId, pages) => {

@@ -8,6 +8,7 @@ import { LEVELS } from '../../utils/levelData';
 import { loadQuestionBank, CATEGORY_META } from '../../utils/questionBank';
 import { TOTAL_QUIZ_QUESTIONS } from '../../utils/quizGenerator';
 import { useLevel } from '../../context/LevelContext';
+import { api } from '../../utils/api';
 
 /* ── Edit Modal ── */
 function EditModal({ levelId, settings, onSave, onClose }) {
@@ -150,9 +151,12 @@ function LevelCard({ level, settings, stats, onEdit }) {
 export default function ExamLevels() {
   const { user } = useAuth();
   const { setLevelActive, levelSettings } = useLevel();
-  const [editing,   setEditing]  = useState(null);
-  const [saved,     setSaved]    = useState(false);
-  const [bankStats, setBankStats] = useState({ total: 0, perCat: [] });
+  const [editing,    setEditing]   = useState(null);
+  const [saved,      setSaved]     = useState(false);
+  const [bankStats,  setBankStats] = useState({ total: 0, perCat: [] });
+  const [levelStats, setLevelStats] = useState(
+    LEVELS.reduce((acc, l) => { acc[l.id] = { completed: 0, avg: 0 }; return acc; }, {})
+  );
 
   // Build settings from LevelContext (API-backed), fallback to LEVELS defaults
   const settings = LEVELS.reduce((acc, l) => {
@@ -167,11 +171,10 @@ export default function ExamLevels() {
     return acc;
   }, {});
 
-  // Load bank stats from API
+  // Load bank stats and per-level completion stats from API
   useEffect(() => {
     if (!user?.id) return;
     loadQuestionBank().then(bank => {
-      // API returns active questions only — no status filter needed
       const allQs = Object.values(bank).flat();
       const total  = allQs.length;
       const perCat = Object.entries(CATEGORY_META).map(([cat, meta]) => ({
@@ -180,6 +183,29 @@ export default function ExamLevels() {
         count: (bank[cat] || []).length,
       }));
       setBankStats({ total, perCat });
+    }).catch(() => {});
+
+    api.getStudents().then(students => {
+      const totals = LEVELS.reduce((acc, l) => {
+        acc[l.id] = { completed: 0, scoreSum: 0 };
+        return acc;
+      }, {});
+      students.forEach(student => {
+        LEVELS.forEach(l => {
+          const lp = student.levels?.[l.id];
+          if (lp?.status === 'completed') {
+            totals[l.id].completed++;
+            totals[l.id].scoreSum += (lp.score || 0);
+          }
+        });
+      });
+      setLevelStats(
+        LEVELS.reduce((acc, l) => {
+          const { completed, scoreSum } = totals[l.id];
+          acc[l.id] = { completed, avg: completed > 0 ? Math.round(scoreSum / completed) : 0 };
+          return acc;
+        }, {})
+      );
     }).catch(() => {});
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -196,8 +222,6 @@ export default function ExamLevels() {
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
-
-  const stats = LEVELS.reduce((acc, l) => { acc[l.id] = { completed: 0, avg: 0 }; return acc; }, {});
 
   return (
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-6">
@@ -239,7 +263,7 @@ export default function ExamLevels() {
             key={level.id}
             level={level}
             settings={settings}
-            stats={stats[level.id]}
+            stats={levelStats[level.id]}
             onEdit={setEditing}
           />
         ))}
