@@ -1302,20 +1302,12 @@ export default function QuestionBankAdmin() {
   const [selectedBankId, setSelectedBankId] = useState(null);
   const [toast, setToast]             = useState('');
 
-  // Load question bank: show cache immediately, then refresh from API
+  // Load question bank from API on mount — always start at the BanksOverview,
+  // never auto-select a bank so the user is not dropped mid-hierarchy.
   useEffect(() => {
-    const cached = loadStorage();
-    if (cached.banks.length > 0) {
-      setStorage(cached);
-      setSelectedBankId(cached.banks[0]?.id || null);
-    }
     loadStorageFromAPI().then(data => {
       setStorage(data);
       persist(data);
-      setSelectedBankId(prev => {
-        if (data.banks.some(b => b.id === prev)) return prev;
-        return data.banks[0]?.id || null;
-      });
     }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1328,10 +1320,7 @@ export default function QuestionBankAdmin() {
     return loadStorageFromAPI().then(data => {
       setStorage(data);
       persist(data);
-      setSelectedBankId(prev => {
-        if (data.banks.some(b => b.id === prev)) return prev;
-        return data.banks[0]?.id || null;
-      });
+      // Keep the current bank selected — never auto-navigate away mid-session.
     }).catch(() => {});
   }, []);
 
