@@ -1314,13 +1314,13 @@ export default function QuestionBankAdmin() {
 
   const showToast = (msg, color='green') => { setToast({msg,color}); setTimeout(()=>setToast(''),2500); };
 
-  // Re-fetch from API and sync localStorage — called after any delete operation
-  // so the DB is the authoritative source and stale cached data cannot resurface.
+  // Sync localStorage to DB state after a delete so the next page refresh sees
+  // correct data. Must NOT call setStorage — React state is already updated by
+  // onDelete/update, and overwriting it with fromFlat() output can produce an
+  // empty banks array that navigates the user to "No Question Banks Yet".
   const reloadFromAPI = useCallback(() => {
     return loadStorageFromAPI().then(data => {
-      setStorage(data);
       persist(data);
-      // Keep the current bank selected — never auto-navigate away mid-session.
     }).catch(() => {});
   }, []);
 
