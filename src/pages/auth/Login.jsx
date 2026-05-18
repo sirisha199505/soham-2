@@ -43,12 +43,14 @@ export default function Login() {
       const route = await login(id, form.password);
       navigate(route, { replace: true });
     } catch (err) {
-      if (err.status === 401) {
+      // Ruby backend returns 400 for credential failures; Node backend returns 401.
+      // Network/server errors have status 500 or no status — show those as-is.
+      if (err.status === 500 || !err.status) {
+        setError(err.message);
+      } else {
         setError(tab === 'admin'
           ? 'Invalid admin email or password.'
           : 'Invalid Student ID or password.');
-      } else {
-        setError(err.message);
       }
     } finally {
       setLoading(false);
