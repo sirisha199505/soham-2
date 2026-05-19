@@ -230,12 +230,42 @@ export function LevelProvider({ children }) {
     }
   }, []);
 
+  // Admin: create a new exam level
+  const createLevel = useCallback(async (data) => {
+    try {
+      const newLevel = await api.createLevel(data);
+      setLevelSettings(prev => ({
+        ...prev,
+        [newLevel.id]: { ...newLevel, active: newLevel.open },
+      }));
+      return newLevel;
+    } catch (err) {
+      console.error('createLevel failed:', err.message);
+      throw err;
+    }
+  }, []);
+
+  // Admin: delete an exam level
+  const deleteLevel = useCallback(async (levelId) => {
+    try {
+      await api.deleteLevel(levelId);
+      setLevelSettings(prev => {
+        const next = { ...prev };
+        delete next[levelId];
+        return next;
+      });
+    } catch (err) {
+      console.error('deleteLevel failed:', err.message);
+      throw err;
+    }
+  }, []);
+
   return (
     <LevelContext.Provider value={{
       getLevel, getLevelStatus, markContentRead, markLevelComplete, isContentRead,
       setApproval, approvals, setStudentOverride, setLevelActive,
       setGlobalAccess: setGlobalAccessFn, levelSettings, globalAccess,
-      refreshLevelSettings,
+      refreshLevelSettings, createLevel, deleteLevel,
     }}>
       {children}
     </LevelContext.Provider>

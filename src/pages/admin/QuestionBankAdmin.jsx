@@ -8,30 +8,11 @@ import {
   ChevronRight, Database, MoreVertical, Calendar, ToggleLeft,
 } from 'lucide-react';
 import Modal from '../../components/ui/Modal';
+import { api } from '../../utils/api';
 import { loadQuestionBank, CATEGORIES, CATEGORY_META, addQuestion as apiAddQuestion, updateQuestion as apiUpdateQuestion, deleteQuestion as apiDeleteQuestion } from '../../utils/questionBank';
 
-// ─── Storage ──────────────────────────────────────────────────────────────
+// ─── Storage (localStorage cache only — source of truth is the API) ────────
 const STORAGE_KEY = 'sohamquiz_qbank_v1';
-// Separate registry that persists bank metadata (id, name, createdAt) even
-// when a bank is empty and has no questions in the DB yet.
-const BANK_REGISTRY_KEY = 'sohamquiz_bank_registry_v1';
-
-function loadBankRegistry() {
-  try {
-    const raw = localStorage.getItem(BANK_REGISTRY_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed?.banks)) return parsed;
-    }
-  } catch {}
-  return { banks: [] };
-}
-
-function saveBankRegistry(registry) {
-  try {
-    localStorage.setItem(BANK_REGISTRY_KEY, JSON.stringify(registry));
-  } catch {}
-}
 
 // Map level name → rqa_question_bank category key
 const NAME_TO_CAT = Object.fromEntries(
@@ -57,19 +38,16 @@ function normalizePair(pair) {
 }
 
 // Convert flat API response → hierarchical bank format.
-// Accepts an optional bank registry so that empty banks (no questions yet)
-// survive page refreshes — they exist in the registry even though they have
-// no questions in the DB to anchor them.
-function fromFlat(flat, registry = { banks: [] }) {
-  const registryBanks = registry.banks || [];
-
-  // bankName → { registryEntry, catMap }
+// Uses DB-backed banks array (from /api/question-banks) to preserve empty banks.
+// Falls back to deriving banks from question bankName fields for backward compat.
+function fromFlat(flat, apiBanks = []) {
+  // bankName → { apiBank, catMap }
   const bankMap = new Map();
 
-  // Seed with ALL registry banks first — preserves empty banks
-  registryBanks.forEach(rb => {
-    bankMap.set(rb.name, {
-      registryEntry: rb,
+  // Seed with ALL DB banks first — preserves empty banks
+  apiBanks.forEach(ab => {
+    bankMap.set(ab.name, {
+      apiBank: ab,
       catMap: Object.fromEntries(CATEGORIES.map(c => [c, []])),
     });
   });
@@ -80,7 +58,7 @@ function fromFlat(flat, registry = { banks: [] }) {
       const bn = q.bankName || 'Question Bank';
       if (!bankMap.has(bn)) {
         bankMap.set(bn, {
-          registryEntry: null,
+          apiBank: null,
           catMap: Object.fromEntries(CATEGORIES.map(c => [c, []])),
         });
       }
@@ -103,12 +81,13 @@ function fromFlat(flat, registry = { banks: [] }) {
     bankName,
   });
 
-  const banks = Array.from(bankMap.entries()).map(([bankName, { registryEntry, catMap }]) => {
+  const banks = Array.from(bankMap.entries()).map(([bankName, { apiBank, catMap }]) => {
     const levels = CATEGORIES
       .filter(cat => catMap[cat].length > 0)
       .map(cat => ({
-        id:   `level-${cat}-${bankName.replace(/[^a-z0-9]/gi, '_')}`,
-        name: CATEGORY_META[cat].label,
+        id:       `level-${cat}-${bankName.replace(/[^a-z0-9]/gi, '_')}`,
+        name:     CATEGORY_META[cat].label,
+        category: cat,
         categories: [{
           id:        `cat-${cat}-general`,
           name:      'General',
@@ -116,32 +95,43 @@ function fromFlat(flat, registry = { banks: [] }) {
         }],
       }));
 
-    // Use the stable registry ID when available so selectedBankId survives reloads
+    // Use the stable DB-assigned ID when available so selectedBankId survives reloads
     return {
-      id:        registryEntry?.id || `bank-${bankName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`,
+      id:        apiBank?.id || `bank-${bankName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`,
       name:      bankName,
-      createdAt: registryEntry?.createdAt || Date.now(),
-      levels,
+      createdAt: apiBank?.createdAt || Date.now(),
+      // Merge DB structure (levels/categories) with questions from DB
+      levels:    mergeStructureWithQuestions(apiBank?.structure?.levels || levels, levels),
     };
   });
 
   return { banks };
 }
 
-// Convert hierarchical bank format → flat rqa_question_bank (synced to quiz)
-function toFlat(storage) {
-  const flat = Object.fromEntries(CATEGORIES.map(c => [c, []]));
-  (storage.banks || []).forEach(bank => {
-    (bank.levels || []).forEach(level => {
-      const cat = getCatFromLevelName(level.name);
-      (level.categories || []).forEach(levelCat => {
-        (levelCat.questions || []).forEach(q => {
-          flat[cat].push({ ...q, category: cat, status: 'active' });
-        });
-      });
-    });
+// Merge levels structure from bank.structure with live questions from the DB.
+// Levels in structure take priority for names/order; questions come from DB.
+function mergeStructureWithQuestions(structureLevels, dbLevels) {
+  if (!structureLevels || structureLevels.length === 0) return dbLevels;
+  return structureLevels.map(sl => {
+    const dbLevel = dbLevels.find(dl => dl.name === sl.name) || {};
+    return {
+      ...sl,
+      id: sl.id || dbLevel.id || uid('level'),
+      categories: mergeCategories(sl.categories || [], dbLevel.categories || []),
+    };
   });
-  return flat;
+}
+
+function mergeCategories(structureCats, dbCats) {
+  if (!structureCats || structureCats.length === 0) return dbCats;
+  return structureCats.map(sc => {
+    const dbCat = dbCats.find(dc => dc.name === sc.name) || {};
+    return {
+      ...sc,
+      id: sc.id || dbCat.id || uid('cat'),
+      questions: dbCat.questions || sc.questions || [],
+    };
+  });
 }
 
 function loadStorage() {
@@ -155,27 +145,22 @@ function loadStorage() {
   return { banks: [] };
 }
 
+// Load banks from DB API, then overlay questions. Returns hierarchical format.
 async function loadStorageFromAPI() {
-  const registry = loadBankRegistry();
   try {
-    const flat = await loadQuestionBank();
-    console.log('[QuestionBank] Loaded from API. Registry banks:', registry.banks.length, '| DB questions:', Object.values(flat).flat().length);
-    return fromFlat(flat, registry);
+    const [flat, apiBanks] = await Promise.all([
+      loadQuestionBank(),
+      api.getQuestionBanks(),
+    ]);
+    const dbBankList = Array.isArray(apiBanks) ? apiBanks : [];
+    console.log('[QuestionBank] Loaded from API. DB banks:', dbBankList.length, '| DB questions:', Object.values(flat).flat().length);
+    return fromFlat(flat, dbBankList);
   } catch (err) {
     console.warn('[QuestionBank] API load failed:', err?.message);
-    return fromFlat({ robotics: [], chemistry: [], physics: [], mathematics: [] }, registry);
-  }
-}
-
-// Persist a single question operation to the API
-async function persistQuestion(op, q, cat) {
-  try {
-    const flat = { ...q, category: cat, status: 'active' };
-    if (op === 'add')    await apiAddQuestion(flat);
-    if (op === 'update') await apiUpdateQuestion(flat);
-    if (op === 'delete') await apiDeleteQuestion(cat, q.id);
-  } catch (err) {
-    console.error('persistQuestion failed:', err.message);
+    // Fall back to localStorage cache
+    const cached = loadStorage();
+    if (cached.banks.length > 0) return cached;
+    return fromFlat({ robotics: [], chemistry: [], physics: [], mathematics: [] }, []);
   }
 }
 
@@ -198,6 +183,13 @@ const BANK_PALETTE = [
   { grad:'from-sky-500 to-cyan-600',      soft:'bg-sky-50',      border:'border-sky-200',     text:'text-sky-700',      icon:'text-sky-500'      },
 ];
 const bankPal = (idx) => BANK_PALETTE[idx % BANK_PALETTE.length];
+
+// ─── Category selector options ────────────────────────────────────────────
+const CATEGORY_OPTIONS = CATEGORIES.map(cat => ({
+  value: cat,
+  label: CATEGORY_META[cat].label,
+  color: CATEGORY_META[cat].color,
+}));
 
 // ─── Level colour palette ──────────────────────────────────────────────────
 const LEVEL_PALETTE = [
@@ -862,12 +854,15 @@ function QuestionRow({ q, index, onEdit, onDelete }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Category Section
 // ═══════════════════════════════════════════════════════════════════════════
-function CategorySection({ cat, levelName, bankName, pal, onRename, onDelete, onQuestionsChange, showToast }) {
+function CategorySection({ cat, levelName, levelCategory, bankName, pal, onRename, onDelete, onQuestionsChange, showToast }) {
   const [collapsed, setCollapsed] = useState(false);
   const [qModal,    setQModal]    = useState(null);
   const [deleteQ,   setDeleteQ]   = useState(null);
   const [renaming,  setRenaming]  = useState(false);
   const qCount = (cat.questions||[]).length;
+
+  // Use explicitly stored category, fall back to name-derived mapping
+  const resolvedCat = levelCategory || getCatFromLevelName(levelName);
 
   // Normalize options to plain strings for the backend (DB stores string arrays)
   const flattenQ = (q, apiCat) => ({
@@ -885,11 +880,9 @@ function CategorySection({ cat, levelName, bankName, pal, onRename, onDelete, on
   });
 
   const handleAdd = async (q) => {
-    const apiCat = getCatFromLevelName(levelName);
-    const payload = flattenQ(q, apiCat);
+    const payload = flattenQ(q, resolvedCat);
     try {
       const saved = await apiAddQuestion(payload);
-      // Use the DB-assigned ID so subsequent edits/deletes work correctly
       const savedQ = { ...(saved?.id ? { ...q, id: saved.id } : q), bankName: bankName || 'Question Bank' };
       onQuestionsChange([...(cat.questions||[]), savedQ]);
       setQModal(null);
@@ -904,9 +897,8 @@ function CategorySection({ cat, levelName, bankName, pal, onRename, onDelete, on
     const original = (cat.questions||[]).find(q => q.id === u.id);
     onQuestionsChange((cat.questions||[]).map(q => q.id===u.id ? u : q));
     setQModal(null);
-    const apiCat = getCatFromLevelName(levelName);
     try {
-      await apiUpdateQuestion(flattenQ(u, apiCat));
+      await apiUpdateQuestion(flattenQ(u, resolvedCat));
       showToast?.('Question updated successfully!');
     } catch (err) {
       console.error('Update question failed:', err.message);
@@ -1006,7 +998,7 @@ function LevelSection({ level, index, bankName, onUpdate, onDelete, onReload, sh
 
   const handleImport = async (questions, catId, newCatName) => {
     // Persist each imported question to the backend and collect DB-assigned IDs
-    const apiCat = getCatFromLevelName(level.name);
+    const apiCat = level.category || getCatFromLevelName(level.name);
     const savedQuestions = [];
     for (const q of questions) {
       try {
@@ -1084,7 +1076,7 @@ function LevelSection({ level, index, bankName, onUpdate, onDelete, onReload, sh
             </div>
           ):(
             cats.map(cat=>(
-              <CategorySection key={cat.id} cat={cat} levelName={level.name} bankName={bankName} pal={pal}
+              <CategorySection key={cat.id} cat={cat} levelName={level.name} levelCategory={level.category} bankName={bankName} pal={pal}
                 onRename={name=>update({categories:cats.map(c=>c.id===cat.id?{...c,name}:c)})}
                 onDelete={()=>setDeleteCat(cat)}
                 onQuestionsChange={qs=>update({categories:cats.map(c=>c.id===cat.id?{...c,questions:qs}:c)})}
@@ -1127,8 +1119,10 @@ function LevelSection({ level, index, bankName, onUpdate, onDelete, onReload, sh
 // Bank Detail View
 // ═══════════════════════════════════════════════════════════════════════════
 function BankDetail({ bank, bankIndex, onBack, onUpdate, onReload, showToast }) {
-  const [addingLevel, setAddingLevel] = useState(false);
+  const [addingLevel,  setAddingLevel]  = useState(false);
   const [renamingBank, setRenamingBank] = useState(false);
+  const [newLevelName, setNewLevelName] = useState('');
+  const [newLevelCat,  setNewLevelCat]  = useState(CATEGORY_OPTIONS[0]?.value || '');
 
   const levels     = bank.levels || [];
   const totalCats  = levels.reduce((s,l)=>s+(l.categories||[]).length,0);
@@ -1143,9 +1137,13 @@ function BankDetail({ bank, bankIndex, onBack, onUpdate, onReload, showToast }) 
     onUpdate({ ...bank, levels: levels.filter((_,i)=>i!==idx) });
   }, [bank, levels, onUpdate]);
 
-  const addLevel = (name) => {
-    const newLevel = { id:uid('level'), name:name||`Level ${levels.length+1}`, categories:[] };
-    onUpdate({ ...bank, levels:[...levels, newLevel] });
+  const addLevel = () => {
+    const name = newLevelName.trim() || `Level ${levels.length + 1}`;
+    const category = newLevelCat || CATEGORY_OPTIONS[0]?.value;
+    const newLevel = { id: uid('level'), name, category, categories: [] };
+    onUpdate({ ...bank, levels: [...levels, newLevel] });
+    setNewLevelName('');
+    setNewLevelCat(CATEGORY_OPTIONS[0]?.value || '');
     setAddingLevel(false);
   };
 
@@ -1184,8 +1182,40 @@ function BankDetail({ bank, bankIndex, onBack, onUpdate, onReload, showToast }) 
 
       {addingLevel && (
         <div className="bg-white rounded-2xl border-2 border-indigo-200 p-5 shadow-sm">
-          <p className="text-sm font-bold text-indigo-700 mb-3 flex items-center gap-2"><Layers size={15}/>New Level</p>
-          <InlineInput placeholder={`e.g. Level ${levels.length+1}, Advanced…`} onSave={addLevel} onCancel={()=>setAddingLevel(false)}/>
+          <p className="text-sm font-bold text-indigo-700 mb-4 flex items-center gap-2"><Layers size={15}/>New Level</p>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Level Name</label>
+              <input
+                autoFocus
+                value={newLevelName}
+                onChange={e => setNewLevelName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') addLevel(); if (e.key === 'Escape') { setAddingLevel(false); setNewLevelName(''); } }}
+                placeholder={`e.g. Level ${levels.length + 1}, Advanced…`}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Subject Category</label>
+              <select
+                value={newLevelCat}
+                onChange={e => setNewLevelCat(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+              >
+                {CATEGORY_OPTIONS.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <button onClick={addLevel} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-blue-600 hover:opacity-90 transition-all">
+                <Plus size={12}/>Add Level
+              </button>
+              <button onClick={() => { setAddingLevel(false); setNewLevelName(''); }} className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100 transition-all">
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1439,44 +1469,65 @@ export default function QuestionBankAdmin() {
     });
   }, []);
 
-  const createBank = useCallback((name) => {
-    const bank = {
-      id:        uid('bank'),
-      name,
-      createdAt: Date.now(),
-      levels:    [],
-    };
-    // Persist bank metadata to registry so it survives API reloads even when empty
-    const registry = loadBankRegistry();
-    registry.banks = [...registry.banks, { id: bank.id, name: bank.name, createdAt: bank.createdAt }];
-    saveBankRegistry(registry);
-    console.log('[QuestionBank] Bank created and saved to registry:', bank.name, bank.id);
-    mutate(prev => ({ ...prev, banks: [...prev.banks, bank] }));
-    setSelectedBankId(bank.id);
-    showToast(`"${name}" created!`);
+  const createBank = useCallback(async (name) => {
+    try {
+      // Persist to DB — this gives us a stable DB-assigned ID
+      const created = await api.createQuestionBank({ name });
+      const bank = {
+        id:        created.id,
+        name:      created.name || name,
+        createdAt: created.createdAt || Date.now(),
+        levels:    [],
+      };
+      mutate(prev => ({ ...prev, banks: [...prev.banks, bank] }));
+      setSelectedBankId(bank.id);
+      showToast(`"${name}" created!`);
+    } catch (err) {
+      console.error('[QuestionBank] createBank failed:', err.message);
+      showToast('Failed to create bank — check connection', 'red');
+    }
   }, [mutate]);
 
-  const deleteBank = useCallback((id) => {
-    // Remove from registry so it doesn't reappear on next API reload
-    const registry = loadBankRegistry();
-    registry.banks = registry.banks.filter(b => b.id !== id);
-    saveBankRegistry(registry);
-    console.log('[QuestionBank] Bank removed from registry:', id);
+  const deleteBank = useCallback(async (id) => {
+    // Remove from DB — only remove from state on success
+    try {
+      // Only call API delete if id is a real DB integer (not a temp uid string)
+      if (typeof id === 'number' || /^\d+$/.test(String(id))) {
+        await api.deleteQuestionBank(id);
+      }
+    } catch (err) {
+      console.warn('[QuestionBank] deleteBank API failed (continuing):', err.message);
+    }
     mutate(prev => ({ ...prev, banks: prev.banks.filter(b=>b.id!==id) }));
     setSelectedBankId(curr => curr===id ? null : curr);
     showToast('Question bank deleted.','red');
   }, [mutate]);
 
-  const renameBank = useCallback((id, name) => {
-    // Keep registry name in sync so fromFlat can match questions by bankName
-    const registry = loadBankRegistry();
-    registry.banks = registry.banks.map(b => b.id === id ? { ...b, name } : b);
-    saveBankRegistry(registry);
+  const renameBank = useCallback(async (id, name) => {
     mutate(prev => ({ ...prev, banks: prev.banks.map(b=>b.id===id?{...b,name}:b) }));
+    try {
+      if (typeof id === 'number' || /^\d+$/.test(String(id))) {
+        await api.updateQuestionBank(id, { name });
+      }
+    } catch (err) {
+      console.warn('[QuestionBank] renameBank API failed:', err.message);
+    }
   }, [mutate]);
 
   const updateBank = useCallback((updated) => {
     mutate(prev => ({ ...prev, banks: prev.banks.map(b=>b.id===updated.id?updated:b) }));
+    // Persist structure to DB so levels/categories survive refresh
+    if (typeof updated.id === 'number' || /^\d+$/.test(String(updated.id))) {
+      const structure = {
+        levels: (updated.levels || []).map(l => ({
+          id: l.id, name: l.name, category: l.category,
+          categories: (l.categories || []).map(c => ({ id: c.id, name: c.name })),
+        })),
+      };
+      api.updateQuestionBank(updated.id, { structure }).catch(err =>
+        console.warn('[QuestionBank] updateBank structure persist failed:', err.message)
+      );
+    }
   }, [mutate]);
 
   const selectedBank      = storage.banks.find(b=>b.id===selectedBankId);

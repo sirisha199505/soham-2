@@ -4,14 +4,18 @@ import {
   FileText, Plus, Edit2, Trash2, X, Save, CheckCircle,
   BookOpen, ChevronDown, ChevronUp, Info, Upload, Eye, Loader2,
 } from 'lucide-react';
-import { LEVELS } from '../../utils/levelData';
+import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
 
-const LEVEL_COLORS = {
-  1: { from: '#3BC0EF', to: '#1E3A8A' },
-  2: { from: '#8B5CF6', to: '#6d28d9' },
-  3: { from: '#10B981', to: '#047857' },
-};
+const PALETTE = [
+  { from: '#3BC0EF', to: '#1E3A8A' },
+  { from: '#8B5CF6', to: '#6d28d9' },
+  { from: '#10B981', to: '#047857' },
+  { from: '#F59E0B', to: '#D97706' },
+  { from: '#EF4444', to: '#B91C1C' },
+  { from: '#EC4899', to: '#BE185D' },
+];
+const levelColors = (order) => PALETTE[(order - 1) % PALETTE.length];
 
 /* ── Section Editor ── */
 function SectionEditor({ sections, onChange }) {
@@ -174,10 +178,9 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
 }
 
 /* ── Level Section ── */
-function LevelSection({ levelId, pages, onEdit, onDelete, onAdd }) {
-  const [expanded, setExpanded] = useState(levelId === 1);
-  const level = LEVELS.find(l => l.id === levelId);
-  const colors = LEVEL_COLORS[levelId];
+function LevelSection({ levelId, levelTitle, levelOrder, pages, onEdit, onDelete, onAdd }) {
+  const [expanded, setExpanded] = useState(levelOrder === 1);
+  const colors = levelColors(levelOrder);
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -190,7 +193,7 @@ function LevelSection({ levelId, pages, onEdit, onDelete, onAdd }) {
             {levelId}
           </div>
           <div>
-            <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>{level?.title}</h3>
+            <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>{levelTitle || `Level ${levelId}`}</h3>
             <p className="text-xs text-slate-500">{pages.length} content page{pages.length !== 1 ? 's' : ''}</p>
           </div>
         </div>
@@ -247,20 +250,29 @@ function LevelSection({ levelId, pages, onEdit, onDelete, onAdd }) {
 /* ── MAIN ── */
 export default function ContentManagement() {
   const { user } = useAuth();
-  const [content, setContent] = useState({ 1: [], 2: [], 3: [] });
+  const { levelSettings } = useLevel();
+  const [content, setContent] = useState({});
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState('');
 
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(''), 2500); };
 
+  // Sorted levels from LevelContext
+  const sortedLevels = Object.values(levelSettings)
+    .sort((a, b) => (a.order || a.id) - (b.order || b.id));
+
   useEffect(() => {
-    if (!user?.id) return;
-    Promise.all([api.getContent(1), api.getContent(2), api.getContent(3)])
-      .then(([p1, p2, p3]) => setContent({ 1: p1, 2: p2, 3: p3 }))
+    if (!user?.id || sortedLevels.length === 0) return;
+    Promise.all(sortedLevels.map(l => api.getContent(l.id)))
+      .then(results => {
+        const map = {};
+        sortedLevels.forEach((l, i) => { map[l.id] = results[i] || []; });
+        setContent(map);
+      })
       .catch(err => console.error('Failed to load content:', err))
       .finally(() => setLoading(false));
-  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id, sortedLevels.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const persistLevel = async (levelId, pages) => {
     try {
@@ -327,16 +339,25 @@ export default function ContentManagement() {
 
       {/* Level sections */}
       <div className="space-y-4">
-        {[1, 2, 3].map(lvl => (
+        {sortedLevels.map((lvl, idx) => (
           <LevelSection
-            key={lvl}
-            levelId={lvl}
-            pages={content[lvl] || []}
+            key={lvl.id}
+            levelId={lvl.id}
+            levelTitle={lvl.title || `Level ${lvl.id}`}
+            levelOrder={idx + 1}
+            pages={content[lvl.id] || []}
             onAdd={levelId => setModal({ type: 'add', levelId })}
             onEdit={(levelId, page, pageIdx) => setModal({ type: 'edit', levelId, page, pageIdx })}
             onDelete={handleDelete}
           />
         ))}
+        {sortedLevels.length === 0 && (
+          <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-200">
+            <BookOpen size={32} className="text-slate-200 mx-auto mb-3" />
+            <p className="text-sm font-semibold text-slate-400">No levels configured yet</p>
+            <p className="text-xs text-slate-300 mt-1">Add levels in Exam Level Management first</p>
+          </div>
+        )}
       </div>
 
       {modal?.type === 'add'  && <PageModal levelId={modal.levelId} page={null}       pageIdx={null}           onSave={handleSave} onClose={() => setModal(null)} />}

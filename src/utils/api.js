@@ -139,4 +139,14 @@ export const api = {
 
   // Monitoring
   getMonitoringSessions: () => request('GET', '/api/monitoring/sessions'),
+
+  // Question Banks (persistent bank registry)
+  getQuestionBanks: () => request('GET', '/api/question-banks'),
+  createQuestionBank: (data) => request('POST', '/api/question-banks', data),
+  updateQuestionBank: (id, data) => request('PUT', `/api/question-banks/${id}`, data),
+  deleteQuestionBank: (id) => request('DELETE', `/api/question-banks/${id}`),
+
+  // Exam Level CRUD (add / delete levels)
+  createLevel: (data) => request('POST', '/api/levels', data),
+  deleteLevel: (id) => request('DELETE', `/api/levels/${id}`),
 };

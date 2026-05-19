@@ -3,16 +3,137 @@ import { useAuth } from '../../context/AuthContext';
 import {
   Layers, Edit2, CheckCircle, Lock, Users, Clock,
   BookOpen, X, Save, ToggleLeft, ToggleRight, Zap,
+  Plus, Trash2, AlertCircle, Loader2,
 } from 'lucide-react';
-import { LEVELS } from '../../utils/levelData';
 import { loadQuestionBank, CATEGORY_META } from '../../utils/questionBank';
 import { TOTAL_QUIZ_QUESTIONS } from '../../utils/quizGenerator';
 import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
 
+const DEFAULT_COLORS = [
+  { from: '#3BC0EF', to: '#1E3A8A' },
+  { from: '#8B5CF6', to: '#6d28d9' },
+  { from: '#10B981', to: '#047857' },
+  { from: '#F59E0B', to: '#D97706' },
+  { from: '#EF4444', to: '#B91C1C' },
+  { from: '#EC4899', to: '#BE185D' },
+];
+const levelColor = (order) => DEFAULT_COLORS[(order - 1) % DEFAULT_COLORS.length];
+
+/* ── Add Level Modal ── */
+function AddLevelModal({ onSave, onClose }) {
+  const [form, setForm] = useState({ title: '', subtitle: '', description: '', timeLimit: 10 });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSave = async () => {
+    if (!form.title.trim()) { setError('Title is required'); return; }
+    setSaving(true);
+    try {
+      await onSave(form);
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Failed to create level');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Add New Level</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={16} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Level Title <span className="text-red-400">*</span></label>
+            <input value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+              placeholder="e.g. Level 4, Advanced Robotics…"
+              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Subtitle</label>
+            <input value={form.subtitle} onChange={e => setForm(p => ({ ...p, subtitle: e.target.value }))}
+              placeholder="Short description…"
+              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Description</label>
+            <textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={3}
+              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Time Limit (minutes)</label>
+            <input type="number" min="1" max="120" value={form.timeLimit}
+              onChange={e => setForm(p => ({ ...p, timeLimit: Number(e.target.value) }))}
+              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+          </div>
+          {error && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-red-50 rounded-xl border border-red-100 text-sm text-red-600">
+              <AlertCircle size={14} />{error}
+            </div>
+          )}
+        </div>
+        <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button onClick={handleSave} disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+            {saving ? 'Creating…' : 'Create Level'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Delete Confirm Modal ── */
+function DeleteModal({ level, onConfirm, onClose }) {
+  const [deleting, setDeleting] = useState(false);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+              <AlertCircle size={18} className="text-red-500" />
+            </div>
+            <h3 className="font-bold text-slate-800">Delete {level?.title}?</h3>
+          </div>
+          <p className="text-sm text-slate-500 leading-relaxed">
+            This will permanently delete <span className="font-semibold text-slate-700">{level?.title}</span> including all
+            student progress and content for this level. This cannot be undone.
+          </p>
+        </div>
+        <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button
+            onClick={async () => { setDeleting(true); await onConfirm(); setDeleting(false); }}
+            disabled={deleting}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 disabled:opacity-50 transition-colors">
+            {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+            {deleting ? 'Deleting…' : 'Delete Level'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Edit Modal ── */
 function EditModal({ levelId, settings, onSave, onClose }) {
-  const [form, setForm] = useState({ ...settings[levelId] });
+  const s = settings[levelId] || {};
+  const [form, setForm] = useState({
+    title:       s.title       || '',
+    subtitle:    s.subtitle    || '',
+    description: s.description || '',
+    timeLimit:   s.timeLimit   ?? 10,
+    active:      s.active      ?? true,
+  });
   const f = v => e => setForm(p => ({ ...p, [v]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
 
   return (
@@ -21,34 +142,31 @@ function EditModal({ levelId, settings, onSave, onClose }) {
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>
-            Edit Level {levelId} Settings
+            Edit Level Settings
           </h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={16} /></button>
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-          <div className="grid grid-cols-1 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Level Title</label>
-              <input value={form.title} onChange={f('title')}
-                className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Subtitle</label>
-              <input value={form.subtitle} onChange={f('subtitle')}
-                className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Description</label>
-              <textarea value={form.description} onChange={f('description')} rows={3}
-                className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none" />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Time Limit (minutes)</label>
-              <input type="number" min="1" max="60" value={form.timeLimit} onChange={f('timeLimit')}
-                className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
-            </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Level Title</label>
+            <input value={form.title} onChange={f('title')}
+              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
           </div>
-
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Subtitle</label>
+            <input value={form.subtitle} onChange={f('subtitle')}
+              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Description</label>
+            <textarea value={form.description} onChange={f('description')} rows={3}
+              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none" />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Time Limit (minutes)</label>
+            <input type="number" min="1" max="120" value={form.timeLimit} onChange={f('timeLimit')}
+              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+          </div>
           <label className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3 cursor-pointer">
             <div>
               <p className="text-sm font-semibold text-slate-700">Level Active</p>
@@ -60,7 +178,6 @@ function EditModal({ levelId, settings, onSave, onClose }) {
             </button>
           </label>
         </div>
-
         <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
           <button onClick={() => onSave(levelId, form)}
@@ -74,45 +191,50 @@ function EditModal({ levelId, settings, onSave, onClose }) {
 }
 
 /* ── Level Card ── */
-function LevelCard({ level, settings, stats, onEdit }) {
-  const s = settings[level.id];
+function LevelCard({ levelId, settings, stats, onEdit, onDelete }) {
+  const s = settings[levelId] || {};
+  const color = levelColor(s.order || levelId);
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
       <div className="relative p-5 pb-4 overflow-hidden"
-        style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}>
+        style={{ background: `linear-gradient(135deg, ${color.from}, ${color.to})` }}>
         <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-10 blur-[40px] bg-white" />
         <div className="relative z-10 flex items-start justify-between">
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="text-white/70 text-xs font-semibold uppercase tracking-wider mb-0.5">
-              {s?.active ? 'Active' : 'Inactive'}
+              {s.active ? 'Active' : 'Inactive'}
             </p>
-            <h3 className="text-xl font-bold text-white" style={{ fontFamily: 'Space Grotesk' }}>{s?.title || level.title}</h3>
-            <p className="text-white/80 text-sm mt-0.5">{s?.subtitle || level.subtitle}</p>
+            <h3 className="text-xl font-bold text-white truncate" style={{ fontFamily: 'Space Grotesk' }}>
+              {s.title || `Level ${levelId}`}
+            </h3>
+            <p className="text-white/80 text-sm mt-0.5">{s.subtitle || ''}</p>
           </div>
-          <div className={`px-2 py-0.5 rounded-full text-[10px] font-bold
-            ${s?.active ? 'bg-white/20 text-white' : 'bg-black/20 text-white/60'}`}>
-            {s?.active ? '● LIVE' : '○ OFF'}
+          <div className="flex items-center gap-1.5 shrink-0 ml-2">
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${s.active ? 'bg-white/20 text-white' : 'bg-black/20 text-white/60'}`}>
+              {s.active ? '● LIVE' : '○ OFF'}
+            </span>
           </div>
         </div>
-
         <div className="relative z-10 flex items-center gap-1.5 mt-3">
-          {level.id === 1 ? (
+          {levelId === 1 ? (
             <><Zap size={12} className="text-white/70" /><span className="text-white/60 text-xs">Unlocked by default</span></>
           ) : (
-            <><Lock size={12} className="text-white/70" /><span className="text-white/60 text-xs">Unlocks after Level {level.id - 1}</span></>
+            <><Lock size={12} className="text-white/70" /><span className="text-white/60 text-xs">Unlocks after previous level</span></>
           )}
         </div>
       </div>
 
       <div className="p-5 space-y-4">
-        <p className="text-sm text-slate-500 leading-relaxed line-clamp-2">{s?.description || level.description}</p>
+        {s.description && (
+          <p className="text-sm text-slate-500 leading-relaxed line-clamp-2">{s.description}</p>
+        )}
 
         <div className="grid grid-cols-3 gap-2">
           {[
             { icon: <BookOpen size={12} />, label: 'Questions',   val: `${TOTAL_QUIZ_QUESTIONS} per quiz` },
-            { icon: <Clock size={12} />,    label: 'Time Limit',  val: `${s?.timeLimit ?? 10} min` },
-            { icon: <Users size={12} />,    label: 'Completions', val: stats.completed },
+            { icon: <Clock size={12} />,    label: 'Time Limit',  val: `${s.timeLimit ?? 10} min` },
+            { icon: <Users size={12} />,    label: 'Completions', val: stats?.completed ?? 0 },
           ].map(m => (
             <div key={m.label} className="bg-slate-50 rounded-xl px-3 py-2 flex items-center gap-2">
               <span className="text-slate-400 shrink-0">{m.icon}</span>
@@ -124,24 +246,16 @@ function LevelCard({ level, settings, stats, onEdit }) {
           ))}
         </div>
 
-        {stats.completed > 0 && (
-          <div className="flex gap-3 text-center bg-slate-50 rounded-xl px-4 py-3">
-            <div className="flex-1">
-              <p className="text-lg font-bold text-slate-700" style={{ fontFamily: 'Space Grotesk' }}>{stats.avg}%</p>
-              <p className="text-[10px] text-slate-400">Avg Score</p>
-            </div>
-            <div className="w-px bg-slate-200" />
-            <div className="flex-1">
-              <p className="text-lg font-bold text-slate-700" style={{ fontFamily: 'Space Grotesk' }}>{stats.completed}</p>
-              <p className="text-[10px] text-slate-400">Students Done</p>
-            </div>
-          </div>
-        )}
-
-        <button onClick={() => onEdit(level.id)}
-          className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:border-indigo-200 hover:text-indigo-600 transition-all">
-          <Edit2 size={13} /> Edit Settings
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => onEdit(levelId)}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:border-indigo-200 hover:text-indigo-600 transition-all">
+            <Edit2 size={13} /> Edit Settings
+          </button>
+          <button onClick={() => onDelete(levelId)}
+            className="p-2.5 rounded-xl border border-slate-200 text-slate-400 hover:bg-red-50 hover:border-red-200 hover:text-red-500 transition-all">
+            <Trash2 size={14} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -150,28 +264,20 @@ function LevelCard({ level, settings, stats, onEdit }) {
 /* ── MAIN ── */
 export default function ExamLevels() {
   const { user } = useAuth();
-  const { setLevelActive, levelSettings } = useLevel();
-  const [editing,    setEditing]   = useState(null);
-  const [saved,      setSaved]     = useState(false);
-  const [bankStats,  setBankStats] = useState({ total: 0, perCat: [] });
-  const [levelStats, setLevelStats] = useState(
-    LEVELS.reduce((acc, l) => { acc[l.id] = { completed: 0, avg: 0 }; return acc; }, {})
-  );
+  const { setLevelActive, levelSettings, refreshLevelSettings, createLevel, deleteLevel } = useLevel();
+  const [editing,     setEditing]    = useState(null);
+  const [deletingId,  setDeletingId] = useState(null);
+  const [showAdd,     setShowAdd]    = useState(false);
+  const [saved,       setSaved]      = useState(false);
+  const [bankStats,   setBankStats]  = useState({ total: 0, perCat: [] });
+  const [levelStats,  setLevelStats] = useState({});
+  const [loading,     setLoading]    = useState(false);
 
-  // Build settings from LevelContext (API-backed), fallback to LEVELS defaults
-  const settings = LEVELS.reduce((acc, l) => {
-    acc[l.id] = {
-      title:       l.title,
-      subtitle:    l.subtitle,
-      description: l.description,
-      timeLimit:   10,
-      active:      true,
-      ...levelSettings[l.id],
-    };
-    return acc;
-  }, {});
+  // Sorted level IDs from levelSettings
+  const levelIds = Object.values(levelSettings)
+    .sort((a, b) => (a.order || a.id) - (b.order || b.id))
+    .map(l => l.id);
 
-  // Load bank stats and per-level completion stats from API
   useEffect(() => {
     if (!user?.id) return;
     loadQuestionBank().then(bank => {
@@ -186,31 +292,26 @@ export default function ExamLevels() {
     }).catch(() => {});
 
     api.getStudents().then(students => {
-      const totals = LEVELS.reduce((acc, l) => {
-        acc[l.id] = { completed: 0, scoreSum: 0 };
-        return acc;
-      }, {});
+      const totals = {};
       students.forEach(student => {
-        LEVELS.forEach(l => {
-          const lp = student.levels?.[l.id];
+        Object.entries(student.levels || {}).forEach(([lid, lp]) => {
+          const id = Number(lid);
+          if (!totals[id]) totals[id] = { completed: 0, scoreSum: 0 };
           if (lp?.status === 'completed') {
-            totals[l.id].completed++;
-            totals[l.id].scoreSum += (lp.score || 0);
+            totals[id].completed++;
+            totals[id].scoreSum += (lp.score || 0);
           }
         });
       });
-      setLevelStats(
-        LEVELS.reduce((acc, l) => {
-          const { completed, scoreSum } = totals[l.id];
-          acc[l.id] = { completed, avg: completed > 0 ? Math.round(scoreSum / completed) : 0 };
-          return acc;
-        }, {})
-      );
+      const stats = {};
+      Object.entries(totals).forEach(([lid, { completed, scoreSum }]) => {
+        stats[Number(lid)] = { completed, avg: completed > 0 ? Math.round(scoreSum / completed) : 0 };
+      });
+      setLevelStats(stats);
     }).catch(() => {});
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSave = async (levelId, form) => {
-    // Pass the full form so title, subtitle, description, timeLimit, and active all persist
     await setLevelActive(levelId, {
       title:       form.title,
       subtitle:    form.subtitle,
@@ -223,18 +324,51 @@ export default function ExamLevels() {
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const handleCreate = async (form) => {
+    setLoading(true);
+    try {
+      await createLevel({
+        title:       form.title,
+        subtitle:    form.subtitle,
+        description: form.description,
+        timeLimit:   Number(form.timeLimit) || 10,
+      });
+      await refreshLevelSettings();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (levelId) => {
+    try {
+      await deleteLevel(levelId);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {}
+    setDeletingId(null);
+  };
+
   return (
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-6">
 
       {saved && (
         <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm font-semibold shadow-lg">
-          <CheckCircle size={14} /> Settings saved!
+          <CheckCircle size={14} /> Changes saved!
         </div>
       )}
 
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Exam Level Management</h1>
-        <p className="text-sm text-slate-400 mt-0.5">Configure and manage the sequential exam system</p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Exam Level Management</h1>
+          <p className="text-sm text-slate-400 mt-0.5">Configure and manage the sequential exam system</p>
+        </div>
+        <button
+          onClick={() => setShowAdd(true)}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-colors shadow-sm">
+          <Plus size={16} /> Add Level
+        </button>
       </div>
 
       {/* Question Bank Summary */}
@@ -257,24 +391,52 @@ export default function ExamLevels() {
       </div>
 
       {/* Level cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {LEVELS.map(level => (
-          <LevelCard
-            key={level.id}
-            level={level}
-            settings={settings}
-            stats={levelStats[level.id]}
-            onEdit={setEditing}
-          />
-        ))}
-      </div>
+      {levelIds.length === 0 ? (
+        <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-200">
+          <Layers size={36} className="text-slate-300 mx-auto mb-3" />
+          <p className="font-semibold text-slate-400">No levels yet</p>
+          <p className="text-sm text-slate-400 mt-1 mb-4">Create exam levels to get started</p>
+          <button onClick={() => setShowAdd(true)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-colors">
+            <Plus size={15} /> Add First Level
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {levelIds.map(levelId => (
+            <LevelCard
+              key={levelId}
+              levelId={levelId}
+              settings={levelSettings}
+              stats={levelStats[levelId]}
+              onEdit={setEditing}
+              onDelete={setDeletingId}
+            />
+          ))}
+        </div>
+      )}
 
       {editing && (
         <EditModal
           levelId={editing}
-          settings={settings}
+          settings={levelSettings}
           onSave={handleSave}
           onClose={() => setEditing(null)}
+        />
+      )}
+
+      {showAdd && (
+        <AddLevelModal
+          onSave={handleCreate}
+          onClose={() => setShowAdd(false)}
+        />
+      )}
+
+      {deletingId && (
+        <DeleteModal
+          level={levelSettings[deletingId]}
+          onConfirm={() => handleDelete(deletingId)}
+          onClose={() => setDeletingId(null)}
         />
       )}
     </div>
