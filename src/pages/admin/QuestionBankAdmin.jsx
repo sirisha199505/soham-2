@@ -1182,9 +1182,9 @@ function BanksOverview({ banks, onSelect, onCreate, onDelete, onRename }) {
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
             <p className="text-xs text-slate-400 mt-1.5">Leave blank to auto-name as "Question Bank {banks.length+1}"</p>
           </div>
-          <div className="bg-slate-50 rounded-xl p-3 text-xs text-slate-500">
+          {/* <div className="bg-slate-50 rounded-xl p-3 text-xs text-slate-500">
             Starts with 3 default levels (Level 1, 2, 3). You can add, rename or delete levels after creation.
-          </div>
+          </div> */}
         </div>
       </Modal>
 
