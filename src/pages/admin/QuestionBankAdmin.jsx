@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import {
   Plus, ChevronDown, ChevronUp, Edit2, Trash2, BookOpen,
   CheckCircle, X, Save, AlertTriangle, Image,
@@ -360,21 +361,68 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
   const processFile = (f) => {
     if (!f) return;
     setError('');
+    const isXlsx = f.name?.endsWith('.xlsx') || f.name?.endsWith('.xls');
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const qs = parseCSV(e.target.result);
-        if (!qs.length) { setError('No valid questions found. Ensure the file matches the CSV template format.'); return; }
+        let csvText;
+        if (isXlsx) {
+          const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          csvText = XLSX.utils.sheet_to_csv(ws);
+        } else {
+          csvText = e.target.result;
+        }
+        const qs = parseCSV(csvText);
+        if (!qs.length) { setError('No valid questions found. Ensure the file matches the template format.'); return; }
         setParsed(qs); setStep('preview');
-      } catch { setError('Could not parse file. Ensure it matches the CSV template.'); }
+      } catch { setError('Could not parse file. Ensure it matches the template format.'); }
     };
-    reader.readAsText(f);
+    if (isXlsx) reader.readAsArrayBuffer(f);
+    else reader.readAsText(f);
   };
 
   const downloadTemplate = () => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([CSV_TEMPLATE],{type:'text/csv'}));
-    a.download = 'question_bank_template.csv'; a.click();
+    const headers = [
+      'type','text','difficulty',
+      'opt_a','opt_b','opt_c','opt_d',
+      'correct','explanation','image_url(img only)',
+      'p1_left','p1_right','p2_left','p2_right',
+      'p3_left','p3_right','p4_left','p4_right',
+    ];
+    const rows = [
+      ['mcq','What is a servo motor?','easy',
+       'A DC motor with feedback control','A stepper motor','A linear actuator','An AC induction motor',
+       'A','Servo motors use encoders for closed-loop position control.','',
+       '','','','','','','',''],
+      ['image','What component is shown in the image?','medium',
+       'Servo motor','DC motor','Stepper motor','Solenoid',
+       'C','','https://example.com/robot-component.jpg',
+       '','','','','','','',''],
+      ['match','Match each component to its function','easy',
+       '','','','','','','',
+       'Sensor','Detects input signals',
+       'Motor','Converts electricity to motion',
+       'CPU','Processes instructions',
+       'Battery','Stores electrical energy'],
+      ['truefalse','A robot arm uses inverse kinematics to find joint angles.','medium',
+       '','','','','A','IK maps end-effector pose back to joint angles.','',
+       '','','','','','','',''],
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws['!cols'] = [
+      {wch:10},{wch:50},{wch:10},
+      {wch:30},{wch:22},{wch:22},{wch:22},
+      {wch:8},{wch:46},{wch:36},
+      {wch:18},{wch:22},{wch:18},{wch:22},
+      {wch:18},{wch:22},{wch:18},{wch:22},
+    ];
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Questions');
+    XLSX.writeFile(wb, 'question_bank_template.xlsx');
   };
 
   const handleImport = async () => {
@@ -419,16 +467,16 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
               ))}
             </div>
             <button onClick={downloadTemplate} className="mt-3 flex items-center gap-2 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
-              <Download size={12}/> Download CSV Template
+              <Download size={12}/> Download Excel Template (.xlsx)
             </button>
           </div>
           <label onDragOver={e=>{e.preventDefault();setDragOver(true);}} onDragLeave={()=>setDragOver(false)}
             onDrop={e=>{e.preventDefault();setDragOver(false);processFile(e.dataTransfer.files[0]);}}
             className={`block border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all ${dragOver?'border-indigo-400 bg-indigo-50':'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'}`}>
             <FileSpreadsheet size={36} className={`mx-auto mb-3 ${dragOver?'text-indigo-500':'text-slate-300'}`}/>
-            <p className="text-sm font-semibold text-slate-600">Drop your CSV / Excel file here</p>
-            <p className="text-xs text-slate-400 mt-1">or click to browse · all file types accepted</p>
-            <input type="file" accept="*/*" className="hidden" onChange={e=>processFile(e.target.files[0])}/>
+            <p className="text-sm font-semibold text-slate-600">Drop your Excel or CSV file here</p>
+            <p className="text-xs text-slate-400 mt-1">or click to browse · .xlsx and .csv accepted</p>
+            <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e=>processFile(e.target.files[0])}/>
           </label>
           {error && <div className="flex items-center gap-2 px-4 py-3 bg-red-50 rounded-xl border border-red-100 text-sm text-red-600"><AlertCircle size={14}/>{error}</div>}
         </div>
