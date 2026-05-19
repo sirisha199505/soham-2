@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import * as XLSX from 'xlsx';
 import {
   Plus, Search, Edit2, Trash2, Upload, Tag,
   CheckCircle2, XCircle, ChevronDown, ChevronUp,
@@ -30,12 +31,6 @@ const IMPORT_SCHEMA = [
   { col: 'bank_name',      req: false, values: 'Any text (default: Question Bank)' },
 ];
 
-const CSV_TEMPLATE = [
-  'question_text,type,option_a,option_b,option_c,option_d,correct_answer,difficulty,topic,marks,explanation,bank_name',
-  '"What is a servo motor?",mcq,"A DC motor with feedback control","A stepper motor","A linear actuator","An AC induction motor",A,easy,Sensors & Actuators,2,"Servo motors use encoders for closed-loop position control.",Question Bank',
-  '"A robot arm uses inverse kinematics to find joint angles.",true_false,True,False,,,A,medium,Kinematics,1,"IK maps end-effector pose back to joint angles.",Question Bank',
-  '"Which of the following are common robot sensors?",multi_select,Lidar,Paintbrush,Camera,Hammer,"A,C",easy,Sensors & Actuators,3,"Lidar and cameras are standard perception sensors.",Question Bank',
-].join('\n');
 
 const TYPES = [
   { value: 'mcq',          label: 'MCQ',          sub: '4 options · 1 correct',    color: 'bg-blue-100 text-blue-700' },
@@ -75,11 +70,54 @@ export default function QuestionBank() {
   );
 
   const downloadTemplate = () => {
-    const blob = new Blob([CSV_TEMPLATE], { type: 'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
-    const a    = Object.assign(document.createElement('a'), { href: url, download: 'question_bank_template.csv' });
-    a.click();
-    URL.revokeObjectURL(url);
+    const headers = [
+      'question_text', 'type', 'option_a', 'option_b', 'option_c', 'option_d',
+      'correct_answer', 'difficulty', 'topic', 'marks', 'explanation', 'bank_name',
+    ];
+    const samples = [
+      [
+        'What is a servo motor?',
+        'mcq',
+        'A DC motor with feedback control',
+        'A stepper motor',
+        'A linear actuator',
+        'An AC induction motor',
+        'A', 'easy', 'Sensors & Actuators', 2,
+        'Servo motors use encoders for closed-loop position control.',
+        'Question Bank',
+      ],
+      [
+        'A robot arm uses inverse kinematics to find joint angles.',
+        'true_false',
+        'True', 'False', '', '',
+        'A', 'medium', 'Kinematics', 1,
+        'IK maps end-effector pose back to joint angles.',
+        'Question Bank',
+      ],
+      [
+        'Which of the following are common robot sensors?',
+        'multi_select',
+        'Lidar', 'Paintbrush', 'Camera', 'Hammer',
+        'A,C', 'easy', 'Sensors & Actuators', 3,
+        'Lidar and cameras are standard perception sensors.',
+        'Question Bank',
+      ],
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...samples]);
+
+    // Column widths
+    ws['!cols'] = [
+      { wch: 52 }, { wch: 14 }, { wch: 34 }, { wch: 20 }, { wch: 20 }, { wch: 20 },
+      { wch: 14 }, { wch: 10 }, { wch: 24 }, { wch: 6 }, { wch: 44 }, { wch: 18 },
+    ];
+
+    // Freeze the header row
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Questions');
+    XLSX.writeFile(wb, 'question_bank_template.xlsx');
   };
 
   const [search,       setSearch]       = useState('');
@@ -557,10 +595,10 @@ export default function QuestionBank() {
           <label className="block">
             <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-indigo-300 hover:bg-indigo-50/30 transition-all cursor-pointer group">
               <Upload size={28} className="mx-auto mb-2 text-slate-300 group-hover:text-indigo-400 transition-colors" />
-              <p className="text-sm font-semibold text-slate-600 group-hover:text-indigo-700">Drop your CSV file here, or click to browse</p>
-              <p className="text-xs text-slate-400 mt-1">Supports .csv · Max 500 questions per file</p>
+              <p className="text-sm font-semibold text-slate-600 group-hover:text-indigo-700">Drop your file here, or click to browse</p>
+              <p className="text-xs text-slate-400 mt-1">Supports .csv and .xlsx · Max 500 questions per file</p>
             </div>
-            <input type="file" accept=".csv" className="hidden" />
+            <input type="file" accept=".csv,.xlsx" className="hidden" />
           </label>
 
         </div>
