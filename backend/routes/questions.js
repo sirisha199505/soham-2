@@ -6,10 +6,10 @@ const router = express.Router();
 
 const CATEGORIES = ['robotics', 'chemistry', 'physics', 'mathematics'];
 
-// GET /api/questions/bank — all questions grouped by category
+// GET /api/questions/bank — all questions grouped by category (each has bankName field)
 router.get('/bank', requireAuth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM questions ORDER BY category, created_at');
+    const result = await pool.query('SELECT * FROM questions ORDER BY bank_name, category, created_at');
     const bank = {};
     CATEGORIES.forEach(c => { bank[c] = []; });
     result.rows.forEach(r => {
@@ -38,14 +38,16 @@ router.get('/', requireAdmin, async (req, res) => {
 router.post('/', requireAdmin, async (req, res) => {
   const q = req.body;
   try {
-    await pool.query(
-      `INSERT INTO questions (id, category, type, text, image_url, options, correct_answer, pairs, explanation, difficulty, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+    const result = await pool.query(
+      `INSERT INTO questions (id, category, bank_name, type, text, image_url, options, correct_answer, pairs, explanation, difficulty, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        ON CONFLICT (id) DO UPDATE
-       SET category=$2, type=$3, text=$4, image_url=$5, options=$6, correct_answer=$7,
-           pairs=$8, explanation=$9, difficulty=$10, status=$11`,
+       SET category=$2, bank_name=$3, type=$4, text=$5, image_url=$6, options=$7, correct_answer=$8,
+           pairs=$9, explanation=$10, difficulty=$11, status=$12
+       RETURNING *`,
       [
-        q.id, q.category, q.type, q.text || null, q.imageUrl || null,
+        q.id, q.category, q.bankName || 'Question Bank', q.type,
+        q.text || null, q.imageUrl || null,
         q.options ? JSON.stringify(q.options) : null,
         q.correct ?? null,
         q.pairs ? JSON.stringify(q.pairs) : null,
@@ -54,7 +56,7 @@ router.post('/', requireAdmin, async (req, res) => {
         q.status || 'active',
       ]
     );
-    res.status(201).json({ success: true });
+    res.status(201).json(rowToQuestion(result.rows[0]));
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: 'Failed to add question.' });
@@ -66,11 +68,12 @@ router.put('/:id', requireAdmin, async (req, res) => {
   const q = req.body;
   try {
     await pool.query(
-      `UPDATE questions SET category=$2, type=$3, text=$4, image_url=$5, options=$6,
-       correct_answer=$7, pairs=$8, explanation=$9, difficulty=$10, status=$11
+      `UPDATE questions SET category=$2, bank_name=$3, type=$4, text=$5, image_url=$6, options=$7,
+       correct_answer=$8, pairs=$9, explanation=$10, difficulty=$11, status=$12
        WHERE id=$1`,
       [
-        req.params.id, q.category, q.type, q.text || null, q.imageUrl || null,
+        req.params.id, q.category, q.bankName || 'Question Bank', q.type,
+        q.text || null, q.imageUrl || null,
         q.options ? JSON.stringify(q.options) : null,
         q.correct ?? null,
         q.pairs ? JSON.stringify(q.pairs) : null,
@@ -115,11 +118,12 @@ router.post('/seed', requireAuth, async (req, res) => {
       await client.query('BEGIN');
       for (const q of questions) {
         await client.query(
-          `INSERT INTO questions (id, category, type, text, image_url, options, correct_answer, pairs, explanation, difficulty, status)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          `INSERT INTO questions (id, category, bank_name, type, text, image_url, options, correct_answer, pairs, explanation, difficulty, status)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
            ON CONFLICT (id) DO NOTHING`,
           [
-            q.id, q.category, q.type, q.text || null, q.imageUrl || null,
+            q.id, q.category, q.bankName || 'Question Bank', q.type,
+            q.text || null, q.imageUrl || null,
             q.options ? JSON.stringify(q.options) : null,
             q.correct ?? null,
             q.pairs ? JSON.stringify(q.pairs) : null,
@@ -147,6 +151,7 @@ function rowToQuestion(r) {
   return {
     id:          r.id,
     category:    r.category,
+    bankName:    r.bank_name || 'Question Bank',
     type:        r.type,
     text:        r.text,
     imageUrl:    r.image_url,

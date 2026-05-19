@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS global_level_access (
 CREATE TABLE IF NOT EXISTS questions (
   id             VARCHAR(100) PRIMARY KEY,
   category       VARCHAR(100) NOT NULL,
+  bank_name      VARCHAR(255) DEFAULT 'Question Bank',
   type           VARCHAR(50)  NOT NULL,
   text           TEXT,
   image_url      TEXT,
@@ -74,6 +75,8 @@ CREATE TABLE IF NOT EXISTS questions (
   status         VARCHAR(50) DEFAULT 'active',
   created_at     TIMESTAMPTZ DEFAULT NOW()
 );
+-- Add bank_name to existing installs that pre-date this column
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS bank_name VARCHAR(255) DEFAULT 'Question Bank';
 
 CREATE TABLE IF NOT EXISTS used_questions (
   user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

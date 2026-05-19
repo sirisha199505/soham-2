@@ -35,39 +35,60 @@ function normalizePair(pair) {
   };
 }
 
-// Convert flat rqa_question_bank → hierarchical bank format used by this UI.
-// Only creates levels that have at least one question so that deleted levels
-// do not reappear on refresh (the DB is the source of truth).
+// Convert flat API response → hierarchical bank format.
+// Questions carry a bankName field from the DB; we group by it so each distinct
+// bank_name becomes an independent bank in the UI. Deleted banks stay gone after
+// refresh because their questions no longer exist in the DB.
 function fromFlat(flat) {
-  const levels = CATEGORIES
-    .filter(cat => (flat[cat] || []).length > 0)
-    .map(cat => ({
-      id: `level-${cat}`,
-      name: CATEGORY_META[cat].label,
-      categories: [{
-        id: `cat-${cat}-general`,
-        name: 'General',
-        questions: (flat[cat] || []).map(q => ({
-          id: q.id || uid('q'),
-          type: q.type || 'mcq',
-          text: q.text || '',
-          imageUrl: q.imageUrl || '',
-          difficulty: q.difficulty || 'easy',
-          options: q.options ? q.options.map(normalizeOpt) : undefined,
-          correct: q.correct,
-          pairs: q.pairs ? q.pairs.map(normalizePair) : undefined,
-          explanation: q.explanation || '',
-        })),
-      }],
-    }));
-  return {
-    banks: levels.length > 0 ? [{
-      id: 'bank-default',
-      name: 'Question Bank',
+  // bankName → { category: [...questions] }
+  const bankMap = new Map();
+  CATEGORIES.forEach(cat => {
+    (flat[cat] || []).forEach(q => {
+      const bn = q.bankName || 'Question Bank';
+      if (!bankMap.has(bn)) {
+        bankMap.set(bn, Object.fromEntries(CATEGORIES.map(c => [c, []])));
+      }
+      bankMap.get(bn)[cat].push(q);
+    });
+  });
+
+  if (bankMap.size === 0) return { banks: [] };
+
+  const normalizeQ = (q, bankName) => ({
+    id:          q.id || uid('q'),
+    type:        q.type || 'mcq',
+    text:        q.text || '',
+    imageUrl:    q.imageUrl || '',
+    difficulty:  q.difficulty || 'easy',
+    options:     q.options ? q.options.map(normalizeOpt) : undefined,
+    correct:     q.correct,
+    pairs:       q.pairs ? q.pairs.map(normalizePair) : undefined,
+    explanation: q.explanation || '',
+    bankName,
+  });
+
+  const banks = Array.from(bankMap.entries()).map(([bankName, catMap]) => {
+    const levels = CATEGORIES
+      .filter(cat => catMap[cat].length > 0)
+      .map(cat => ({
+        id:   `level-${cat}-${bankName.replace(/[^a-z0-9]/gi, '_')}`,
+        name: CATEGORY_META[cat].label,
+        categories: [{
+          id:        `cat-${cat}-general`,
+          name:      'General',
+          questions: catMap[cat].map(q => normalizeQ(q, bankName)),
+        }],
+      }));
+
+    return {
+      id:        `bank-${bankName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`,
+      name:      bankName,
       createdAt: Date.now(),
       levels,
-    }] : [],
-  };
+    };
+  });
+
+  return { banks };
 }
 
 // Convert hierarchical bank format → flat rqa_question_bank (synced to quiz)
@@ -757,7 +778,7 @@ function QuestionRow({ q, index, onEdit, onDelete }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Category Section
 // ═══════════════════════════════════════════════════════════════════════════
-function CategorySection({ cat, levelName, pal, onRename, onDelete, onQuestionsChange, showToast }) {
+function CategorySection({ cat, levelName, bankName, pal, onRename, onDelete, onQuestionsChange, showToast }) {
   const [collapsed, setCollapsed] = useState(false);
   const [qModal,    setQModal]    = useState(null);
   const [deleteQ,   setDeleteQ]   = useState(null);
@@ -768,6 +789,7 @@ function CategorySection({ cat, levelName, pal, onRename, onDelete, onQuestionsC
   const flattenQ = (q, apiCat) => ({
     ...q,
     category:      apiCat,
+    bankName:      q.bankName || bankName || 'Question Bank',
     status:        'active',
     correctAnswer: q.correct,
     options: Array.isArray(q.options)
@@ -784,7 +806,7 @@ function CategorySection({ cat, levelName, pal, onRename, onDelete, onQuestionsC
     try {
       const saved = await apiAddQuestion(payload);
       // Use the DB-assigned ID so subsequent edits/deletes work correctly
-      const savedQ = saved?.id ? { ...q, id: saved.id } : q;
+      const savedQ = { ...(saved?.id ? { ...q, id: saved.id } : q), bankName: bankName || 'Question Bank' };
       onQuestionsChange([...(cat.questions||[]), savedQ]);
       setQModal(null);
       showToast?.('Question added successfully!');
@@ -885,7 +907,7 @@ function CategorySection({ cat, levelName, pal, onRename, onDelete, onQuestionsC
 // ═══════════════════════════════════════════════════════════════════════════
 // Level Section
 // ═══════════════════════════════════════════════════════════════════════════
-function LevelSection({ level, index, onUpdate, onDelete, onReload, showToast }) {
+function LevelSection({ level, index, bankName, onUpdate, onDelete, onReload, showToast }) {
   const pal = levelPal(index);
   const [collapsed,   setCollapsed]   = useState(false);
   const [addingCat,   setAddingCat]   = useState(false);
@@ -906,16 +928,17 @@ function LevelSection({ level, index, onUpdate, onDelete, onReload, showToast })
       try {
         const saved = await apiAddQuestion({
           ...q,
-          category: apiCat,
-          status: 'active',
-          options: Array.isArray(q.options) ? q.options.map(o => (typeof o === 'string' ? o : (o?.text || ''))) : q.options,
-          pairs: Array.isArray(q.pairs) ? q.pairs.map(p => ({ left: p.left || '', right: p.right || '' })) : q.pairs,
+          category:     apiCat,
+          bankName:     bankName || 'Question Bank',
+          status:       'active',
+          options:      Array.isArray(q.options) ? q.options.map(o => (typeof o === 'string' ? o : (o?.text || ''))) : q.options,
+          pairs:        Array.isArray(q.pairs) ? q.pairs.map(p => ({ left: p.left || '', right: p.right || '' })) : q.pairs,
           correctAnswer: q.correct,
         });
-        savedQuestions.push(saved?.id ? { ...q, id: saved.id } : q);
+        savedQuestions.push({ ...(saved?.id ? { ...q, id: saved.id } : q), bankName: bankName || 'Question Bank' });
       } catch (err) {
         console.error('Import: failed to save question:', err.message);
-        savedQuestions.push(q);
+        savedQuestions.push({ ...q, bankName: bankName || 'Question Bank' });
       }
     }
     const newCats = catId
@@ -977,7 +1000,7 @@ function LevelSection({ level, index, onUpdate, onDelete, onReload, showToast })
             </div>
           ):(
             cats.map(cat=>(
-              <CategorySection key={cat.id} cat={cat} levelName={level.name} pal={pal}
+              <CategorySection key={cat.id} cat={cat} levelName={level.name} bankName={bankName} pal={pal}
                 onRename={name=>update({categories:cats.map(c=>c.id===cat.id?{...c,name}:c)})}
                 onDelete={()=>setDeleteCat(cat)}
                 onQuestionsChange={qs=>update({categories:cats.map(c=>c.id===cat.id?{...c,questions:qs}:c)})}
@@ -1094,7 +1117,7 @@ function BankDetail({ bank, bankIndex, onBack, onUpdate, onReload, showToast }) 
       ) : (
         <div className="space-y-4">
           {levels.map((level,idx)=>(
-            <LevelSection key={level.id} level={level} index={idx}
+            <LevelSection key={level.id} level={level} index={idx} bankName={bank.name}
               onUpdate={u=>updateLevel(idx,u)} onDelete={()=>deleteLevel(idx)} onReload={onReload} showToast={showToast}/>
           ))}
           {!addingLevel && (
@@ -1334,16 +1357,13 @@ export default function QuestionBankAdmin() {
 
   const createBank = useCallback((name) => {
     const bank = {
-      id: uid('bank'),
+      id:        uid('bank'),
       name,
       createdAt: Date.now(),
-      levels: [
-        {id:uid('level'),name:'Level 1',categories:[]},
-        {id:uid('level'),name:'Level 2',categories:[]},
-        {id:uid('level'),name:'Level 3',categories:[]},
-      ],
+      levels:    [],
     };
-    mutate(prev => ({ ...prev, banks:[...prev.banks, bank] }));
+    mutate(prev => ({ ...prev, banks: [...prev.banks, bank] }));
+    setSelectedBankId(bank.id);
     showToast(`"${name}" created!`);
   }, [mutate]);
 
