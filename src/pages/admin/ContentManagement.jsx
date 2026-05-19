@@ -64,7 +64,7 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
   const [pdfDrag, setPdfDrag] = useState(false);
 
   const processPdf = (file) => {
-    if (!file || file.type !== 'application/pdf') return;
+    if (!file) return;
     const reader = new FileReader();
     reader.onload = e => setForm(p => ({ ...p, pdfData: e.target.result, pdfName: file.name }));
     reader.readAsDataURL(file);
@@ -152,8 +152,8 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
                   className={`block border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all ${pdfDrag ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'}`}>
                   <Upload size={30} className={`mx-auto mb-2 ${pdfDrag ? 'text-indigo-500' : 'text-slate-300'}`} />
                   <p className="text-sm font-semibold text-slate-600">Drop your PDF here</p>
-                  <p className="text-xs text-slate-400 mt-1">or click to browse · PDF files only</p>
-                  <input type="file" accept=".pdf,application/pdf" className="hidden"
+                  <p className="text-xs text-slate-400 mt-1">or click to browse · all file types accepted</p>
+                  <input type="file" accept="*/*" className="hidden"
                     onChange={e => processPdf(e.target.files[0])} />
                 </label>
               )}

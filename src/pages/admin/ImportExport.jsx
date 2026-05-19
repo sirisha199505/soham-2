@@ -200,7 +200,7 @@ export default function ImportExport() {
     setTimeout(() => setToast(''), 3500);
   };
 
-  // ── Parse uploaded file (CSV or Excel) ──────────────────────────────────
+  // ── Parse uploaded file (CSV, Excel, or any text-readable format) ────────
   const processFile = async (f) => {
     setFile(f); setParsed(null); setImportDone(null);
     try {
@@ -211,15 +211,20 @@ export default function ImportExport() {
         const wb     = XLSX.read(buffer, { type: 'array' });
         const ws     = wb.Sheets[wb.SheetNames[0]];
         rows = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
-        // Normalise header keys to lowercase with underscores (match CSV headers)
         rows = rows.map(r => {
           const out = {};
           Object.keys(r).forEach(k => { out[k.toLowerCase().replace(/\s+/g, '_')] = r[k]; });
           return out;
         });
       } else {
-        const text = await f.text();
-        rows = parseCSV(text).rows;
+        // Fall back to text parsing for CSV, TXT, and any other text-readable file
+        try {
+          const text = await f.text();
+          rows = parseCSV(text).rows;
+        } catch {
+          showToast('This file format cannot be parsed as question data. Please use CSV or Excel.', true);
+          return;
+        }
       }
       setParsed(rows.map(row => ({ row, errors: validateRow(row) })));
     } catch (e) {
@@ -397,7 +402,7 @@ export default function ImportExport() {
             </div>
 
             <div className="bg-blue-50 rounded-xl p-3 mb-4 text-xs text-blue-700 space-y-1">
-              <p className="font-bold">Supported formats: .xlsx · .xls · .csv</p>
+              <p className="font-bold">Recommended formats: .xlsx · .xls · .csv · .txt</p>
               <p>First row must contain the exact column header names shown above.</p>
               <p>Rows with validation errors are automatically skipped on import.</p>
             </div>
@@ -416,11 +421,11 @@ export default function ImportExport() {
                 <p className="font-semibold text-slate-700 text-sm">
                   {dragging ? 'Drop to upload' : 'Click or drag file here'}
                 </p>
-                <p className="text-xs text-slate-400 mt-1">.xlsx · .xls · .csv</p>
+                <p className="text-xs text-slate-400 mt-1">all file types accepted</p>
                 <input
                   ref={fileRef}
                   type="file"
-                  accept=".csv,.xlsx,.xls"
+                  accept="*/*"
                   onChange={e => e.target.files[0] && processFile(e.target.files[0])}
                   className="hidden"
                 />

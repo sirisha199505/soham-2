@@ -11,6 +11,26 @@ import { loadQuestionBank, CATEGORIES, CATEGORY_META, addQuestion as apiAddQuest
 
 // ─── Storage ──────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'sohamquiz_qbank_v1';
+// Separate registry that persists bank metadata (id, name, createdAt) even
+// when a bank is empty and has no questions in the DB yet.
+const BANK_REGISTRY_KEY = 'sohamquiz_bank_registry_v1';
+
+function loadBankRegistry() {
+  try {
+    const raw = localStorage.getItem(BANK_REGISTRY_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed?.banks)) return parsed;
+    }
+  } catch {}
+  return { banks: [] };
+}
+
+function saveBankRegistry(registry) {
+  try {
+    localStorage.setItem(BANK_REGISTRY_KEY, JSON.stringify(registry));
+  } catch {}
+}
 
 // Map level name → rqa_question_bank category key
 const NAME_TO_CAT = Object.fromEntries(
@@ -36,19 +56,34 @@ function normalizePair(pair) {
 }
 
 // Convert flat API response → hierarchical bank format.
-// Questions carry a bankName field from the DB; we group by it so each distinct
-// bank_name becomes an independent bank in the UI. Deleted banks stay gone after
-// refresh because their questions no longer exist in the DB.
-function fromFlat(flat) {
-  // bankName → { category: [...questions] }
+// Accepts an optional bank registry so that empty banks (no questions yet)
+// survive page refreshes — they exist in the registry even though they have
+// no questions in the DB to anchor them.
+function fromFlat(flat, registry = { banks: [] }) {
+  const registryBanks = registry.banks || [];
+
+  // bankName → { registryEntry, catMap }
   const bankMap = new Map();
+
+  // Seed with ALL registry banks first — preserves empty banks
+  registryBanks.forEach(rb => {
+    bankMap.set(rb.name, {
+      registryEntry: rb,
+      catMap: Object.fromEntries(CATEGORIES.map(c => [c, []])),
+    });
+  });
+
+  // Overlay questions from the API, keyed by the question's bankName field
   CATEGORIES.forEach(cat => {
     (flat[cat] || []).forEach(q => {
       const bn = q.bankName || 'Question Bank';
       if (!bankMap.has(bn)) {
-        bankMap.set(bn, Object.fromEntries(CATEGORIES.map(c => [c, []])));
+        bankMap.set(bn, {
+          registryEntry: null,
+          catMap: Object.fromEntries(CATEGORIES.map(c => [c, []])),
+        });
       }
-      bankMap.get(bn)[cat].push(q);
+      bankMap.get(bn).catMap[cat].push(q);
     });
   });
 
@@ -67,7 +102,7 @@ function fromFlat(flat) {
     bankName,
   });
 
-  const banks = Array.from(bankMap.entries()).map(([bankName, catMap]) => {
+  const banks = Array.from(bankMap.entries()).map(([bankName, { registryEntry, catMap }]) => {
     const levels = CATEGORIES
       .filter(cat => catMap[cat].length > 0)
       .map(cat => ({
@@ -80,10 +115,11 @@ function fromFlat(flat) {
         }],
       }));
 
+    // Use the stable registry ID when available so selectedBankId survives reloads
     return {
-      id:        `bank-${bankName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`,
+      id:        registryEntry?.id || `bank-${bankName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`,
       name:      bankName,
-      createdAt: Date.now(),
+      createdAt: registryEntry?.createdAt || Date.now(),
       levels,
     };
   });
@@ -119,12 +155,14 @@ function loadStorage() {
 }
 
 async function loadStorageFromAPI() {
+  const registry = loadBankRegistry();
   try {
     const flat = await loadQuestionBank();
-    return fromFlat(flat);
+    console.log('[QuestionBank] Loaded from API. Registry banks:', registry.banks.length, '| DB questions:', Object.values(flat).flat().length);
+    return fromFlat(flat, registry);
   } catch (err) {
-    console.warn('QuestionBank: API load failed:', err?.message);
-    return fromFlat({ robotics: [], chemistry: [], physics: [], mathematics: [] });
+    console.warn('[QuestionBank] API load failed:', err?.message);
+    return fromFlat({ robotics: [], chemistry: [], physics: [], mathematics: [] }, registry);
   }
 }
 
@@ -321,16 +359,14 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
 
   const processFile = (f) => {
     if (!f) return;
-    const ext = f.name.split('.').pop().toLowerCase();
-    if (!['csv','txt','xlsx','xls'].includes(ext)) { setError('Please upload a .csv or .xlsx file'); return; }
     setError('');
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const qs = parseCSV(e.target.result);
-        if (!qs.length) { setError('No valid questions found. Check format.'); return; }
+        if (!qs.length) { setError('No valid questions found. Ensure the file matches the CSV template format.'); return; }
         setParsed(qs); setStep('preview');
-      } catch { setError('Could not parse file. Ensure it matches the template.'); }
+      } catch { setError('Could not parse file. Ensure it matches the CSV template.'); }
     };
     reader.readAsText(f);
   };
@@ -391,8 +427,8 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
             className={`block border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all ${dragOver?'border-indigo-400 bg-indigo-50':'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'}`}>
             <FileSpreadsheet size={36} className={`mx-auto mb-3 ${dragOver?'text-indigo-500':'text-slate-300'}`}/>
             <p className="text-sm font-semibold text-slate-600">Drop your CSV / Excel file here</p>
-            <p className="text-xs text-slate-400 mt-1">or click to browse · .csv and .xlsx supported</p>
-            <input type="file" accept=".csv,.xlsx,.xls,.txt" className="hidden" onChange={e=>processFile(e.target.files[0])}/>
+            <p className="text-xs text-slate-400 mt-1">or click to browse · all file types accepted</p>
+            <input type="file" accept="*/*" className="hidden" onChange={e=>processFile(e.target.files[0])}/>
           </label>
           {error && <div className="flex items-center gap-2 px-4 py-3 bg-red-50 rounded-xl border border-red-100 text-sm text-red-600"><AlertCircle size={14}/>{error}</div>}
         </div>
@@ -1362,18 +1398,32 @@ export default function QuestionBankAdmin() {
       createdAt: Date.now(),
       levels:    [],
     };
+    // Persist bank metadata to registry so it survives API reloads even when empty
+    const registry = loadBankRegistry();
+    registry.banks = [...registry.banks, { id: bank.id, name: bank.name, createdAt: bank.createdAt }];
+    saveBankRegistry(registry);
+    console.log('[QuestionBank] Bank created and saved to registry:', bank.name, bank.id);
     mutate(prev => ({ ...prev, banks: [...prev.banks, bank] }));
     setSelectedBankId(bank.id);
     showToast(`"${name}" created!`);
   }, [mutate]);
 
   const deleteBank = useCallback((id) => {
+    // Remove from registry so it doesn't reappear on next API reload
+    const registry = loadBankRegistry();
+    registry.banks = registry.banks.filter(b => b.id !== id);
+    saveBankRegistry(registry);
+    console.log('[QuestionBank] Bank removed from registry:', id);
     mutate(prev => ({ ...prev, banks: prev.banks.filter(b=>b.id!==id) }));
     setSelectedBankId(curr => curr===id ? null : curr);
     showToast('Question bank deleted.','red');
   }, [mutate]);
 
   const renameBank = useCallback((id, name) => {
+    // Keep registry name in sync so fromFlat can match questions by bankName
+    const registry = loadBankRegistry();
+    registry.banks = registry.banks.map(b => b.id === id ? { ...b, name } : b);
+    saveBankRegistry(registry);
     mutate(prev => ({ ...prev, banks: prev.banks.map(b=>b.id===id?{...b,name}:b) }));
   }, [mutate]);
 
