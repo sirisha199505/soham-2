@@ -5,203 +5,64 @@ import {
   CheckCircle, X, Save, AlertTriangle, Image,
   List, AlignLeft, Layers, Tag, HelpCircle, Check,
   FolderOpen, Folder, Upload, Download, FileSpreadsheet, AlertCircle,
-  ChevronRight, Database, MoreVertical, Calendar, ToggleLeft,
+  ChevronRight, Database, MoreVertical, Calendar, ToggleLeft, Loader2,
 } from 'lucide-react';
 import Modal from '../../components/ui/Modal';
 import { api } from '../../utils/api';
-import { loadQuestionBank, CATEGORIES, CATEGORY_META, addQuestion as apiAddQuestion, updateQuestion as apiUpdateQuestion, deleteQuestion as apiDeleteQuestion } from '../../utils/questionBank';
+import { CATEGORIES, CATEGORY_META } from '../../utils/questionBank';
 
-// ─── Storage (localStorage cache only — source of truth is the API) ────────
-const STORAGE_KEY = 'sohamquiz_qbank_v1';
-
-// Map level name → rqa_question_bank category key
+// ─── Category name → DB category key ─────────────────────────────────────
 const NAME_TO_CAT = Object.fromEntries(
   CATEGORIES.map(cat => [CATEGORY_META[cat].label.toLowerCase(), cat])
 );
 CATEGORIES.forEach(cat => { NAME_TO_CAT[cat] = cat; });
 
-function getCatFromLevelName(name = '') {
-  return NAME_TO_CAT[name.toLowerCase()] || CATEGORIES[0];
+function getCatFromName(name = '') {
+  return NAME_TO_CAT[name.toLowerCase().trim()] || name.toLowerCase().trim() || CATEGORIES[0];
 }
 
-// ─── Data normalizers (backward-compat) ───────────────────────────────────
+// ─── Normalizers ─────────────────────────────────────────────────────────
 function normalizeOpt(opt) {
   return typeof opt === 'string' ? { text: opt, imageUrl: '' } : (opt || { text: '', imageUrl: '' });
 }
 function normalizePair(pair) {
   return {
-    left: pair.left || '',
-    leftImage: pair.leftImage || '',
-    right: pair.right || '',
-    rightImage: pair.rightImage || '',
+    left: pair?.left || '', leftImage: pair?.leftImage || '',
+    right: pair?.right || '', rightImage: pair?.rightImage || '',
   };
 }
+const flattenOptions = (opts) =>
+  Array.isArray(opts) ? opts.map(o => (typeof o === 'string' ? o : (o?.text || ''))) : opts;
+const flattenPairs = (pairs) =>
+  Array.isArray(pairs) ? pairs.map(p => ({ left: p?.left || '', right: p?.right || '' })) : pairs;
 
-// Convert flat API response → hierarchical bank format.
-// Uses DB-backed banks array (from /api/question-banks) to preserve empty banks.
-// Falls back to deriving banks from question bankName fields for backward compat.
-function fromFlat(flat, apiBanks = []) {
-  // bankName → { apiBank, catMap }
-  const bankMap = new Map();
-
-  // Seed with ALL DB banks first — preserves empty banks
-  apiBanks.forEach(ab => {
-    bankMap.set(ab.name, {
-      apiBank: ab,
-      catMap: Object.fromEntries(CATEGORIES.map(c => [c, []])),
-    });
-  });
-
-  // Overlay questions from the API, keyed by the question's bankName field
-  CATEGORIES.forEach(cat => {
-    (flat[cat] || []).forEach(q => {
-      const bn = q.bankName || 'Question Bank';
-      if (!bankMap.has(bn)) {
-        bankMap.set(bn, {
-          apiBank: null,
-          catMap: Object.fromEntries(CATEGORIES.map(c => [c, []])),
-        });
-      }
-      bankMap.get(bn).catMap[cat].push(q);
-    });
-  });
-
-  if (bankMap.size === 0) return { banks: [] };
-
-  const normalizeQ = (q, bankName) => ({
-    id:          q.id || uid('q'),
-    type:        q.type || 'mcq',
-    text:        q.text || '',
-    imageUrl:    q.imageUrl || '',
-    difficulty:  q.difficulty || 'easy',
-    options:     q.options ? q.options.map(normalizeOpt) : undefined,
-    correct:     q.correct,
-    pairs:       q.pairs ? q.pairs.map(normalizePair) : undefined,
-    explanation: q.explanation || '',
-    bankName,
-  });
-
-  const banks = Array.from(bankMap.entries()).map(([bankName, { apiBank, catMap }]) => {
-    const levels = CATEGORIES
-      .filter(cat => catMap[cat].length > 0)
-      .map(cat => ({
-        id:       `level-${cat}-${bankName.replace(/[^a-z0-9]/gi, '_')}`,
-        name:     CATEGORY_META[cat].label,
-        category: cat,
-        categories: [{
-          id:        `cat-${cat}-general`,
-          name:      'General',
-          questions: catMap[cat].map(q => normalizeQ(q, bankName)),
-        }],
-      }));
-
-    // Use the stable DB-assigned ID when available so selectedBankId survives reloads
-    return {
-      id:        apiBank?.id || `bank-${bankName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`,
-      name:      bankName,
-      createdAt: apiBank?.createdAt || Date.now(),
-      // Merge DB structure (levels/categories) with questions from DB
-      levels:    mergeStructureWithQuestions(apiBank?.structure?.levels || levels, levels),
-    };
-  });
-
-  return { banks };
-}
-
-// Merge levels structure from bank.structure with live questions from the DB.
-// Levels in structure take priority for names/order; questions come from DB.
-function mergeStructureWithQuestions(structureLevels, dbLevels) {
-  if (!structureLevels || structureLevels.length === 0) return dbLevels;
-  return structureLevels.map(sl => {
-    const dbLevel = dbLevels.find(dl => dl.name === sl.name) || {};
-    return {
-      ...sl,
-      id: sl.id || dbLevel.id || uid('level'),
-      categories: mergeCategories(sl.categories || [], dbLevel.categories || []),
-    };
-  });
-}
-
-function mergeCategories(structureCats, dbCats) {
-  if (!structureCats || structureCats.length === 0) return dbCats;
-  return structureCats.map(sc => {
-    const dbCat = dbCats.find(dc => dc.name === sc.name) || {};
-    return {
-      ...sc,
-      id: sc.id || dbCat.id || uid('cat'),
-      questions: dbCat.questions || sc.questions || [],
-    };
-  });
-}
-
-function loadStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed?.banks) && parsed.banks.length > 0) return parsed;
-    }
-  } catch {}
-  return { banks: [] };
-}
-
-// Load banks from DB API, then overlay questions. Returns hierarchical format.
-async function loadStorageFromAPI() {
-  try {
-    const [flat, apiBanks] = await Promise.all([
-      loadQuestionBank(),
-      api.getQuestionBanks(),
-    ]);
-    const dbBankList = Array.isArray(apiBanks) ? apiBanks : [];
-    console.log('[QuestionBank] Loaded from API. DB banks:', dbBankList.length, '| DB questions:', Object.values(flat).flat().length);
-    return fromFlat(flat, dbBankList);
-  } catch (err) {
-    console.warn('[QuestionBank] API load failed:', err?.message);
-    // Fall back to localStorage cache
-    const cached = loadStorage();
-    if (cached.banks.length > 0) return cached;
-    return fromFlat({ robotics: [], chemistry: [], physics: [], mathematics: [] }, []);
-  }
-}
-
-function persist(data) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {}
-}
-
+// ─── Unique ID (temp, local only) ────────────────────────────────────────
 let _seq = Date.now();
 function uid(p = 'id') { return `${p}-${++_seq}`; }
 
-// ─── Bank colour palette ───────────────────────────────────────────────────
+// ─── Bank colour palette ──────────────────────────────────────────────────
 const BANK_PALETTE = [
-  { grad:'from-indigo-500 to-blue-600',   soft:'bg-indigo-50',   border:'border-indigo-200',  text:'text-indigo-700',   icon:'text-indigo-500'   },
-  { grad:'from-violet-500 to-purple-600', soft:'bg-violet-50',   border:'border-violet-200',  text:'text-violet-700',   icon:'text-violet-500'   },
-  { grad:'from-rose-500 to-pink-600',     soft:'bg-rose-50',     border:'border-rose-200',    text:'text-rose-700',     icon:'text-rose-500'     },
-  { grad:'from-emerald-500 to-teal-600',  soft:'bg-emerald-50',  border:'border-emerald-200', text:'text-emerald-700',  icon:'text-emerald-500'  },
-  { grad:'from-amber-500 to-orange-600',  soft:'bg-amber-50',    border:'border-amber-200',   text:'text-amber-700',    icon:'text-amber-500'    },
-  { grad:'from-sky-500 to-cyan-600',      soft:'bg-sky-50',      border:'border-sky-200',     text:'text-sky-700',      icon:'text-sky-500'      },
+  { grad:'from-indigo-500 to-blue-600',   soft:'bg-indigo-50',   border:'border-indigo-200',  text:'text-indigo-700'   },
+  { grad:'from-violet-500 to-purple-600', soft:'bg-violet-50',   border:'border-violet-200',  text:'text-violet-700'   },
+  { grad:'from-rose-500 to-pink-600',     soft:'bg-rose-50',     border:'border-rose-200',    text:'text-rose-700'     },
+  { grad:'from-emerald-500 to-teal-600',  soft:'bg-emerald-50',  border:'border-emerald-200', text:'text-emerald-700'  },
+  { grad:'from-amber-500 to-orange-600',  soft:'bg-amber-50',    border:'border-amber-200',   text:'text-amber-700'    },
+  { grad:'from-sky-500 to-cyan-600',      soft:'bg-sky-50',      border:'border-sky-200',     text:'text-sky-700'      },
 ];
 const bankPal = (idx) => BANK_PALETTE[idx % BANK_PALETTE.length];
 
-// ─── Category selector options ────────────────────────────────────────────
-const CATEGORY_OPTIONS = CATEGORIES.map(cat => ({
-  value: cat,
-  label: CATEGORY_META[cat].label,
-  color: CATEGORY_META[cat].color,
-}));
-
-// ─── Level colour palette ──────────────────────────────────────────────────
+// ─── Level colour palette ─────────────────────────────────────────────────
 const LEVEL_PALETTE = [
   { bg:'from-indigo-500 to-blue-500',   light:'bg-indigo-50',  border:'border-indigo-200',  text:'text-indigo-700'  },
   { bg:'from-violet-500 to-purple-500', light:'bg-violet-50',  border:'border-violet-200',  text:'text-violet-700'  },
   { bg:'from-emerald-500 to-teal-500',  light:'bg-emerald-50', border:'border-emerald-200', text:'text-emerald-700' },
   { bg:'from-amber-500 to-orange-500',  light:'bg-amber-50',   border:'border-amber-200',   text:'text-amber-700'   },
   { bg:'from-rose-500 to-pink-500',     light:'bg-rose-50',    border:'border-rose-200',    text:'text-rose-700'    },
+  { bg:'from-sky-500 to-cyan-500',      light:'bg-sky-50',     border:'border-sky-200',     text:'text-sky-700'     },
 ];
 const levelPal = (idx) => LEVEL_PALETTE[idx % LEVEL_PALETTE.length];
 
-// ─── Question-type config ──────────────────────────────────────────────────
+// ─── Question-type config ─────────────────────────────────────────────────
 const Q_TYPES = [
   { value:'mcq',       label:'MCQ',                icon:List,       sub:'4 options · text or image'     },
   { value:'match',     label:'Match the Following', icon:AlignLeft,  sub:'Pair matching · text or image'  },
@@ -214,7 +75,7 @@ const DIFF_CFG = {
   hard:   { label:'Hard',   cls:'bg-red-100   text-red-700'   },
 };
 
-// ─── Blank question factories ─────────────────────────────────────────────
+// ─── Blank factories ──────────────────────────────────────────────────────
 const blankOpt  = () => ({ text: '', imageUrl: '' });
 const blankPair = () => ({ left: '', leftImage: '', right: '', rightImage: '' });
 const blankMcq       = () => ({ type:'mcq',       text:'', imageUrl:'', difficulty:'easy', options:[blankOpt(),blankOpt(),blankOpt(),blankOpt()], correct:null, explanation:'' });
@@ -224,13 +85,6 @@ const blankTrueFalse = () => ({ type:'truefalse', text:'', imageUrl:'', difficul
 const blankForType   = (t) => t==='match'?blankMatch():t==='image'?blankImage():t==='truefalse'?blankTrueFalse():blankMcq();
 
 // ─── CSV parser ───────────────────────────────────────────────────────────
-const CSV_TEMPLATE = [
-  'type,text,difficulty,opt_a,opt_b,opt_c,opt_d,correct,explanation,image_url(img only),p1_left,p1_right,p2_left,p2_right,p3_left,p3_right,p4_left,p4_right',
-  'mcq,What is a sensor?,easy,Input device,Output device,Control unit,Power supply,A,A sensor detects signals from the environment,,,,,,,,,',
-  'image,What component is shown?,medium,Servo motor,DC motor,Stepper motor,Solenoid,C,,https://example.com/img.jpg,,,,,,,,,',
-  'match,Match the component to its function,easy,,,,,,,,,Sensor,Detects input,Motor,Creates motion,CPU,Processes data,Battery,Stores energy',
-].join('\n');
-
 function parseCSV(text) {
   const lines = text.trim().split('\n').filter(Boolean);
   if (lines.length < 2) return [];
@@ -242,19 +96,11 @@ function parseCSV(text) {
     const text = clean(cols[1]);
     if (!text) continue;
     const diff = ['easy','medium','hard'].includes(clean(cols[2])) ? clean(cols[2]) : 'easy';
-    if (type==='mcq')   questions.push({ id:uid('q'), type:'mcq', text, difficulty:diff, options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
+    if (type==='mcq')       questions.push({ id:uid('q'), type:'mcq',   text, difficulty:diff, options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
     else if (type==='match') questions.push({ id:uid('q'), type:'match', text, difficulty:diff, pairs:[{left:clean(cols[10]),leftImage:'',right:clean(cols[11]),rightImage:''},{left:clean(cols[12]),leftImage:'',right:clean(cols[13]),rightImage:''},{left:clean(cols[14]),leftImage:'',right:clean(cols[15]),rightImage:''},{left:clean(cols[16]),leftImage:'',right:clean(cols[17]),rightImage:''}], explanation:'' });
     else if (type==='image') questions.push({ id:uid('q'), type:'image', text, difficulty:diff, imageUrl:clean(cols[9])||'', options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
   }
   return questions;
-}
-
-// ─── Bank stats helper ────────────────────────────────────────────────────
-function bankStats(bank) {
-  const levels = bank.levels || [];
-  const cats   = levels.flatMap(l => l.categories || []);
-  const qs     = cats.flatMap(c => c.questions   || []);
-  return { levels: levels.length, categories: cats.length, questions: qs.length };
 }
 
 function fmtDate(ts) {
@@ -264,6 +110,14 @@ function fmtDate(ts) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Shared UI helpers
 // ═══════════════════════════════════════════════════════════════════════════
+function Toast({ msg }) {
+  return (
+    <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm font-semibold shadow-lg animate-in slide-in-from-top-2">
+      <CheckCircle size={14}/>{msg}
+    </div>
+  );
+}
+
 function DeleteModal({ isOpen, onClose, onConfirm, title, message }) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title||'Confirm Delete'} size="sm"
@@ -293,62 +147,47 @@ function InlineInput({ placeholder, onSave, onCancel, initial='' }) {
   );
 }
 
-// ─── Image Upload helper ──────────────────────────────────────────────────
+// ─── Image Upload ──────────────────────────────────────────────────────────
 function ImageUpload({ value, onChange, compact = false, label = 'Image' }) {
-  const ref = useRef(null);
   const [drag, setDrag] = useState(false);
-
   const process = (file) => {
     if (!file || !file.type.startsWith('image/')) return;
     const reader = new FileReader();
     reader.onload = e => onChange(e.target.result);
     reader.readAsDataURL(file);
   };
-
-  if (value) {
-    return (
-      <div className="relative rounded-xl overflow-hidden border border-slate-200 group">
-        <img src={value} alt={label}
-          className={`w-full object-cover ${compact ? 'h-16' : 'h-28'}`} />
-        <button onClick={() => onChange('')}
-          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors shadow-sm opacity-0 group-hover:opacity-100">
-          <X size={9} />
-        </button>
-      </div>
-    );
-  }
-
+  if (value) return (
+    <div className="relative rounded-xl overflow-hidden border border-slate-200 group">
+      <img src={value} alt={label} className={`w-full object-cover ${compact ? 'h-16' : 'h-28'}`}/>
+      <button onClick={() => onChange('')} className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors shadow-sm opacity-0 group-hover:opacity-100"><X size={9}/></button>
+    </div>
+  );
   return (
     <label
       onDragOver={e => { e.preventDefault(); setDrag(true); }}
       onDragLeave={() => setDrag(false)}
       onDrop={e => { e.preventDefault(); setDrag(false); process(e.dataTransfer.files[0]); }}
-      className={`flex flex-col items-center justify-center gap-1 border-2 border-dashed rounded-xl cursor-pointer transition-all ${
-        drag ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
-      } ${compact ? 'h-14' : 'h-24'}`}>
-      <Upload size={compact ? 13 : 18} className={drag ? 'text-indigo-500' : 'text-slate-300'} />
-      <p className={`font-semibold text-slate-400 ${compact ? 'text-[9px]' : 'text-[10px]'}`}>
-        {compact ? 'Add Image' : 'Upload Image'}
-      </p>
-      <input ref={ref} type="file" accept="image/*" className="hidden"
-        onChange={e => process(e.target.files[0])} />
+      className={`flex flex-col items-center justify-center gap-1 border-2 border-dashed rounded-xl cursor-pointer transition-all ${drag ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'} ${compact ? 'h-14' : 'h-24'}`}>
+      <Upload size={compact ? 13 : 18} className={drag ? 'text-indigo-500' : 'text-slate-300'}/>
+      <p className={`font-semibold text-slate-400 ${compact ? 'text-[9px]' : 'text-[10px]'}`}>{compact ? 'Add Image' : 'Upload Image'}</p>
+      <input type="file" accept="image/*" className="hidden" onChange={e => process(e.target.files[0])}/>
     </label>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Import Modal (per-level Excel import)
+// Import Modal
 // ═══════════════════════════════════════════════════════════════════════════
 function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
   const [step,       setStep]       = useState('upload');
   const [parsed,     setParsed]     = useState([]);
   const [error,      setError]      = useState('');
-  const [catId,      setCatId]      = useState(categories[0]?.id||'');
+  const [catId,      setCatId]      = useState(categories[0]?.id || '');
   const [newCatName, setNewCatName] = useState('');
   const [dragOver,   setDragOver]   = useState(false);
   const [importing,  setImporting]  = useState(false);
 
-  const reset = () => { setStep('upload'); setParsed([]); setError(''); setCatId(categories[0]?.id||''); setNewCatName(''); };
+  const reset = () => { setStep('upload'); setParsed([]); setError(''); setCatId(categories[0]?.id || ''); setNewCatName(''); };
 
   const processFile = (f) => {
     if (!f) return;
@@ -366,7 +205,7 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
           csvText = e.target.result;
         }
         const qs = parseCSV(csvText);
-        if (!qs.length) { setError('No valid questions found. Ensure the file matches the template format.'); return; }
+        if (!qs.length) { setError('No valid questions found. Ensure the file matches the template.'); return; }
         setParsed(qs); setStep('preview');
       } catch { setError('Could not parse file. Ensure it matches the template format.'); }
     };
@@ -375,43 +214,14 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
   };
 
   const downloadTemplate = () => {
-    const headers = [
-      'type','text','difficulty',
-      'opt_a','opt_b','opt_c','opt_d',
-      'correct','explanation','image_url(img only)',
-      'p1_left','p1_right','p2_left','p2_right',
-      'p3_left','p3_right','p4_left','p4_right',
-    ];
+    const headers = ['type','text','difficulty','opt_a','opt_b','opt_c','opt_d','correct','explanation','image_url(img only)','p1_left','p1_right','p2_left','p2_right','p3_left','p3_right','p4_left','p4_right'];
     const rows = [
-      ['mcq','What is a servo motor?','easy',
-       'A DC motor with feedback control','A stepper motor','A linear actuator','An AC induction motor',
-       'A','Servo motors use encoders for closed-loop position control.','',
-       '','','','','','','',''],
-      ['image','What component is shown in the image?','medium',
-       'Servo motor','DC motor','Stepper motor','Solenoid',
-       'C','','https://example.com/robot-component.jpg',
-       '','','','','','','',''],
-      ['match','Match each component to its function','easy',
-       '','','','','','','',
-       'Sensor','Detects input signals',
-       'Motor','Converts electricity to motion',
-       'CPU','Processes instructions',
-       'Battery','Stores electrical energy'],
-      ['truefalse','A robot arm uses inverse kinematics to find joint angles.','medium',
-       '','','','','A','IK maps end-effector pose back to joint angles.','',
-       '','','','','','','',''],
+      ['mcq','What is a servo motor?','easy','A DC motor with feedback control','A stepper motor','A linear actuator','An AC induction motor','A','Servo motors use encoders for closed-loop position control.','','','','','','','','',''],
+      ['image','What component is shown?','medium','Servo motor','DC motor','Stepper motor','Solenoid','C','','https://example.com/component.jpg','','','','','','','',''],
+      ['match','Match each component to its function','easy','','','','','','','','Sensor','Detects input signals','Motor','Converts electricity to motion','CPU','Processes instructions','Battery','Stores electrical energy'],
     ];
-
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    ws['!cols'] = [
-      {wch:10},{wch:50},{wch:10},
-      {wch:30},{wch:22},{wch:22},{wch:22},
-      {wch:8},{wch:46},{wch:36},
-      {wch:18},{wch:22},{wch:18},{wch:22},
-      {wch:18},{wch:22},{wch:18},{wch:22},
-    ];
-    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
-
+    ws['!cols'] = [{wch:10},{wch:50},{wch:10},{wch:30},{wch:22},{wch:22},{wch:22},{wch:8},{wch:46},{wch:36},{wch:18},{wch:22},{wch:18},{wch:22},{wch:18},{wch:22},{wch:18},{wch:22}];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Questions');
     XLSX.writeFile(wb, 'question_bank_template.xlsx');
@@ -420,13 +230,13 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
   const handleImport = async () => {
     setImporting(true);
     try {
-      await onImport(parsed, catId==='__new__' ? null : catId, catId==='__new__' ? newCatName.trim()||'Imported' : null);
+      await onImport(parsed, catId === '__new__' ? null : catId, catId === '__new__' ? newCatName.trim() || 'Imported' : null);
     } catch {}
     setImporting(false);
     setStep('done');
   };
 
-  const typeLabel = (t) => Q_TYPES.find(q=>q.value===t)?.label||t;
+  const typeLabel = (t) => Q_TYPES.find(q=>q.value===t)?.label || t;
 
   return (
     <Modal isOpen={isOpen} onClose={()=>{reset();onClose();}} title={`Import Questions — ${levelName}`} size="lg"
@@ -438,7 +248,7 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
               <button onClick={()=>{reset();onClose();}} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
               <button onClick={handleImport} disabled={importing||(catId==='__new__'&&!newCatName.trim())}
                 className="flex items-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-                {importing?<><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>Importing…</>:<><Upload size={14}/>Import {parsed.length} Questions</>}
+                {importing?<><Loader2 size={14} className="animate-spin"/>Importing…</>:<><Upload size={14}/>Import {parsed.length} Questions</>}
               </button>
             </div>
           </div>
@@ -451,7 +261,7 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
           <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100">
             <p className="text-sm font-bold text-indigo-800 mb-3">Supported Column Formats</p>
             <div className="grid grid-cols-3 gap-3">
-              {[{type:'MCQ',cols:['type','text','difficulty','opt_a–opt_d','correct (A–D)']},{type:'Image',cols:['type','text','difficulty','image_url','opt_a–opt_d','correct']},{type:'Match',cols:['type','text','difficulty','p1_left, p1_right','… (4 pairs)']}].map(f=>(
+              {[{type:'MCQ',cols:['type','text','difficulty','opt_a–opt_d','correct (A–D)']},{type:'Image',cols:['type','text','image_url','opt_a–opt_d','correct']},{type:'Match',cols:['type','text','difficulty','p1_left, p1_right','… (4 pairs)']}].map(f=>(
                 <div key={f.type} className="bg-white rounded-xl p-3 border border-indigo-100">
                   <p className="text-xs font-bold text-indigo-700 mb-2">{f.type}</p>
                   {f.cols.map(c=><p key={c} className="text-[10px] text-slate-500 font-mono">• {c}</p>)}
@@ -477,9 +287,7 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
         <div className="space-y-4">
           <div className="flex flex-wrap gap-3">
             {[{l:'Total',v:parsed.length,c:'bg-slate-100 text-slate-700'},{l:'MCQ',v:parsed.filter(q=>q.type==='mcq').length,c:'bg-blue-100 text-blue-700'},{l:'Match',v:parsed.filter(q=>q.type==='match').length,c:'bg-violet-100 text-violet-700'},{l:'Image',v:parsed.filter(q=>q.type==='image').length,c:'bg-rose-100 text-rose-700'}].map(s=>(
-              <div key={s.l} className={`px-4 py-2 rounded-xl text-center ${s.c}`}>
-                <p className="text-lg font-bold">{s.v}</p><p className="text-[10px] font-semibold">{s.l}</p>
-              </div>
+              <div key={s.l} className={`px-4 py-2 rounded-xl text-center ${s.c}`}><p className="text-lg font-bold">{s.v}</p><p className="text-[10px] font-semibold">{s.l}</p></div>
             ))}
           </div>
           <div>
@@ -514,7 +322,7 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
         <div className="text-center py-8">
           <div className="w-16 h-16 rounded-2xl bg-green-100 flex items-center justify-center mx-auto mb-4"><CheckCircle size={32} className="text-green-500"/></div>
           <h3 className="text-lg font-bold text-slate-800 mb-1">{parsed.length} Questions Imported!</h3>
-          <p className="text-sm text-slate-500">Questions added to <span className="font-semibold text-slate-700">{levelName}</span></p>
+          <p className="text-sm text-slate-500">Added to <span className="font-semibold text-slate-700">{levelName}</span></p>
         </div>
       )}
     </Modal>
@@ -522,73 +330,46 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Question Form Modal  (supports text + image for all fields)
+// Question Form Modal
 // ═══════════════════════════════════════════════════════════════════════════
 function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catName }) {
   const [form, setForm]     = useState(() => initial ? { ...initial, options: initial.options?.map(normalizeOpt), pairs: initial.pairs?.map(normalizePair) } : blankMcq());
   const [errors, setErrors] = useState({});
 
   const set     = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const setOpt  = (i, field, val) => setForm(p => { const opts = (Array.isArray(p.options)?p.options:[]).map(normalizeOpt); opts[i]={...opts[i],[field]:val}; return {...p,options:opts}; });
+  const setPair = (i, side, val) => setForm(p => { const pairs=(p.pairs||[]).map(normalizePair); pairs[i]={...pairs[i],[side]:val}; return {...p,pairs}; });
 
-  const setOpt = (i, field, val) => setForm(p => {
-    const opts = (Array.isArray(p.options) ? p.options : []).map(normalizeOpt);
-    opts[i] = { ...opts[i], [field]: val };
-    return { ...p, options: opts };
-  });
-
-  const setPair = (i, side, val) => setForm(p => {
-    const pairs = (p.pairs || []).map(normalizePair);
-    pairs[i] = { ...pairs[i], [side]: val };
-    return { ...p, pairs };
-  });
-
-  const handleTypeChange = (t) => {
-    setForm(p => ({ ...blankForType(t), id: p.id, difficulty: p.difficulty, text: p.text, imageUrl: p.imageUrl || '' }));
-    setErrors({});
-  };
+  const handleTypeChange = (t) => { setForm(p => ({ ...blankForType(t), id: p.id, difficulty: p.difficulty, text: p.text, imageUrl: p.imageUrl || '' })); setErrors({}); };
 
   const validate = () => {
     const e = {};
     if (!form.text.trim() && !form.imageUrl) e.text = 'Question text or image required';
     if (form.type === 'match') {
-      (form.pairs || []).forEach((p, i) => {
-        const pr = normalizePair(p);
-        if ((!pr.left.trim() && !pr.leftImage) || (!pr.right.trim() && !pr.rightImage))
-          e[`pair${i}`] = 'Both sides need text or image';
-      });
+      (form.pairs || []).forEach((p, i) => { const pr=normalizePair(p); if ((!pr.left.trim()&&!pr.leftImage)||(!pr.right.trim()&&!pr.rightImage)) e[`pair${i}`]='Both sides need text or image'; });
     } else if (form.type === 'truefalse') {
-      if (form.correct === null || form.correct === undefined)
-        e.correct = 'Please select True or False as the correct answer';
+      if (form.correct === null || form.correct === undefined) e.correct = 'Please select True or False';
     } else {
-      (form.options || []).forEach((o, i) => {
-        const opt = normalizeOpt(o);
-        if (!opt.text.trim() && !opt.imageUrl) e[`opt${i}`] = 'Fill all options';
-      });
-      if (form.correct === null || form.correct === undefined)
-        e.correct = 'Please select the correct answer by clicking a letter button';
+      (form.options||[]).forEach((o,i)=>{ const opt=normalizeOpt(o); if(!opt.text.trim()&&!opt.imageUrl) e[`opt${i}`]='Fill all options'; });
+      if (form.correct === null || form.correct === undefined) e.correct = 'Please select the correct answer';
     }
     setErrors(e);
     return !Object.keys(e).length;
   };
 
-  const handleSave = () => {
-    if (!validate()) return;
-    onSave({ ...form, id: form.id || uid('q'), text: form.text.trim() });
-  };
+  const handleSave = () => { if (!validate()) return; onSave({ ...form, id: form.id || uid('q'), text: form.text.trim() }); };
 
   const inp = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 transition-all';
   const lbl = 'text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5';
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={form.id ? 'Edit Question' : 'Add New Question'} size="lg"
-      footer={
-        <div className="flex gap-3 justify-end w-full">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button onClick={handleSave} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-colors">
-            <Save size={14}/>{form.id ? 'Save Changes' : 'Add Question'}
-          </button>
-        </div>
-      }>
+      footer={<div className="flex gap-3 justify-end w-full">
+        <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+        <button onClick={handleSave} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-colors">
+          <Save size={14}/>{form.id ? 'Save Changes' : 'Add Question'}
+        </button>
+      </div>}>
       <div className="space-y-5">
         {(levelName || catName) && (
           <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-50 rounded-xl px-3 py-2">
@@ -597,95 +378,59 @@ function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catNam
             {catName && <span className="font-semibold text-slate-600">{catName}</span>}
           </div>
         )}
-
-        {/* ── Question Type ── */}
         <div>
           <label className={lbl}>Question Type</label>
           <div className="grid grid-cols-2 gap-2">
-            {Q_TYPES.map(qt => { const Icon = qt.icon; return (
+            {Q_TYPES.map(qt => { const Icon=qt.icon; return (
               <button key={qt.value} type="button" onClick={() => handleTypeChange(qt.value)}
-                className={`p-3 rounded-xl border-2 text-left transition-all ${form.type === qt.value ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-indigo-200 hover:bg-slate-50'}`}>
-                <Icon size={16} className={`mb-1.5 ${form.type === qt.value ? 'text-indigo-600' : 'text-slate-400'}`}/>
-                <p className={`text-xs font-bold ${form.type === qt.value ? 'text-indigo-700' : 'text-slate-700'}`}>{qt.label}</p>
+                className={`p-3 rounded-xl border-2 text-left transition-all ${form.type===qt.value?'border-indigo-500 bg-indigo-50':'border-slate-200 hover:border-indigo-200 hover:bg-slate-50'}`}>
+                <Icon size={16} className={`mb-1.5 ${form.type===qt.value?'text-indigo-600':'text-slate-400'}`}/>
+                <p className={`text-xs font-bold ${form.type===qt.value?'text-indigo-700':'text-slate-700'}`}>{qt.label}</p>
                 <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{qt.sub}</p>
               </button>
             );})}
           </div>
         </div>
-
-        {/* ── Question Text + Image ── */}
         <div className="space-y-2">
-          <label className={lbl}>
-            Question Text <span className="text-slate-400 normal-case font-normal">(or image only)</span>
-          </label>
-          <textarea rows={3} value={form.text} onChange={e => set('text', e.target.value)}
-            placeholder="Type your question here… (leave blank if image only)"
+          <label className={lbl}>Question Text <span className="text-slate-400 normal-case font-normal">(or image only)</span></label>
+          <textarea rows={3} value={form.text} onChange={e => set('text', e.target.value)} placeholder="Type your question here…"
             className={`${inp} resize-none ${errors.text ? 'border-red-400' : ''}`}/>
-          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-semibold mb-1">
-            <Image size={11}/> Question Image <span className="font-normal">(optional — use with or instead of text)</span>
-          </div>
+          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-semibold mb-1"><Image size={11}/> Question Image <span className="font-normal">(optional)</span></div>
           <ImageUpload value={form.imageUrl || ''} onChange={v => set('imageUrl', v)} />
           {errors.text && <p className="text-xs text-red-500">{errors.text}</p>}
         </div>
-
-        {/* ── MCQ / Image options ── */}
-        {(form.type === 'mcq' || form.type === 'image') && (
+        {(form.type==='mcq'||form.type==='image') && (
           <div>
-            <label className={lbl}>
-              Answer Options <span className="text-red-400">*</span>
-              <span className="normal-case font-normal text-slate-400 ml-1">Click letter to mark correct · each option can be text, image, or both</span>
-            </label>
+            <label className={lbl}>Answer Options <span className="text-red-400">*</span><span className="normal-case font-normal text-slate-400 ml-1">Click letter to mark correct</span></label>
             <div className="space-y-2">
-              {(form.options || []).map((opt, i) => {
-                const optObj = normalizeOpt(opt);
-                const correct = form.correct === i;
-                return (
-                  <div key={i} className={`rounded-xl border-2 p-3 transition-all ${correct ? 'border-green-300 bg-green-50' : errors[`opt${i}`] ? 'border-red-300' : 'border-slate-100 bg-slate-50/60'}`}>
-                    <div className="flex items-center gap-2.5 mb-2">
-                      <button type="button" onClick={() => set('correct', i)}
-                        className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 shrink-0 transition-all ${correct ? 'bg-green-500 border-green-500 text-white' : 'border-slate-300 text-slate-400 hover:border-green-400'}`}>
-                        {String.fromCharCode(65 + i)}
-                      </button>
-                      <input value={optObj.text} onChange={e => setOpt(i, 'text', e.target.value)}
-                        placeholder={`Option ${String.fromCharCode(65 + i)} text… (or image only)`}
-                        className={`flex-1 bg-transparent outline-none text-sm placeholder-slate-300 ${correct ? 'text-green-800 font-semibold' : 'text-slate-700'}`}/>
-                      {correct && <span className="flex items-center gap-1 text-[10px] font-bold text-green-600 shrink-0"><Check size={10}/>Correct</span>}
-                    </div>
-                    <ImageUpload value={optObj.imageUrl} onChange={v => setOpt(i, 'imageUrl', v)} compact />
-                    {errors[`opt${i}`] && <p className="text-[10px] text-red-500 mt-1">{errors[`opt${i}`]}</p>}
+              {(form.options||[]).map((opt,i)=>{ const optObj=normalizeOpt(opt); const correct=form.correct===i; return (
+                <div key={i} className={`rounded-xl border-2 p-3 transition-all ${correct?'border-green-300 bg-green-50':errors[`opt${i}`]?'border-red-300':'border-slate-100 bg-slate-50/60'}`}>
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <button type="button" onClick={()=>set('correct',i)}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 shrink-0 transition-all ${correct?'bg-green-500 border-green-500 text-white':'border-slate-300 text-slate-400 hover:border-green-400'}`}>
+                      {String.fromCharCode(65+i)}
+                    </button>
+                    <input value={optObj.text} onChange={e=>setOpt(i,'text',e.target.value)} placeholder={`Option ${String.fromCharCode(65+i)}…`}
+                      className={`flex-1 bg-transparent outline-none text-sm placeholder-slate-300 ${correct?'text-green-800 font-semibold':'text-slate-700'}`}/>
+                    {correct && <span className="flex items-center gap-1 text-[10px] font-bold text-green-600 shrink-0"><Check size={10}/>Correct</span>}
                   </div>
-                );
-              })}
+                  <ImageUpload value={optObj.imageUrl} onChange={v=>setOpt(i,'imageUrl',v)} compact/>
+                  {errors[`opt${i}`] && <p className="text-[10px] text-red-500 mt-1">{errors[`opt${i}`]}</p>}
+                </div>
+              );})}
             </div>
-            {errors.correct && (
-              <p className="mt-2 flex items-center gap-1.5 text-xs text-red-500 font-semibold">
-                <AlertCircle size={12}/>{errors.correct}
-              </p>
-            )}
+            {errors.correct && <p className="mt-2 flex items-center gap-1.5 text-xs text-red-500 font-semibold"><AlertCircle size={12}/>{errors.correct}</p>}
           </div>
         )}
-
-        {/* ── True / False ── */}
-        {form.type === 'truefalse' && (
+        {form.type==='truefalse' && (
           <div>
-            <label className={lbl}>
-              Correct Answer <span className="text-red-400">*</span>
-              <span className="normal-case font-normal text-slate-400 ml-1">Click to select the correct option</span>
-            </label>
+            <label className={lbl}>Correct Answer <span className="text-red-400">*</span></label>
             <div className="grid grid-cols-2 gap-3">
-              {[{label:'True', idx:0, color:'emerald'}, {label:'False', idx:1, color:'rose'}].map(({label, idx, color}) => {
-                const selected = form.correct === idx;
+              {[{label:'True',idx:0,color:'emerald'},{label:'False',idx:1,color:'rose'}].map(({label,idx,color})=>{
+                const selected=form.correct===idx;
                 return (
-                  <button key={label} type="button" onClick={() => set('correct', idx)}
-                    className={`py-6 rounded-2xl border-2 font-bold text-lg transition-all ${
-                      selected
-                        ? color === 'emerald'
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                          : 'border-rose-500 bg-rose-50 text-rose-700'
-                        : errors.correct
-                          ? 'border-red-300 text-slate-500 hover:border-slate-300'
-                          : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50'
-                    }`}>
+                  <button key={label} type="button" onClick={()=>set('correct',idx)}
+                    className={`py-6 rounded-2xl border-2 font-bold text-lg transition-all ${selected?(color==='emerald'?'border-emerald-500 bg-emerald-50 text-emerald-700':'border-rose-500 bg-rose-50 text-rose-700'):(errors.correct?'border-red-300 text-slate-500':'border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50')}`}>
                     {selected && <Check size={16} className="mx-auto mb-1"/>}
                     {label}
                     {selected && <p className="text-[10px] font-semibold mt-1 opacity-70">Correct Answer</p>}
@@ -693,75 +438,53 @@ function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catNam
                 );
               })}
             </div>
-            {errors.correct && (
-              <p className="mt-2 flex items-center gap-1.5 text-xs text-red-500 font-semibold">
-                <AlertCircle size={12}/>{errors.correct}
-              </p>
-            )}
+            {errors.correct && <p className="mt-2 flex items-center gap-1.5 text-xs text-red-500 font-semibold"><AlertCircle size={12}/>{errors.correct}</p>}
           </div>
         )}
-
-        {/* ── Match pairs ── */}
-        {form.type === 'match' && (
+        {form.type==='match' && (
           <div>
-            <label className={lbl}>
-              Match Pairs <span className="text-red-400">*</span>
-              <span className="normal-case font-normal text-slate-400 ml-1">Each side can have text, image, or both</span>
-            </label>
+            <label className={lbl}>Match Pairs <span className="text-red-400">*</span></label>
             <div className="space-y-3">
-              {(form.pairs || []).map((pair, i) => {
-                const pr = normalizePair(pair);
-                return (
-                  <div key={i} className={`bg-slate-50 rounded-xl p-3 border-2 ${errors[`pair${i}`] ? 'border-red-300' : 'border-slate-100'}`}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs font-bold text-slate-400 w-5">{i + 1}.</span>
-                      <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">Pair {i + 1}</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Left Side</p>
-                        <input value={pr.left} onChange={e => setPair(i, 'left', e.target.value)}
-                          placeholder="Text…"
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
-                        <ImageUpload value={pr.leftImage} onChange={v => setPair(i, 'leftImage', v)} compact />
-                      </div>
-                      <div className="space-y-1.5">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Right Side</p>
-                        <input value={pr.right} onChange={e => setPair(i, 'right', e.target.value)}
-                          placeholder="Text…"
-                          className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
-                        <ImageUpload value={pr.rightImage} onChange={v => setPair(i, 'rightImage', v)} compact />
-                      </div>
-                    </div>
-                    {errors[`pair${i}`] && <p className="text-[10px] text-red-500 mt-1">{errors[`pair${i}`]}</p>}
+              {(form.pairs||[]).map((pair,i)=>{ const pr=normalizePair(pair); return (
+                <div key={i} className={`bg-slate-50 rounded-xl p-3 border-2 ${errors[`pair${i}`]?'border-red-300':'border-slate-100'}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-bold text-slate-400 w-5">{i+1}.</span>
+                    <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">Pair {i+1}</span>
                   </div>
-                );
-              })}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Left Side</p>
+                      <input value={pr.left} onChange={e=>setPair(i,'left',e.target.value)} placeholder="Text…" className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
+                      <ImageUpload value={pr.leftImage} onChange={v=>setPair(i,'leftImage',v)} compact/>
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Right Side</p>
+                      <input value={pr.right} onChange={e=>setPair(i,'right',e.target.value)} placeholder="Text…" className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
+                      <ImageUpload value={pr.rightImage} onChange={v=>setPair(i,'rightImage',v)} compact/>
+                    </div>
+                  </div>
+                  {errors[`pair${i}`] && <p className="text-[10px] text-red-500 mt-1">{errors[`pair${i}`]}</p>}
+                </div>
+              );})}
             </div>
           </div>
         )}
-
-        {/* ── Difficulty ── */}
         <div>
           <label className={lbl}>Difficulty</label>
           <div className="flex gap-2">
-            {Object.entries(DIFF_CFG).map(([k, v]) => (
-              <button key={k} type="button" onClick={() => set('difficulty', k)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all ${form.difficulty === k ? `${v.cls} border-current` : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+            {Object.entries(DIFF_CFG).map(([k,v])=>(
+              <button key={k} type="button" onClick={()=>set('difficulty',k)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all ${form.difficulty===k?v.cls+' border-transparent':'border-slate-200 text-slate-500 hover:border-slate-300'}`}>
                 {v.label}
               </button>
             ))}
           </div>
         </div>
-
-        {/* ── Explanation ── */}
         <div>
-          <label className={lbl}>Explanation <span className="text-slate-400 normal-case font-normal">(optional)</span></label>
-          <textarea rows={2} value={form.explanation || ''} onChange={e => set('explanation', e.target.value)}
-            placeholder="Explain why the answer is correct…"
+          <label className={lbl}>Explanation <span className="font-normal normal-case text-slate-400">(optional)</span></label>
+          <textarea rows={2} value={form.explanation||''} onChange={e=>set('explanation',e.target.value)} placeholder="Explain why this is the correct answer…"
             className={`${inp} resize-none`}/>
         </div>
-
       </div>
     </Modal>
   );
@@ -772,76 +495,60 @@ function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catNam
 // ═══════════════════════════════════════════════════════════════════════════
 function QuestionRow({ q, index, onEdit, onDelete }) {
   const [expanded, setExpanded] = useState(false);
-  const typeLabel = Q_TYPES.find(t => t.value === q.type)?.label || q.type;
-  const hasImg = !!q.imageUrl;
+  const typeConf = Q_TYPES.find(t=>t.value===q.type)||Q_TYPES[0];
+  const TypeIcon = typeConf.icon;
+  const diff = DIFF_CFG[q.difficulty] || DIFF_CFG.easy;
   return (
-    <div className={`bg-white rounded-xl border transition-all ${expanded ? 'border-slate-200 shadow-sm' : 'border-slate-100'}`}>
+    <div className="rounded-xl border border-slate-100 bg-white overflow-hidden">
       <div className="flex items-center gap-3 px-4 py-3">
         <span className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">{index}</span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            {hasImg && <Image size={12} className="text-indigo-400 shrink-0"/>}
-            <p className="text-sm font-semibold text-slate-800 truncate">{q.text || <span className="italic text-slate-400">{hasImg ? '[Image question]' : 'Untitled'}</span>}</p>
+        <button onClick={()=>setExpanded(p=>!p)} className="flex-1 text-left min-w-0">
+          <p className="text-sm font-semibold text-slate-800 truncate">{q.text || '[Image question]'}</p>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <TypeIcon size={11} className="text-slate-400"/>
+            <span className="text-[10px] text-slate-400">{typeConf.label}</span>
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-0.5 ${diff.cls}`}>{diff.label}</span>
           </div>
-          <div className="flex items-center gap-1.5 mt-1">
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">{typeLabel}</span>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${DIFF_CFG[q.difficulty]?.cls || 'bg-slate-100 text-slate-500'}`}>{DIFF_CFG[q.difficulty]?.label}</span>
-          </div>
-        </div>
+        </button>
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={() => setExpanded(p => !p)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors">{expanded ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}</button>
           <button onClick={onEdit} className="p-1.5 rounded-lg hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 transition-colors"><Edit2 size={13}/></button>
           <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={13}/></button>
+          <button onClick={()=>setExpanded(p=>!p)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors">{expanded?<ChevronUp size={13}/>:<ChevronDown size={13}/>}</button>
         </div>
       </div>
       {expanded && (
-        <div className="px-4 pb-4 border-t border-slate-100 pt-3 space-y-2">
-          {q.imageUrl && <img src={q.imageUrl} alt="Question" className="w-full h-32 object-cover rounded-xl border border-slate-200"/>}
-          {q.type === 'match' ? (
+        <div className="px-4 pb-3 space-y-2 border-t border-slate-50">
+          {q.imageUrl && <img src={q.imageUrl} alt="" className="w-full max-h-40 object-cover rounded-xl border border-slate-100 mt-2"/>}
+          {q.type==='match'?(
             <div className="space-y-1.5">
-              {(q.pairs || []).map((p, i) => {
-                const pr = normalizePair(p);
-                return (
-                  <div key={i} className="flex items-stretch gap-2 text-xs">
-                    <div className="flex-1 bg-slate-50 rounded-lg p-2 text-slate-700 font-medium">
-                      {pr.leftImage && <img src={pr.leftImage} alt="" className="w-full h-10 object-cover rounded-lg mb-1"/>}
-                      {pr.left && <span>{pr.left}</span>}
-                      {!pr.left && !pr.leftImage && <span className="text-slate-400">—</span>}
-                    </div>
-                    <span className="text-slate-400 font-bold self-center shrink-0">→</span>
-                    <div className="flex-1 bg-green-50 rounded-lg p-2 text-green-700 font-medium">
-                      {pr.rightImage && <img src={pr.rightImage} alt="" className="w-full h-10 object-cover rounded-lg mb-1"/>}
-                      {pr.right && <span>{pr.right}</span>}
-                      {!pr.right && !pr.rightImage && <span className="text-green-400">—</span>}
-                    </div>
-                  </div>
-                );
-              })}
+              {(q.pairs||[]).map((p,i)=>{ const pr=normalizePair(p); return (
+                <div key={i} className="flex items-stretch gap-2 text-xs">
+                  <div className="flex-1 bg-slate-50 rounded-lg p-2 text-slate-700 font-medium">{pr.leftImage&&<img src={pr.leftImage} alt="" className="w-full h-10 object-cover rounded-lg mb-1"/>}{pr.left||<span className="text-slate-400">—</span>}</div>
+                  <span className="text-slate-400 font-bold self-center shrink-0">→</span>
+                  <div className="flex-1 bg-green-50 rounded-lg p-2 text-green-700 font-medium">{pr.rightImage&&<img src={pr.rightImage} alt="" className="w-full h-10 object-cover rounded-lg mb-1"/>}{pr.right||<span className="text-green-400">—</span>}</div>
+                </div>
+              );})}
             </div>
-          ) : q.type === 'truefalse' ? (
+          ):q.type==='truefalse'?(
             <div className="flex gap-2">
-              {[{label:'True',idx:0},{label:'False',idx:1}].map(({label,idx}) => (
-                <div key={label} className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs border font-semibold ${idx === q.correct ? 'bg-green-50 border-green-200 text-green-800' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
-                  {idx === q.correct && <CheckCircle size={10} className="text-green-500"/>}
-                  {label}
+              {[{label:'True',idx:0},{label:'False',idx:1}].map(({label,idx})=>(
+                <div key={label} className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs border font-semibold ${idx===q.correct?'bg-green-50 border-green-200 text-green-800':'bg-slate-50 border-slate-100 text-slate-500'}`}>
+                  {idx===q.correct&&<CheckCircle size={10} className="text-green-500"/>}{label}
                 </div>
               ))}
             </div>
-          ) : (
+          ):(
             <div className="space-y-1.5">
-              {(q.options || []).map((opt, i) => {
-                const o = normalizeOpt(opt);
-                return (
-                  <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs border ${i === q.correct ? 'bg-green-50 border-green-200 text-green-800 font-semibold' : 'bg-slate-50 border-slate-100 text-slate-600'}`}>
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${i === q.correct ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-500'}`}>{String.fromCharCode(65 + i)}</span>
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      {o.imageUrl && <img src={o.imageUrl} alt="" className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"/>}
-                      <span className="truncate">{o.text || (o.imageUrl ? '[Image]' : '—')}</span>
-                    </div>
-                    {i === q.correct && <CheckCircle size={10} className="ml-auto text-green-500 shrink-0"/>}
+              {(q.options||[]).map((opt,i)=>{ const o=normalizeOpt(opt); return (
+                <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs border ${i===q.correct?'bg-green-50 border-green-200 text-green-800 font-semibold':'bg-slate-50 border-slate-100 text-slate-600'}`}>
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${i===q.correct?'bg-green-500 text-white':'bg-slate-200 text-slate-500'}`}>{String.fromCharCode(65+i)}</span>
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    {o.imageUrl&&<img src={o.imageUrl} alt="" className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"/>}
+                    <span className="truncate">{o.text||(o.imageUrl?'[Image]':'—')}</span>
                   </div>
-                );
-              })}
+                  {i===q.correct&&<CheckCircle size={10} className="ml-auto text-green-500 shrink-0"/>}
+                </div>
+              );})}
             </div>
           )}
           {q.explanation && <div className="bg-blue-50 rounded-xl px-3 py-2 text-xs text-blue-700"><span className="font-bold">Explanation: </span>{q.explanation}</div>}
@@ -852,77 +559,99 @@ function QuestionRow({ q, index, onEdit, onDelete }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Category Section
+// Category Section — loads questions from API by cat.id
 // ═══════════════════════════════════════════════════════════════════════════
-function CategorySection({ cat, levelName, levelCategory, bankName, pal, onRename, onDelete, onQuestionsChange, showToast }) {
-  const [collapsed, setCollapsed] = useState(false);
-  const [qModal,    setQModal]    = useState(null);
-  const [deleteQ,   setDeleteQ]   = useState(null);
-  const [renaming,  setRenaming]  = useState(false);
-  const qCount = (cat.questions||[]).length;
+function CategorySection({ cat, levelId, levelName, bankId, pal, onRenamed, onDeleted, showToast }) {
+  const [questions,  setQuestions]  = useState([]);
+  const [loaded,     setLoaded]     = useState(false);
+  const [loading,    setLoading]    = useState(false);
+  const [collapsed,  setCollapsed]  = useState(false);
+  const [qModal,     setQModal]     = useState(null);
+  const [deleteQ,    setDeleteQ]    = useState(null);
+  const [renaming,   setRenaming]   = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
 
-  // Use explicitly stored category, fall back to name-derived mapping
-  const resolvedCat = levelCategory || getCatFromLevelName(levelName);
-
-  // Normalize options to plain strings for the backend (DB stores string arrays)
-  const flattenQ = (q, apiCat) => ({
-    ...q,
-    category:      apiCat,
-    bankName:      q.bankName || bankName || 'Question Bank',
-    status:        'active',
-    correctAnswer: q.correct,
-    options: Array.isArray(q.options)
-      ? q.options.map(o => (typeof o === 'string' ? o : (o?.text || '')))
-      : q.options,
-    pairs: Array.isArray(q.pairs)
-      ? q.pairs.map(p => ({ left: p.left || '', right: p.right || '' }))
-      : q.pairs,
-  });
+  useEffect(() => {
+    setLoading(true);
+    api.getQuestionsByCategory(cat.id)
+      .then(qs => { setQuestions(Array.isArray(qs) ? qs : []); setLoaded(true); })
+      .catch(err => console.error('Load questions failed:', err.message))
+      .finally(() => setLoading(false));
+  }, [cat.id]);
 
   const handleAdd = async (q) => {
-    const payload = flattenQ(q, resolvedCat);
     try {
-      const saved = await apiAddQuestion(payload);
-      const savedQ = { ...(saved?.id ? { ...q, id: saved.id } : q), bankName: bankName || 'Question Bank' };
-      onQuestionsChange([...(cat.questions||[]), savedQ]);
+      const saved = await api.addQuestion({
+        text:          q.text,
+        type:          q.type,
+        options:       flattenOptions(q.options),
+        pairs:         flattenPairs(q.pairs),
+        correctAnswer: q.correct,
+        difficulty:    q.difficulty,
+        imageUrl:      q.imageUrl || '',
+        explanation:   q.explanation || '',
+        qbCategoryId:  cat.id,
+        qbLevelId:     levelId,
+        category:      getCatFromName(cat.name),
+        bankName:      'Question Bank',
+        status:        'active',
+      });
+      setQuestions(prev => [...prev, saved?.id ? { ...q, id: saved.id } : q]);
       setQModal(null);
-      showToast?.('Question added successfully!');
-    } catch (err) {
-      console.error('Add question failed:', err.message);
-      showToast?.(`Failed to add question: ${err.message}`, 'red');
-    }
+      showToast?.('Question added!');
+    } catch (err) { showToast?.(`Failed to add: ${err.message}`, 'red'); }
   };
 
-  const handleEdit = async (u) => {
-    const original = (cat.questions||[]).find(q => q.id === u.id);
-    onQuestionsChange((cat.questions||[]).map(q => q.id===u.id ? u : q));
+  const handleEdit = async (updated) => {
+    const original = questions.find(q => q.id === updated.id);
+    setQuestions(prev => prev.map(q => q.id === updated.id ? updated : q));
     setQModal(null);
     try {
-      await apiUpdateQuestion(flattenQ(u, resolvedCat));
-      showToast?.('Question updated successfully!');
+      await api.updateQuestion({
+        id: updated.id, text: updated.text, type: updated.type,
+        options: flattenOptions(updated.options), pairs: flattenPairs(updated.pairs),
+        correctAnswer: updated.correct, difficulty: updated.difficulty,
+        imageUrl: updated.imageUrl || '', explanation: updated.explanation || '',
+      });
+      showToast?.('Question updated!');
     } catch (err) {
-      console.error('Update question failed:', err.message);
-      // Revert the optimistic update
-      if (original) onQuestionsChange((cat.questions||[]).map(q => q.id===u.id ? original : q));
-      showToast?.(`Failed to save changes: ${err.message}`, 'red');
+      if (original) setQuestions(prev => prev.map(q => q.id === updated.id ? original : q));
+      showToast?.(`Failed to update: ${err.message}`, 'red');
     }
   };
 
-  const handleDel = async () => {
+  const handleDeleteQ = async () => {
     const toDelete = deleteQ;
-    const originalQuestions = [...(cat.questions||[])];
-    onQuestionsChange(originalQuestions.filter(q => q.id !== toDelete.id));
+    const original = [...questions];
+    setQuestions(prev => prev.filter(q => q.id !== toDelete.id));
     setDeleteQ(null);
     try {
-      await apiDeleteQuestion(null, toDelete.id);
+      await api.deleteQuestion(toDelete.id);
       showToast?.('Question deleted.');
     } catch (err) {
-      console.error('Delete question failed:', err.message);
-      // Revert the optimistic removal
-      onQuestionsChange(originalQuestions);
-      showToast?.(`Failed to delete question: ${err.message}`, 'red');
+      setQuestions(original);
+      showToast?.(`Failed to delete: ${err.message}`, 'red');
     }
   };
+
+  const handleRename = async (name) => {
+    try {
+      await api.updateQbCategory(cat.id, { name });
+      onRenamed?.(cat.id, name);
+      setRenaming(false);
+    } catch (err) { showToast?.(`Failed to rename: ${err.message}`, 'red'); }
+  };
+
+  const handleDeleteCat = async () => {
+    setConfirmDel(false);
+    try {
+      await api.deleteQbCategory(cat.id);
+      onDeleted?.(cat.id);
+      showToast?.(`"${cat.name}" deleted.`);
+    } catch (err) { showToast?.(`Failed to delete: ${err.message}`, 'red'); }
+  };
+
+  const qCount = questions.length;
 
   return (
     <div className={`rounded-2xl border-2 ${pal.border} overflow-hidden`}>
@@ -931,7 +660,7 @@ function CategorySection({ cat, levelName, levelCategory, bankName, pal, onRenam
           {collapsed?<Folder size={16} className={pal.text}/>:<FolderOpen size={16} className={pal.text}/>}
           {renaming?(
             <div className="flex-1" onClick={e=>e.stopPropagation()}>
-              <InlineInput initial={cat.name} placeholder="Category name" onSave={v=>{onRename(v);setRenaming(false);}} onCancel={()=>setRenaming(false)}/>
+              <InlineInput initial={cat.name} placeholder="Category name" onSave={handleRename} onCancel={()=>setRenaming(false)}/>
             </div>
           ):(
             <>
@@ -940,20 +669,23 @@ function CategorySection({ cat, levelName, levelCategory, bankName, pal, onRenam
             </>
           )}
         </button>
-        {!renaming&&(
+        {!renaming && (
           <div className="flex items-center gap-1 shrink-0">
             <button onClick={()=>setQModal('add')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border ${pal.border} ${pal.text} text-xs font-bold hover:opacity-80 transition-all shadow-sm`}>
-              <Plus size={12}/>Add Questions
+              <Plus size={12}/>Add Question
             </button>
             <button onClick={()=>setRenaming(true)} className="p-1.5 rounded-lg hover:bg-white/60 text-slate-500 transition-colors"><Edit2 size={13}/></button>
-            <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={13}/></button>
+            <button onClick={()=>setConfirmDel(true)} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={13}/></button>
             <button onClick={()=>setCollapsed(p=>!p)} className="p-1.5 rounded-lg hover:bg-white/60 text-slate-500 transition-colors">{collapsed?<ChevronDown size={13}/>:<ChevronUp size={13}/>}</button>
           </div>
         )}
       </div>
-      {!collapsed&&(
+
+      {!collapsed && (
         <div className="p-4 bg-white">
-          {qCount===0?(
+          {loading ? (
+            <div className="flex items-center justify-center py-6"><Loader2 size={20} className="animate-spin text-slate-300"/></div>
+          ) : qCount === 0 ? (
             <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
               <HelpCircle size={28} className="text-slate-300 mx-auto mb-2"/>
               <p className="text-sm font-semibold text-slate-400">No questions yet</p>
@@ -962,9 +694,9 @@ function CategorySection({ cat, levelName, levelCategory, bankName, pal, onRenam
                 <Plus size={12}/>Add First Question
               </button>
             </div>
-          ):(
+          ) : (
             <div className="space-y-2">
-              {(cat.questions||[]).map((q,i)=>(
+              {questions.map((q,i)=>(
                 <QuestionRow key={q.id} q={q} index={i+1} onEdit={()=>setQModal(q)} onDelete={()=>setDeleteQ(q)}/>
               ))}
               <button onClick={()=>setQModal('add')} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-slate-200 text-xs font-semibold text-slate-400 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50/40 transition-all">
@@ -974,55 +706,106 @@ function CategorySection({ cat, levelName, levelCategory, bankName, pal, onRenam
           )}
         </div>
       )}
-      {qModal!==null&&<QuestionFormModal isOpen onClose={()=>setQModal(null)} onSave={qModal==='add'?handleAdd:handleEdit} initial={qModal==='add'?null:qModal} levelName={levelName} catName={cat.name}/>}
-      <DeleteModal isOpen={!!deleteQ} onClose={()=>setDeleteQ(null)} onConfirm={handleDel} title="Delete Question?" message={`"${deleteQ?.text||'This question'}" will be permanently removed.`}/>
+
+      {qModal !== null && (
+        <QuestionFormModal isOpen onClose={()=>setQModal(null)}
+          onSave={qModal==='add' ? handleAdd : handleEdit}
+          initial={qModal==='add' ? null : qModal}
+          levelName={levelName} catName={cat.name}/>
+      )}
+      <DeleteModal isOpen={!!deleteQ} onClose={()=>setDeleteQ(null)} onConfirm={handleDeleteQ}
+        title="Delete Question?" message={`"${deleteQ?.text||'This question'}" will be permanently removed.`}/>
+      <DeleteModal isOpen={confirmDel} onClose={()=>setConfirmDel(false)} onConfirm={handleDeleteCat}
+        title={`Delete "${cat.name}"?`} message={`All ${qCount} questions in this category will be permanently deleted.`}/>
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Level Section
+// Level Section — loads categories from API, manages them via CRUD
 // ═══════════════════════════════════════════════════════════════════════════
-function LevelSection({ level, index, bankName, onUpdate, onDelete, onReload, showToast }) {
+function LevelSection({ level, bankId, index, onRenamed, onDeleted, showToast }) {
   const pal = levelPal(index);
+  const [categories,  setCategories]  = useState([]);
+  const [loading,     setLoading]     = useState(true);
   const [collapsed,   setCollapsed]   = useState(false);
   const [addingCat,   setAddingCat]   = useState(false);
   const [renaming,    setRenaming]    = useState(false);
-  const [deleteLevel, setDeleteLevel] = useState(false);
-  const [deleteCat,   setDeleteCat]   = useState(null);
+  const [confirmDel,  setConfirmDel]  = useState(false);
   const [importOpen,  setImportOpen]  = useState(false);
+  const [saving,      setSaving]      = useState(false);
 
-  const cats   = level.categories||[];
-  const qTotal = cats.reduce((s,c)=>s+(c.questions||[]).length,0);
-  const update = useCallback((patch)=>onUpdate({...level,...patch}),[level,onUpdate]);
+  useEffect(() => {
+    api.getQbCategories(level.id)
+      .then(cats => setCategories(Array.isArray(cats) ? cats : []))
+      .catch(err => console.error('Load categories failed:', err.message))
+      .finally(() => setLoading(false));
+  }, [level.id]);
+
+  const handleAddCategory = async (name) => {
+    setSaving(true);
+    try {
+      const newCat = await api.createQbCategory({ levelId: level.id, bankId, name });
+      setCategories(prev => [...prev, newCat]);
+      setAddingCat(false);
+      showToast?.('Category added!');
+    } catch (err) {
+      showToast?.(`Failed to add category: ${err.message}`, 'red');
+    } finally { setSaving(false); }
+  };
+
+  const handleRenameLevel = async (name) => {
+    try {
+      await api.updateQbLevel(level.id, { name });
+      onRenamed?.(level.id, name);
+      setRenaming(false);
+    } catch (err) { showToast?.(`Failed to rename: ${err.message}`, 'red'); }
+  };
+
+  const handleDeleteLevel = async () => {
+    setConfirmDel(false);
+    try {
+      await api.deleteQbLevel(level.id);
+      onDeleted?.(level.id);
+      showToast?.(`${level.name} deleted.`);
+    } catch (err) { showToast?.(`Failed to delete: ${err.message}`, 'red'); }
+  };
 
   const handleImport = async (questions, catId, newCatName) => {
-    // Persist each imported question to the backend and collect DB-assigned IDs
-    const apiCat = level.category || getCatFromLevelName(level.name);
-    const savedQuestions = [];
-    for (const q of questions) {
+    let targetCatId = catId;
+
+    if (!catId && newCatName) {
       try {
-        const saved = await apiAddQuestion({
-          ...q,
-          category:     apiCat,
-          bankName:     bankName || 'Question Bank',
-          status:       'active',
-          options:      Array.isArray(q.options) ? q.options.map(o => (typeof o === 'string' ? o : (o?.text || ''))) : q.options,
-          pairs:        Array.isArray(q.pairs) ? q.pairs.map(p => ({ left: p.left || '', right: p.right || '' })) : q.pairs,
-          correctAnswer: q.correct,
-        });
-        savedQuestions.push({ ...(saved?.id ? { ...q, id: saved.id } : q), bankName: bankName || 'Question Bank' });
+        const newCat = await api.createQbCategory({ levelId: level.id, bankId, name: newCatName });
+        targetCatId = newCat.id;
+        setCategories(prev => [...prev, newCat]);
       } catch (err) {
-        console.error('Import: failed to save question:', err.message);
-        savedQuestions.push({ ...q, bankName: bankName || 'Question Bank' });
+        showToast?.(`Failed to create category: ${err.message}`, 'red');
+        return;
       }
     }
-    const newCats = catId
-      ? cats.map(c=>c.id===catId?{...c,questions:[...(c.questions||[]),...savedQuestions]}:c)
-      : [...cats,{id:uid('cat'),name:newCatName||'Imported',questions:savedQuestions}];
-    update({categories:newCats});
-    showToast?.(`${savedQuestions.length} questions imported and saved!`);
+
+    const targetCatName = categories.find(c => c.id == targetCatId)?.name || newCatName || '';
+    let count = 0;
+    for (const q of questions) {
+      try {
+        await api.addQuestion({
+          text: q.text, type: q.type,
+          options: flattenOptions(q.options), pairs: flattenPairs(q.pairs),
+          correctAnswer: q.correct, difficulty: q.difficulty,
+          imageUrl: q.imageUrl || '', explanation: q.explanation || '',
+          qbCategoryId: targetCatId, qbLevelId: level.id,
+          category: getCatFromName(targetCatName),
+          bankName: 'Question Bank', status: 'active',
+        });
+        count++;
+      } catch {}
+    }
+    showToast?.(`${count} question${count !== 1 ? 's' : ''} imported!`);
+    setImportOpen(false);
   };
+
+  const totalQs = categories.reduce((s, c) => s + (c.questionCount || 0), 0);
 
   return (
     <div className="rounded-2xl overflow-hidden shadow-sm border border-slate-100">
@@ -1030,18 +813,20 @@ function LevelSection({ level, index, bankName, onUpdate, onDelete, onReload, sh
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center shrink-0"><Layers size={16} className="text-white"/></div>
           <div className="flex-1 min-w-0">
-            {renaming?(
+            {renaming ? (
               <div onClick={e=>e.stopPropagation()}>
-                <InlineInput initial={level.name} placeholder="Level name" onSave={v=>{update({name:v});setRenaming(false);}} onCancel={()=>setRenaming(false)}/>
+                <InlineInput initial={level.name} placeholder="Level name" onSave={handleRenameLevel} onCancel={()=>setRenaming(false)}/>
               </div>
-            ):(
+            ) : (
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-white font-bold text-base" style={{fontFamily:'Space Grotesk'}}>{level.name}</h3>
-                <span className="text-white/70 text-xs font-semibold">{cats.length} {cats.length===1?'category':'categories'} · {qTotal} questions</span>
+                <span className="text-white/70 text-xs font-semibold">
+                  {loading ? '…' : `${categories.length} ${categories.length===1?'category':'categories'}`}
+                </span>
               </div>
             )}
           </div>
-          {!renaming&&(
+          {!renaming && (
             <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
               <button onClick={()=>setImportOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-all border border-white/30">
                 <Upload size={12}/>Import Excel
@@ -1050,102 +835,114 @@ function LevelSection({ level, index, bankName, onUpdate, onDelete, onReload, sh
                 <Plus size={13}/>Add Category
               </button>
               <button onClick={()=>setRenaming(true)} className="p-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white/80 hover:text-white transition-all"><Edit2 size={13}/></button>
-              <button onClick={()=>setDeleteLevel(true)} className="p-1.5 rounded-xl bg-white/15 hover:bg-red-400/50 text-white/80 hover:text-white transition-all"><Trash2 size={13}/></button>
+              <button onClick={()=>setConfirmDel(true)} className="p-1.5 rounded-xl bg-white/15 hover:bg-red-400/50 text-white/80 hover:text-white transition-all"><Trash2 size={13}/></button>
               <button onClick={()=>setCollapsed(p=>!p)} className="p-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white transition-all">{collapsed?<ChevronDown size={15}/>:<ChevronUp size={15}/>}</button>
             </div>
           )}
         </div>
       </div>
-      {!collapsed&&(
+
+      {!collapsed && (
         <div className={`${pal.light} px-5 py-4 space-y-3`}>
-          {addingCat&&(
+          {addingCat && (
             <div className={`bg-white rounded-2xl border-2 ${pal.border} p-4`}>
               <p className={`text-xs font-bold ${pal.text} mb-2`}>New Category Name</p>
-              <InlineInput placeholder="e.g. Robotics Basics, Sensors…" onSave={n=>{update({categories:[...cats,{id:uid('cat'),name:n,questions:[]}]});setAddingCat(false);}} onCancel={()=>setAddingCat(false)}/>
+              {saving ? (
+                <div className="flex items-center gap-2 py-2 text-sm text-slate-500"><Loader2 size={14} className="animate-spin"/>Creating…</div>
+              ) : (
+                <InlineInput placeholder="e.g. Basics, Advanced Concepts…" onSave={handleAddCategory} onCancel={()=>setAddingCat(false)}/>
+              )}
             </div>
           )}
-          {cats.length===0&&!addingCat?(
+
+          {loading ? (
+            <div className="flex items-center justify-center py-8"><Loader2 size={20} className="animate-spin text-slate-300"/></div>
+          ) : categories.length === 0 && !addingCat ? (
             <div className="text-center py-10 bg-white/70 rounded-2xl border-2 border-dashed border-white">
               <Tag size={28} className={`${pal.text} mx-auto mb-2 opacity-40`}/>
               <p className={`text-sm font-semibold ${pal.text} opacity-60`}>No categories yet</p>
-              <p className="text-xs text-slate-400 mt-1 mb-3">Create categories or import from Excel</p>
+              <p className="text-xs text-slate-400 mt-1 mb-3">Create categories to organise your questions</p>
               <div className="flex items-center justify-center gap-2 flex-wrap">
                 <button onClick={()=>setAddingCat(true)} className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r ${pal.bg}`}><Plus size={12}/>Add Category</button>
                 <button onClick={()=>setImportOpen(true)} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-white border-2 border-slate-200 text-slate-600 hover:bg-slate-50"><Upload size={12}/>Import Excel</button>
               </div>
             </div>
-          ):(
-            cats.map(cat=>(
-              <CategorySection key={cat.id} cat={cat} levelName={level.name} levelCategory={level.category} bankName={bankName} pal={pal}
-                onRename={name=>update({categories:cats.map(c=>c.id===cat.id?{...c,name}:c)})}
-                onDelete={()=>setDeleteCat(cat)}
-                onQuestionsChange={qs=>update({categories:cats.map(c=>c.id===cat.id?{...c,questions:qs}:c)})}
-                showToast={showToast}/>
+          ) : (
+            categories.map(cat => (
+              <CategorySection
+                key={cat.id} cat={cat}
+                levelId={level.id} levelName={level.name} bankId={bankId}
+                pal={pal}
+                onRenamed={(catId, name) => setCategories(prev => prev.map(c => c.id === catId ? { ...c, name } : c))}
+                onDeleted={(catId) => setCategories(prev => prev.filter(c => c.id !== catId))}
+                showToast={showToast}
+              />
             ))
           )}
-          {cats.length>0&&!addingCat&&(
+
+          {categories.length > 0 && !addingCat && (
             <button onClick={()=>setAddingCat(true)} className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl border-2 border-dashed border-white text-xs font-semibold ${pal.text} opacity-70 hover:opacity-100 hover:bg-white/50 transition-all`}>
               <Plus size={13}/>Add Category
             </button>
           )}
         </div>
       )}
-      {importOpen&&<ImportModal isOpen levelName={level.name} categories={cats} onClose={()=>setImportOpen(false)} onImport={async (qs,catId,newCatName)=>{await handleImport(qs,catId,newCatName);setImportOpen(false);}}/>}
-      <DeleteModal isOpen={deleteLevel} onClose={()=>setDeleteLevel(false)} onConfirm={async () => {
-        setDeleteLevel(false);
-        const allQs = cats.flatMap(c => c.questions || []);
-        for (const q of allQs) {
-          try { await apiDeleteQuestion(null, q.id); } catch {}
-        }
-        onDelete();
-        await onReload?.();
-        showToast?.(`${level.name} deleted permanently.`);
-      }} title={`Delete ${level.name}?`} message={`"${level.name}" and all its ${cats.length} categories and ${qTotal} questions will be permanently deleted.`}/>
-      <DeleteModal isOpen={!!deleteCat} onClose={()=>setDeleteCat(null)} onConfirm={async () => {
-        const cat = deleteCat;
-        setDeleteCat(null);
-        for (const q of (cat.questions || [])) {
-          try { await apiDeleteQuestion(null, q.id); } catch {}
-        }
-        update({ categories: cats.filter(c => c.id !== cat.id) });
-        await onReload?.();
-        showToast?.(`"${cat.name}" deleted permanently.`);
-      }} title={`Delete "${deleteCat?.name}"?`} message={`This category and its ${(deleteCat?.questions||[]).length} questions will be permanently removed.`}/>
+
+      {importOpen && (
+        <ImportModal isOpen levelName={level.name} categories={categories}
+          onClose={() => setImportOpen(false)}
+          onImport={handleImport}/>
+      )}
+      <DeleteModal isOpen={confirmDel} onClose={()=>setConfirmDel(false)} onConfirm={handleDeleteLevel}
+        title={`Delete ${level.name}?`}
+        message={`"${level.name}" and all its ${categories.length} categories will be permanently deleted.`}/>
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Bank Detail View
+// Bank Detail — loads levels for this bank
 // ═══════════════════════════════════════════════════════════════════════════
-function BankDetail({ bank, bankIndex, onBack, onUpdate, onReload, showToast }) {
-  const [addingLevel,  setAddingLevel]  = useState(false);
-  const [renamingBank, setRenamingBank] = useState(false);
-  const [newLevelName, setNewLevelName] = useState('');
-  const [newLevelCat,  setNewLevelCat]  = useState(CATEGORY_OPTIONS[0]?.value || '');
+function BankDetail({ bank, bankIndex, onBack, onBankRenamed, showToast }) {
+  const [levels,       setLevels]      = useState([]);
+  const [loading,      setLoading]     = useState(true);
+  const [addingLevel,  setAddingLevel] = useState(false);
+  const [newLevelName, setNewLevelName]= useState('');
+  const [renamingBank, setRenamingBank]= useState(false);
+  const [saving,       setSaving]      = useState(false);
+  const pal = bankPal(bankIndex);
 
-  const levels     = bank.levels || [];
-  const totalCats  = levels.reduce((s,l)=>s+(l.categories||[]).length,0);
-  const totalQs    = levels.reduce((s,l)=>s+(l.categories||[]).reduce((ss,c)=>ss+(c.questions||[]).length,0),0);
-  const pal        = bankPal(bankIndex);
+  useEffect(() => {
+    api.getQbLevels(bank.id)
+      .then(lvls => setLevels(Array.isArray(lvls) ? lvls : []))
+      .catch(err => console.error('Load levels failed:', err.message))
+      .finally(() => setLoading(false));
+  }, [bank.id]);
 
-  const updateLevel = useCallback((idx, updated) => {
-    onUpdate({ ...bank, levels: levels.map((l,i)=>i===idx?updated:l) });
-  }, [bank, levels, onUpdate]);
-
-  const deleteLevel = useCallback((idx) => {
-    onUpdate({ ...bank, levels: levels.filter((_,i)=>i!==idx) });
-  }, [bank, levels, onUpdate]);
-
-  const addLevel = () => {
+  const handleAddLevel = async () => {
     const name = newLevelName.trim() || `Level ${levels.length + 1}`;
-    const category = newLevelCat || CATEGORY_OPTIONS[0]?.value;
-    const newLevel = { id: uid('level'), name, category, categories: [] };
-    onUpdate({ ...bank, levels: [...levels, newLevel] });
-    setNewLevelName('');
-    setNewLevelCat(CATEGORY_OPTIONS[0]?.value || '');
-    setAddingLevel(false);
+    setSaving(true);
+    try {
+      const newLevel = await api.createQbLevel({ bankId: bank.id, name });
+      setLevels(prev => [...prev, newLevel]);
+      setNewLevelName('');
+      setAddingLevel(false);
+      showToast?.('Level added!');
+    } catch (err) {
+      showToast?.(`Failed: ${err.message}`, 'red');
+    } finally { setSaving(false); }
   };
+
+  const handleRenameBank = async (name) => {
+    try {
+      await api.updateQuestionBank(bank.id, { name });
+      onBankRenamed?.(bank.id, name);
+      setRenamingBank(false);
+    } catch (err) { showToast?.(`Failed: ${err.message}`, 'red'); }
+  };
+
+  const totalCats = levels.length; // approximate
+  const pal2 = bankPal(bankIndex);
 
   return (
     <div className="space-y-5">
@@ -1157,69 +954,50 @@ function BankDetail({ bank, bankIndex, onBack, onUpdate, onReload, showToast }) 
           </button>
           {renamingBank ? (
             <div className="max-w-xs">
-              <InlineInput initial={bank.name} placeholder="Bank name" onSave={v=>{onUpdate({...bank,name:v});setRenamingBank(false);}} onCancel={()=>setRenamingBank(false)}/>
+              <InlineInput initial={bank.name} placeholder="Bank name" onSave={handleRenameBank} onCancel={()=>setRenamingBank(false)}/>
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br ${pal.grad}`}>
-                <Database size={14} className="text-white"/>
-              </div>
+              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br ${pal2.grad}`}><Database size={14} className="text-white"/></div>
               <h1 className="text-2xl font-bold text-slate-800" style={{fontFamily:'Space Grotesk'}}>{bank.name}</h1>
               <button onClick={()=>setRenamingBank(true)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"><Edit2 size={14}/></button>
             </div>
           )}
           <p className="text-sm text-slate-400 mt-1 ml-10">
-            <span className="font-semibold text-slate-600">{levels.length}</span> levels ·{' '}
-            <span className="font-semibold text-slate-600">{totalCats}</span> categories ·{' '}
-            <span className={`font-semibold ${pal.text}`}>{totalQs}</span> questions
+            <span className="font-semibold text-slate-600">{levels.length}</span> levels
           </p>
         </div>
         <button onClick={()=>setAddingLevel(true)}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white shadow-sm hover:opacity-90 transition-all bg-gradient-to-r ${pal.grad}`}>
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white shadow-sm hover:opacity-90 transition-all bg-gradient-to-r ${pal2.grad}`}>
           <Plus size={16}/>Add Level
         </button>
       </div>
 
       {addingLevel && (
         <div className="bg-white rounded-2xl border-2 border-indigo-200 p-5 shadow-sm">
-          <p className="text-sm font-bold text-indigo-700 mb-4 flex items-center gap-2"><Layers size={15}/>New Level</p>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1">Level Name</label>
-              <input
-                autoFocus
-                value={newLevelName}
-                onChange={e => setNewLevelName(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') addLevel(); if (e.key === 'Escape') { setAddingLevel(false); setNewLevelName(''); } }}
+          <p className="text-sm font-bold text-indigo-700 mb-3 flex items-center gap-2"><Layers size={15}/>New Level</p>
+          {saving ? (
+            <div className="flex items-center gap-2 py-2 text-sm text-slate-500"><Loader2 size={14} className="animate-spin"/>Creating…</div>
+          ) : (
+            <div className="space-y-3">
+              <input autoFocus value={newLevelName} onChange={e=>setNewLevelName(e.target.value)}
+                onKeyDown={e=>{ if(e.key==='Enter') handleAddLevel(); if(e.key==='Escape'){setAddingLevel(false);setNewLevelName('');} }}
                 placeholder={`e.g. Level ${levels.length + 1}, Advanced…`}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-              />
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
+              <div className="flex items-center gap-2">
+                <button onClick={handleAddLevel} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-blue-600 hover:opacity-90 transition-all">
+                  <Plus size={12}/>Add Level
+                </button>
+                <button onClick={()=>{setAddingLevel(false);setNewLevelName('');}} className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100 transition-all">Cancel</button>
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1">Subject Category</label>
-              <select
-                value={newLevelCat}
-                onChange={e => setNewLevelCat(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
-              >
-                {CATEGORY_OPTIONS.map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center gap-2 pt-1">
-              <button onClick={addLevel} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-blue-600 hover:opacity-90 transition-all">
-                <Plus size={12}/>Add Level
-              </button>
-              <button onClick={() => { setAddingLevel(false); setNewLevelName(''); }} className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100 transition-all">
-                Cancel
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       )}
 
-      {levels.length===0&&!addingLevel ? (
+      {loading ? (
+        <div className="flex items-center justify-center py-16"><Loader2 size={28} className="animate-spin text-indigo-300"/></div>
+      ) : levels.length === 0 && !addingLevel ? (
         <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-200">
           <Layers size={36} className="text-slate-300 mx-auto mb-3"/>
           <p className="font-semibold text-slate-400">No levels yet</p>
@@ -1230,9 +1008,11 @@ function BankDetail({ bank, bankIndex, onBack, onUpdate, onReload, showToast }) 
         </div>
       ) : (
         <div className="space-y-4">
-          {levels.map((level,idx)=>(
-            <LevelSection key={level.id} level={level} index={idx} bankName={bank.name}
-              onUpdate={u=>updateLevel(idx,u)} onDelete={()=>deleteLevel(idx)} onReload={onReload} showToast={showToast}/>
+          {levels.map((level, idx) => (
+            <LevelSection key={level.id} level={level} bankId={bank.id} index={idx}
+              onRenamed={(levelId, name) => setLevels(prev => prev.map(l => l.id === levelId ? { ...l, name } : l))}
+              onDeleted={(levelId) => setLevels(prev => prev.filter(l => l.id !== levelId))}
+              showToast={showToast}/>
           ))}
           {!addingLevel && (
             <button onClick={()=>setAddingLevel(true)}
@@ -1250,17 +1030,21 @@ function BankDetail({ bank, bankIndex, onBack, onUpdate, onReload, showToast }) 
 // Banks Overview
 // ═══════════════════════════════════════════════════════════════════════════
 function BanksOverview({ banks, onSelect, onCreate, onDelete, onRename }) {
-  const [creatingName, setCreatingName]   = useState('');
-  const [showCreate,   setShowCreate]     = useState(false);
-  const [deleteTarget, setDeleteTarget]   = useState(null);
-  const [menuOpen,     setMenuOpen]       = useState(null);
-  const [renamingId,   setRenamingId]     = useState(null);
+  const [creatingName, setCreatingName] = useState('');
+  const [showCreate,   setShowCreate]   = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [menuOpen,     setMenuOpen]     = useState(null);
+  const [renamingId,   setRenamingId]   = useState(null);
+  const [creating,     setCreating]     = useState(false);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const name = creatingName.trim() || `Question Bank ${banks.length + 1}`;
-    onCreate(name);
-    setCreatingName('');
-    setShowCreate(false);
+    setCreating(true);
+    try {
+      await onCreate(name);
+      setCreatingName('');
+      setShowCreate(false);
+    } finally { setCreating(false); }
   };
 
   return (
@@ -1268,299 +1052,160 @@ function BanksOverview({ banks, onSelect, onCreate, onDelete, onRename }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800" style={{fontFamily:'Space Grotesk'}}>Question Banks</h1>
-          <p className="text-sm text-slate-400 mt-0.5">
-            {banks.length} {banks.length===1?'bank':'banks'} ·{' '}
-            {banks.reduce((s,b)=>s+bankStats(b).questions,0)} total questions
-          </p>
+          <p className="text-sm text-slate-400 mt-0.5">{banks.length} {banks.length===1?'bank':'banks'}</p>
         </div>
-        <button onClick={()=>setShowCreate(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white shadow-sm hover:opacity-90 transition-all"
-          style={{background:'linear-gradient(135deg,#6366f1,#8b5cf6)'}}>
-          <Plus size={16}/>New Question Bank
+        <button onClick={()=>setShowCreate(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white shadow-sm hover:opacity-90 transition-all" style={{background:'linear-gradient(135deg,#6366f1,#8b5cf6)'}}>
+          <Plus size={15}/>New Question Bank
         </button>
       </div>
 
-      <Modal isOpen={showCreate} onClose={()=>setShowCreate(false)} title="Create Question Bank" size="sm"
-        footer={<>
-          <button onClick={()=>setShowCreate(false)} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button onClick={handleCreate} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-colors">
-            <Plus size={14}/>Create Bank
-          </button>
-        </>}>
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Bank Name</label>
-            <input autoFocus value={creatingName} onChange={e=>setCreatingName(e.target.value)}
-              onKeyDown={e=>{ if(e.key==='Enter') handleCreate(); if(e.key==='Escape') setShowCreate(false); }}
-              placeholder={`Question Bank ${banks.length+1}`}
-              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
-            <p className="text-xs text-slate-400 mt-1.5">Leave blank to auto-name as "Question Bank {banks.length+1}"</p>
-          </div>
-          {/* <div className="bg-slate-50 rounded-xl p-3 text-xs text-slate-500">
-            Starts with 3 default levels (Level 1, 2, 3). You can add, rename or delete levels after creation.
-          </div> */}
-        </div>
-      </Modal>
-
-      {banks.length === 0 && (
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="w-full max-w-md text-center">
-            <div className="relative mx-auto w-32 h-32 mb-8">
-              <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-indigo-100 to-purple-100 rotate-6"/>
-              <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
-                <Database size={48} className="text-white"/>
-              </div>
+      {showCreate && (
+        <div className="bg-white rounded-2xl border-2 border-indigo-200 p-5 shadow-sm">
+          <p className="text-sm font-bold text-indigo-700 mb-3 flex items-center gap-2"><Database size={15}/>New Question Bank</p>
+          {creating ? (
+            <div className="flex items-center gap-2 py-2 text-sm text-slate-500"><Loader2 size={14} className="animate-spin"/>Creating…</div>
+          ) : (
+            <div className="flex gap-2">
+              <input autoFocus value={creatingName} onChange={e=>setCreatingName(e.target.value)}
+                onKeyDown={e=>{ if(e.key==='Enter') handleCreate(); if(e.key==='Escape'){setShowCreate(false);setCreatingName('');} }}
+                placeholder="e.g. Robotics Bank, Science Quiz…"
+                className="flex-1 px-3 py-2 rounded-xl border border-indigo-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
+              <button onClick={handleCreate} className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-colors">Create</button>
+              <button onClick={()=>{setShowCreate(false);setCreatingName('');}} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
             </div>
-            <h2 className="text-2xl font-bold text-slate-800 mb-2" style={{fontFamily:'Space Grotesk'}}>No Question Banks Yet</h2>
-            <p className="text-slate-500 text-sm leading-relaxed mb-8 max-w-xs mx-auto">
-              Create multiple independent question banks, each with their own levels, categories, and questions.
-            </p>
-            <div className="flex flex-wrap justify-center gap-2 mb-8">
-              {[{icon:Database,label:'Multiple Banks'},{icon:Layers,label:'Level Structure'},{icon:Tag,label:'Categories'},{icon:Upload,label:'Excel Import'}].map(({icon:Icon,label})=>(
-                <div key={label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold"><Icon size={12}/>{label}</div>
-              ))}
-            </div>
-            <button onClick={()=>setShowCreate(true)}
-              className="inline-flex items-center gap-3 px-8 py-4 rounded-2xl text-white font-bold text-base shadow-lg hover:shadow-xl hover:scale-105 transition-all"
-              style={{background:'linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#a855f7 100%)'}}>
-              <div className="w-7 h-7 rounded-xl bg-white/25 flex items-center justify-center"><Plus size={18}/></div>
-              Create First Question Bank
-            </button>
-          </div>
+          )}
         </div>
       )}
 
-      {banks.length > 0 && (
+      {banks.length === 0 && !showCreate ? (
+        <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-200">
+          <Database size={36} className="text-slate-300 mx-auto mb-3"/>
+          <p className="font-semibold text-slate-400">No question banks yet</p>
+          <p className="text-sm text-slate-400 mt-1 mb-4">Create a bank to start adding questions</p>
+          <button onClick={()=>setShowCreate(true)} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white" style={{background:'linear-gradient(135deg,#6366f1,#8b5cf6)'}}>
+            <Plus size={15}/>Create First Bank
+          </button>
+        </div>
+      ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {banks.map((bank, idx) => {
-            const pal   = bankPal(idx);
-            const stats = bankStats(bank);
-            const isRenaming = renamingId === bank.id;
-
+            const pal = bankPal(idx);
             return (
-              <div key={bank.id}
-                className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-md hover:border-slate-200 transition-all group relative"
-                onMouseLeave={()=>{ if(menuOpen===bank.id) setMenuOpen(null); }}>
-
+              <div key={bank.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden group">
                 <div className={`h-2 bg-gradient-to-r ${pal.grad}`}/>
-
                 <div className="p-5">
-                  <div className="flex items-start gap-3 mb-4">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br ${pal.grad}`}>
-                      <Database size={18} className="text-white"/>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      {isRenaming ? (
-                        <InlineInput initial={bank.name} placeholder="Bank name"
-                          onSave={v=>{onRename(bank.id,v);setRenamingId(null);}}
-                          onCancel={()=>setRenamingId(null)}/>
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br ${pal.grad}`}><Database size={15} className="text-white"/></div>
+                      {renamingId === bank.id ? (
+                        <div onClick={e=>e.stopPropagation()} className="flex-1 min-w-0">
+                          <InlineInput initial={bank.name} placeholder="Bank name"
+                            onSave={name=>{onRename(bank.id,name);setRenamingId(null);}}
+                            onCancel={()=>setRenamingId(null)}/>
+                        </div>
                       ) : (
-                        <h3 className="font-bold text-slate-800 text-sm leading-tight truncate" style={{fontFamily:'Space Grotesk'}}>{bank.name}</h3>
+                        <h3 className="font-bold text-slate-800 truncate" style={{fontFamily:'Space Grotesk'}}>{bank.name}</h3>
                       )}
-                      <div className="flex items-center gap-1.5 mt-1 text-[10px] text-slate-400">
-                        <Calendar size={10}/>
-                        <span>Created {fmtDate(bank.createdAt)}</span>
-                      </div>
                     </div>
-                    {!isRenaming && (
-                      <div className="relative shrink-0">
-                        <button onClick={e=>{e.stopPropagation();setMenuOpen(menuOpen===bank.id?null:bank.id);}}
-                          className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
-                          <MoreVertical size={15}/>
-                        </button>
-                        {menuOpen===bank.id && (
-                          <div className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-slate-100 py-1 z-20 w-40">
-                            <button onClick={()=>{setMenuOpen(null);setRenamingId(bank.id);}}
-                              className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
-                              <Edit2 size={12}/>Rename
-                            </button>
-                            <button onClick={()=>{setMenuOpen(null);setDeleteTarget(bank);}}
-                              className="w-full flex items-center gap-2.5 px-4 py-2 text-xs font-semibold text-red-500 hover:bg-red-50 transition-colors">
-                              <Trash2 size={12}/>Delete Bank
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    <div className="relative shrink-0">
+                      <button onClick={e=>{e.stopPropagation();setMenuOpen(menuOpen===bank.id?null:bank.id);}} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"><MoreVertical size={14}/></button>
+                      {menuOpen===bank.id && (
+                        <div className="absolute right-0 top-8 bg-white rounded-xl shadow-lg border border-slate-100 z-20 min-w-[130px] overflow-hidden" onClick={e=>e.stopPropagation()}>
+                          <button onClick={()=>{setRenamingId(bank.id);setMenuOpen(null);}} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+                            <Edit2 size={12}/>Rename
+                          </button>
+                          <button onClick={()=>{setDeleteTarget(bank);setMenuOpen(null);}} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-red-500 hover:bg-red-50">
+                            <Trash2 size={12}/>Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-
-                  <div className="grid grid-cols-3 gap-2 mb-4">
-                    {[
-                      { label:'Levels',     value:stats.levels,     pal },
-                      { label:'Categories', value:stats.categories, pal },
-                      { label:'Questions',  value:stats.questions,  pal },
-                    ].map(s=>(
-                      <div key={s.label} className={`${pal.soft} rounded-xl p-2.5 text-center`}>
-                        <p className={`text-lg font-bold ${pal.text}`} style={{fontFamily:'Space Grotesk'}}>{s.value}</p>
-                        <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide mt-0.5">{s.label}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <button onClick={()=>onSelect(bank.id)}
-                    className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 bg-gradient-to-r ${pal.grad}`}>
+                  {bank.createdAt && (
+                    <p className="text-[10px] text-slate-400 flex items-center gap-1 mb-4">
+                      <Calendar size={10}/> Created {fmtDate(bank.createdAt)}
+                    </p>
+                  )}
+                  <button onClick={()=>onSelect(bank,idx)} className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white bg-gradient-to-r ${pal.grad} hover:opacity-90 transition-all`}>
                     <BookOpen size={14}/>Open Bank
-                    <ChevronRight size={14}/>
                   </button>
                 </div>
               </div>
             );
           })}
-
-          <button onClick={()=>setShowCreate(true)}
-            className="bg-white rounded-2xl border-2 border-dashed border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/20 transition-all p-5 flex flex-col items-center justify-center gap-3 min-h-[200px] group">
-            <div className="w-12 h-12 rounded-2xl bg-slate-100 group-hover:bg-indigo-100 flex items-center justify-center transition-colors">
-              <Plus size={22} className="text-slate-400 group-hover:text-indigo-600 transition-colors"/>
-            </div>
-            <div className="text-center">
-              <p className="text-sm font-bold text-slate-500 group-hover:text-indigo-700 transition-colors">New Question Bank</p>
-              <p className="text-xs text-slate-400 mt-0.5">Create another independent bank</p>
-            </div>
-          </button>
         </div>
       )}
 
-      <DeleteModal
-        isOpen={!!deleteTarget}
-        onClose={()=>setDeleteTarget(null)}
+      {menuOpen && <div className="fixed inset-0 z-10" onClick={()=>setMenuOpen(null)}/>}
+      <DeleteModal isOpen={!!deleteTarget} onClose={()=>setDeleteTarget(null)}
         onConfirm={()=>{ onDelete(deleteTarget.id); setDeleteTarget(null); }}
         title={`Delete "${deleteTarget?.name}"?`}
-        message={`This will permanently delete "${deleteTarget?.name}" along with all its levels, categories, and ${bankStats(deleteTarget||{}).questions} questions.`}
-      />
+        message="All levels, categories, and questions in this bank will be permanently deleted."/>
     </div>
   );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Root Component
+// Main
 // ═══════════════════════════════════════════════════════════════════════════
 export default function QuestionBankAdmin() {
-  const [storage, setStorage]         = useState(() => loadStorage());
-  const [selectedBankId, setSelectedBankId] = useState(null);
-  const [toast, setToast]             = useState('');
+  const [banks,        setBanks]       = useState([]);
+  const [loading,      setLoading]     = useState(true);
+  const [selectedBank, setSelectedBank]= useState(null);
+  const [selectedIdx,  setSelectedIdx] = useState(0);
+  const [toast,        setToast]       = useState('');
 
-  // Load question bank from API on mount — always start at the BanksOverview,
-  // never auto-select a bank so the user is not dropped mid-hierarchy.
+  const showToast = useCallback((msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); }, []);
+
   useEffect(() => {
-    loadStorageFromAPI().then(data => {
-      setStorage(data);
-      persist(data);
-    }).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    api.getQuestionBanks()
+      .then(data => setBanks(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
-  const showToast = (msg, color='green') => { setToast({msg,color}); setTimeout(()=>setToast(''),2500); };
+  const handleCreateBank = async (name) => {
+    const bank = await api.createQuestionBank({ name });
+    setBanks(prev => [...prev, bank]);
+    showToast('Question Bank created!');
+  };
 
-  // Sync localStorage to DB state after a delete so the next page refresh sees
-  // correct data. Must NOT call setStorage — React state is already updated by
-  // onDelete/update, and overwriting it with fromFlat() output can produce an
-  // empty banks array that navigates the user to "No Question Banks Yet".
-  const reloadFromAPI = useCallback(() => {
-    return loadStorageFromAPI().then(data => {
-      persist(data);
-    }).catch(() => {});
-  }, []);
+  const handleDeleteBank = async (id) => {
+    await api.deleteQuestionBank(id);
+    setBanks(prev => prev.filter(b => b.id !== id));
+    if (selectedBank?.id === id) setSelectedBank(null);
+    showToast('Bank deleted.');
+  };
 
-  const mutate = useCallback((updater) => {
-    setStorage(prev => {
-      const next = updater(prev);
-      persist(next);
-      return next;
-    });
-  }, []);
+  const handleRenameBank = async (id, name) => {
+    await api.updateQuestionBank(id, { name });
+    setBanks(prev => prev.map(b => b.id === id ? { ...b, name } : b));
+    if (selectedBank?.id === id) setSelectedBank(s => ({ ...s, name }));
+  };
 
-  const createBank = useCallback(async (name) => {
-    try {
-      // Persist to DB — this gives us a stable DB-assigned ID
-      const created = await api.createQuestionBank({ name });
-      const bank = {
-        id:        created.id,
-        name:      created.name || name,
-        createdAt: created.createdAt || Date.now(),
-        levels:    [],
-      };
-      mutate(prev => ({ ...prev, banks: [...prev.banks, bank] }));
-      setSelectedBankId(bank.id);
-      showToast(`"${name}" created!`);
-    } catch (err) {
-      console.error('[QuestionBank] createBank failed:', err.message);
-      showToast('Failed to create bank — check connection', 'red');
-    }
-  }, [mutate]);
-
-  const deleteBank = useCallback(async (id) => {
-    // Remove from DB — only remove from state on success
-    try {
-      // Only call API delete if id is a real DB integer (not a temp uid string)
-      if (typeof id === 'number' || /^\d+$/.test(String(id))) {
-        await api.deleteQuestionBank(id);
-      }
-    } catch (err) {
-      console.warn('[QuestionBank] deleteBank API failed (continuing):', err.message);
-    }
-    mutate(prev => ({ ...prev, banks: prev.banks.filter(b=>b.id!==id) }));
-    setSelectedBankId(curr => curr===id ? null : curr);
-    showToast('Question bank deleted.','red');
-  }, [mutate]);
-
-  const renameBank = useCallback(async (id, name) => {
-    mutate(prev => ({ ...prev, banks: prev.banks.map(b=>b.id===id?{...b,name}:b) }));
-    try {
-      if (typeof id === 'number' || /^\d+$/.test(String(id))) {
-        await api.updateQuestionBank(id, { name });
-      }
-    } catch (err) {
-      console.warn('[QuestionBank] renameBank API failed:', err.message);
-    }
-  }, [mutate]);
-
-  const updateBank = useCallback((updated) => {
-    mutate(prev => ({ ...prev, banks: prev.banks.map(b=>b.id===updated.id?updated:b) }));
-    // Persist structure to DB so levels/categories survive refresh
-    if (typeof updated.id === 'number' || /^\d+$/.test(String(updated.id))) {
-      const structure = {
-        levels: (updated.levels || []).map(l => ({
-          id: l.id, name: l.name, category: l.category,
-          categories: (l.categories || []).map(c => ({ id: c.id, name: c.name })),
-        })),
-      };
-      api.updateQuestionBank(updated.id, { structure }).catch(err =>
-        console.warn('[QuestionBank] updateBank structure persist failed:', err.message)
-      );
-    }
-  }, [mutate]);
-
-  const selectedBank      = storage.banks.find(b=>b.id===selectedBankId);
-  const selectedBankIndex = storage.banks.findIndex(b=>b.id===selectedBankId);
+  if (loading) return (
+    <div className="min-h-full flex items-center justify-center">
+      <Loader2 size={28} className="animate-spin text-indigo-400"/>
+    </div>
+  );
 
   return (
-    <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6">
-
-      {toast && (
-        <div className={`fixed top-5 right-5 z-[9999] flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold shadow-xl border ${
-          toast.color==='red'?'bg-red-50 border-red-200 text-red-700':'bg-green-50 border-green-200 text-green-800'
-        }`}>
-          <CheckCircle size={15}/>{toast.msg}
-        </div>
-      )}
-
+    <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-5">
+      {toast && <Toast msg={toast}/>}
       {selectedBank ? (
         <BankDetail
           bank={selectedBank}
-          bankIndex={selectedBankIndex}
-          onBack={()=>setSelectedBankId(null)}
-          onUpdate={updateBank}
-          onReload={reloadFromAPI}
-          showToast={showToast}
-        />
+          bankIndex={selectedIdx}
+          onBack={() => setSelectedBank(null)}
+          onBankRenamed={handleRenameBank}
+          showToast={showToast}/>
       ) : (
         <BanksOverview
-          banks={storage.banks}
-          onSelect={setSelectedBankId}
-          onCreate={createBank}
-          onDelete={deleteBank}
-          onRename={renameBank}
-        />
+          banks={banks}
+          onCreate={handleCreateBank}
+          onDelete={handleDeleteBank}
+          onRename={handleRenameBank}
+          onSelect={(bank, idx) => { setSelectedBank(bank); setSelectedIdx(idx); }}/>
       )}
     </div>
   );

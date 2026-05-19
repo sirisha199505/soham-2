@@ -140,11 +140,26 @@ export const api = {
   // Monitoring
   getMonitoringSessions: () => request('GET', '/api/monitoring/sessions'),
 
-  // Question Banks (persistent bank registry)
+  // Question Banks
   getQuestionBanks: () => request('GET', '/api/question-banks'),
   createQuestionBank: (data) => request('POST', '/api/question-banks', data),
   updateQuestionBank: (id, data) => request('PUT', `/api/question-banks/${id}`, data),
   deleteQuestionBank: (id) => request('DELETE', `/api/question-banks/${id}`),
+
+  // QB Levels (relational — belong to a question bank)
+  getQbLevels:   (bankId) => request('GET', `/api/qb-levels?bankId=${bankId}`),
+  createQbLevel: (data)   => request('POST', '/api/qb-levels', data),
+  updateQbLevel: (id, data) => request('PUT', `/api/qb-levels/${id}`, data),
+  deleteQbLevel: (id)     => request('DELETE', `/api/qb-levels/${id}`),
+
+  // QB Categories (relational — belong to a qb_level)
+  getQbCategories:   (levelId) => request('GET', `/api/qb-categories?levelId=${levelId}`),
+  createQbCategory:  (data)    => request('POST', '/api/qb-categories', data),
+  updateQbCategory:  (id, data) => request('PUT', `/api/qb-categories/${id}`, data),
+  deleteQbCategory:  (id)      => request('DELETE', `/api/qb-categories/${id}`),
+
+  // Questions by QB category
+  getQuestionsByCategory: (categoryId) => request('GET', `/api/questions?categoryId=${categoryId}`),
 
   // Exam Level CRUD (add / delete levels)
   createLevel: (data) => request('POST', '/api/levels', data),

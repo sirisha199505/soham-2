@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
   FileText, Plus, Edit2, Trash2, X, Save, CheckCircle,
   BookOpen, ChevronDown, ChevronUp, Info, Upload, Eye, Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
@@ -177,8 +178,93 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
   );
 }
 
+/* ── Add Level Modal ── */
+function AddLevelModal({ onSave, onClose, saving }) {
+  const [title, setTitle] = useState('');
+  const [timeLimit, setTimeLimit] = useState(10);
+  const canSave = title.trim().length > 0 && !saving;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Add New Level</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={16} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Level Title <span className="text-red-400">*</span></label>
+            <input
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && canSave && onSave({ title: title.trim(), timeLimit })}
+              placeholder="e.g. Advanced Robotics"
+              autoFocus
+              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Time Limit (minutes)</label>
+            <input
+              type="number"
+              min={1}
+              max={180}
+              value={timeLimit}
+              onChange={e => setTimeLimit(Number(e.target.value))}
+              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+            />
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button
+            onClick={() => canSave && onSave({ title: title.trim(), timeLimit })}
+            disabled={!canSave}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+            Add Level
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Delete Level Confirm Modal ── */
+function DeleteLevelModal({ levelTitle, pageCount, onConfirm, onClose, saving }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="p-6 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center mx-auto">
+            <AlertTriangle size={22} className="text-red-500" />
+          </div>
+          <h3 className="font-bold text-slate-800 text-lg" style={{ fontFamily: 'Space Grotesk' }}>Delete Level?</h3>
+          <p className="text-sm text-slate-500">
+            This will permanently delete <span className="font-semibold text-slate-700">"{levelTitle}"</span>
+            {pageCount > 0 && <> and its <span className="font-semibold text-slate-700">{pageCount} content page{pageCount !== 1 ? 's' : ''}</span></>}.
+            This action cannot be undone.
+          </p>
+        </div>
+        <div className="px-6 pb-6 flex gap-3">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button
+            onClick={onConfirm}
+            disabled={saving}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 disabled:opacity-50 transition-colors">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Level Section ── */
-function LevelSection({ levelId, levelTitle, levelOrder, pages, onEdit, onDelete, onAdd }) {
+function LevelSection({ levelId, levelTitle, levelOrder, pages, onEdit, onDelete, onAdd, onDeleteLevel }) {
   const [expanded, setExpanded] = useState(levelOrder === 1);
   const colors = levelColors(levelOrder);
 
@@ -202,6 +288,11 @@ function LevelSection({ levelId, levelTitle, levelOrder, pages, onEdit, onDelete
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white"
             style={{ background: `linear-gradient(135deg, ${colors.from}, ${colors.to})` }}>
             <Plus size={12} /> Add Page
+          </button>
+          <button onClick={() => onDeleteLevel(levelId, levelTitle, pages.length)}
+            className="p-2 rounded-xl hover:bg-red-50 text-slate-300 hover:text-red-500 transition-colors"
+            title="Delete level">
+            <Trash2 size={15} />
           </button>
           <button onClick={() => setExpanded(p => !p)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors">
             {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -250,11 +341,12 @@ function LevelSection({ levelId, levelTitle, levelOrder, pages, onEdit, onDelete
 /* ── MAIN ── */
 export default function ContentManagement() {
   const { user } = useAuth();
-  const { levelSettings } = useLevel();
+  const { levelSettings, createLevel, deleteLevel } = useLevel();
   const [content, setContent] = useState({});
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(''), 2500); };
 
@@ -308,6 +400,35 @@ export default function ContentManagement() {
     if (saved) showToast('Page deleted');
   };
 
+  const handleAddLevel = async (data) => {
+    setSaving(true);
+    try {
+      const newLevel = await createLevel(data);
+      setContent(prev => ({ ...prev, [newLevel.id]: [] }));
+      setModal(null);
+      showToast(`Level "${newLevel.title}" added`);
+    } catch (err) {
+      showToast(err.message || 'Failed to add level');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteLevel = async () => {
+    if (!modal?.levelId) return;
+    setSaving(true);
+    try {
+      await deleteLevel(modal.levelId);
+      setContent(prev => { const next = { ...prev }; delete next[modal.levelId]; return next; });
+      setModal(null);
+      showToast('Level deleted');
+    } catch (err) {
+      showToast(err.message || 'Failed to delete level');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) return (
     <div className="min-h-full flex items-center justify-center">
       <Loader2 size={28} className="animate-spin text-indigo-400" />
@@ -324,9 +445,16 @@ export default function ContentManagement() {
       )}
 
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Content Management</h1>
-        <p className="text-sm text-slate-400 mt-0.5">Manage study material for each exam level</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Content Management</h1>
+          <p className="text-sm text-slate-400 mt-0.5">Manage study material for each exam level</p>
+        </div>
+        <button
+          onClick={() => setModal({ type: 'addLevel' })}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-sm">
+          <Plus size={15} /> Add Level
+        </button>
       </div>
 
       {/* Info banner */}
@@ -349,19 +477,33 @@ export default function ContentManagement() {
             onAdd={levelId => setModal({ type: 'add', levelId })}
             onEdit={(levelId, page, pageIdx) => setModal({ type: 'edit', levelId, page, pageIdx })}
             onDelete={handleDelete}
+            onDeleteLevel={(levelId, levelTitle, pageCount) =>
+              setModal({ type: 'deleteLevel', levelId, levelTitle, pageCount })}
           />
         ))}
         {sortedLevels.length === 0 && (
           <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-200">
             <BookOpen size={32} className="text-slate-200 mx-auto mb-3" />
             <p className="text-sm font-semibold text-slate-400">No levels configured yet</p>
-            <p className="text-xs text-slate-300 mt-1">Add levels in Exam Level Management first</p>
+            <p className="text-xs text-slate-300 mt-1">Click "Add Level" above to create your first level</p>
           </div>
         )}
       </div>
 
       {modal?.type === 'add'  && <PageModal levelId={modal.levelId} page={null}       pageIdx={null}           onSave={handleSave} onClose={() => setModal(null)} />}
       {modal?.type === 'edit' && <PageModal levelId={modal.levelId} page={modal.page} pageIdx={modal.pageIdx}   onSave={handleSave} onClose={() => setModal(null)} />}
+      {modal?.type === 'addLevel' && (
+        <AddLevelModal saving={saving} onSave={handleAddLevel} onClose={() => setModal(null)} />
+      )}
+      {modal?.type === 'deleteLevel' && (
+        <DeleteLevelModal
+          levelTitle={modal.levelTitle}
+          pageCount={modal.pageCount}
+          saving={saving}
+          onConfirm={handleDeleteLevel}
+          onClose={() => setModal(null)}
+        />
+      )}
     </div>
   );
 }
