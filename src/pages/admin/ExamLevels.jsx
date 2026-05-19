@@ -280,14 +280,34 @@ export default function ExamLevels() {
 
   useEffect(() => {
     if (!user?.id) return;
-    loadQuestionBank().then(bank => {
+    Promise.all([
+      loadQuestionBank(),
+      api.getQuestionBanks().catch(() => []),
+    ]).then(([bank, apiBanks]) => {
       const allQs = Object.values(bank).flat();
       const total  = allQs.length;
-      const perCat = Object.entries(CATEGORY_META).map(([cat, meta]) => ({
-        label: meta.label,
-        color: meta.color,
-        count: (bank[cat] || []).length,
-      }));
+
+      // Subjects used as level.category in any bank structure
+      const fromStructure = new Set();
+      (Array.isArray(apiBanks) ? apiBanks : []).forEach(ab => {
+        (ab.structure?.levels || []).forEach(l => { if (l.category) fromStructure.add(l.category); });
+      });
+
+      // Subjects that actually have questions
+      Object.entries(bank).forEach(([cat, qs]) => { if (qs.length > 0) fromStructure.add(cat); });
+
+      // If nothing configured yet, fall back to showing all known categories
+      const catsToShow = fromStructure.size > 0 ? [...fromStructure] : Object.keys(CATEGORY_META);
+
+      const perCat = catsToShow
+        .filter(cat => CATEGORY_META[cat])
+        .map(cat => ({
+          key:   cat,
+          label: CATEGORY_META[cat].label,
+          color: CATEGORY_META[cat].color,
+          count: (bank[cat] || []).length,
+        }));
+
       setBankStats({ total, perCat });
     }).catch(() => {});
 
@@ -371,23 +391,29 @@ export default function ExamLevels() {
         </button>
       </div>
 
-      {/* Question Bank Summary */}
+      {/* Question Bank Pool — syncs with subjects configured in Question Bank */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
         <div className="flex items-center gap-2 mb-4">
           <Layers size={16} className="text-indigo-500" />
           <h2 className="font-bold text-slate-800 text-sm" style={{ fontFamily: 'Space Grotesk' }}>Question Bank Pool</h2>
-          <span className="ml-auto text-xs text-slate-400">{bankStats.total} active questions total</span>
+          <span className="ml-auto text-xs text-slate-400">{bankStats.total} questions total</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {bankStats.perCat.map(cat => (
-            <div key={cat.label} className="rounded-xl px-3 py-2.5 border"
-              style={{ background: `${cat.color}08`, borderColor: `${cat.color}25` }}>
-              <p className="text-xs font-semibold" style={{ color: cat.color }}>{cat.label}</p>
-              <p className="text-lg font-bold text-slate-800 mt-0.5" style={{ fontFamily: 'Space Grotesk' }}>{cat.count}</p>
-              <p className="text-[10px] text-slate-400">questions</p>
-            </div>
-          ))}
-        </div>
+        {bankStats.perCat.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-4">
+            No subjects configured yet — add levels with subjects in the Question Bank to see them here.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {bankStats.perCat.map(cat => (
+              <div key={cat.key} className="rounded-xl px-3 py-2.5 border"
+                style={{ background: `${cat.color}08`, borderColor: `${cat.color}25` }}>
+                <p className="text-xs font-semibold" style={{ color: cat.color }}>{cat.label}</p>
+                <p className="text-lg font-bold text-slate-800 mt-0.5" style={{ fontFamily: 'Space Grotesk' }}>{cat.count}</p>
+                <p className="text-[10px] text-slate-400">questions</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Level cards */}
