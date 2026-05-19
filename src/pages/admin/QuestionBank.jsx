@@ -15,6 +15,28 @@ import { useToast } from '../../context/ToastContext';
 import { useTheme } from '../../context/ThemeContext';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+const IMPORT_SCHEMA = [
+  { col: 'question_text',  req: true,  values: 'Any text' },
+  { col: 'type',           req: true,  values: 'mcq | true_false | multi_select' },
+  { col: 'option_a',       req: true,  values: 'Text (leave blank for true_false)' },
+  { col: 'option_b',       req: true,  values: 'Text (leave blank for true_false)' },
+  { col: 'option_c',       req: false, values: 'Text' },
+  { col: 'option_d',       req: false, values: 'Text' },
+  { col: 'correct_answer', req: true,  values: 'MCQ → A/B/C/D  ·  Multi → A,C  ·  T/F → A or B' },
+  { col: 'difficulty',     req: true,  values: 'easy | medium | hard' },
+  { col: 'topic',          req: true,  values: 'Sensors & Actuators | Programming Logic | …' },
+  { col: 'marks',          req: true,  values: 'Integer 1 – 10' },
+  { col: 'explanation',    req: false, values: 'Any text' },
+  { col: 'bank_name',      req: false, values: 'Any text (default: Question Bank)' },
+];
+
+const CSV_TEMPLATE = [
+  'question_text,type,option_a,option_b,option_c,option_d,correct_answer,difficulty,topic,marks,explanation,bank_name',
+  '"What is a servo motor?",mcq,"A DC motor with feedback control","A stepper motor","A linear actuator","An AC induction motor",A,easy,Sensors & Actuators,2,"Servo motors use encoders for closed-loop position control.",Question Bank',
+  '"A robot arm uses inverse kinematics to find joint angles.",true_false,True,False,,,A,medium,Kinematics,1,"IK maps end-effector pose back to joint angles.",Question Bank',
+  '"Which of the following are common robot sensors?",multi_select,Lidar,Paintbrush,Camera,Hammer,"A,C",easy,Sensors & Actuators,3,"Lidar and cameras are standard perception sensors.",Question Bank',
+].join('\n');
+
 const TYPES = [
   { value: 'mcq',          label: 'MCQ',          sub: '4 options · 1 correct',    color: 'bg-blue-100 text-blue-700' },
   { value: 'true_false',   label: 'True / False', sub: '2 options · 1 correct',    color: 'bg-purple-100 text-purple-700' },
@@ -51,6 +73,14 @@ export default function QuestionBank() {
       explanation: '',
     }))
   );
+
+  const downloadTemplate = () => {
+    const blob = new Blob([CSV_TEMPLATE], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), { href: url, download: 'question_bank_template.csv' });
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const [search,       setSearch]       = useState('');
   const [topicFilter,  setTopicFilter]  = useState('all');
@@ -477,7 +507,7 @@ export default function QuestionBank() {
 
       {/* ── Bulk Upload modal ── */}
       <Modal isOpen={showBulkUpload} onClose={() => setShowBulkUpload(false)}
-        title="Bulk Upload Questions" size="md"
+        title="Bulk Upload Questions" size="lg"
         footer={
           <>
             <Button variant="secondary" onClick={() => setShowBulkUpload(false)}>Cancel</Button>
@@ -487,35 +517,52 @@ export default function QuestionBank() {
           </>
         }>
         <div className="space-y-4">
-          {/* CSV format reference */}
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <p className="text-sm font-semibold text-slate-700 mb-1">Required CSV/Excel Format</p>
-            <p className="text-xs text-slate-500 mb-3">Your file must include these columns in order:</p>
-            <div className="flex flex-wrap gap-1.5">
-              {['question_text', 'type', 'option_a', 'option_b', 'option_c', 'option_d', 'correct', 'topic', 'difficulty', 'marks', 'explanation'].map(h => (
-                <span key={h} className="text-[11px] font-mono bg-white border border-slate-200 text-slate-600 px-2 py-0.5 rounded">{h}</span>
-              ))}
+
+          {/* Schema table */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold text-slate-700">CSV Column Reference</p>
+              <button onClick={downloadTemplate}
+                className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors">
+                <Download size={13} /> Download Template
+              </button>
             </div>
-            <div className="mt-3 p-2 bg-white rounded-lg border border-slate-200">
-              <p className="text-[10px] font-semibold text-slate-500 mb-1">Type values:</p>
-              <p className="text-[10px] text-slate-400 font-mono">mcq · true_false · multi_select</p>
-              <p className="text-[10px] font-semibold text-slate-500 mb-1 mt-1.5">Correct column:</p>
-              <p className="text-[10px] text-slate-400 font-mono">MCQ/TF: A, B, C, or D · Multi-select: A,C</p>
+            <div className="rounded-xl border border-slate-200 overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="text-left px-3 py-2 font-semibold text-slate-500 w-36">Column</th>
+                    <th className="text-left px-3 py-2 font-semibold text-slate-500 w-16">Required</th>
+                    <th className="text-left px-3 py-2 font-semibold text-slate-500">Accepted Values</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {IMPORT_SCHEMA.map(row => (
+                    <tr key={row.col} className="bg-white hover:bg-slate-50 transition-colors">
+                      <td className="px-3 py-2 font-mono font-medium text-slate-700">{row.col}</td>
+                      <td className="px-3 py-2">
+                        {row.req
+                          ? <span className="text-[10px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">Yes</span>
+                          : <span className="text-[10px] text-slate-400">—</span>}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-slate-400">{row.values}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
 
-          <button className="flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors">
-            <Download size={14} /> Download CSV Template
-          </button>
-
+          {/* Drop zone */}
           <label className="block">
             <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-indigo-300 hover:bg-indigo-50/30 transition-all cursor-pointer group">
-              <Upload size={30} className="mx-auto mb-2 text-slate-300 group-hover:text-indigo-400 transition-colors" />
-              <p className="text-sm font-semibold text-slate-600 group-hover:text-indigo-700">Drop your CSV or Excel file here</p>
-              <p className="text-xs text-slate-400 mt-1">Supports .csv and .xlsx · Max 500 questions</p>
+              <Upload size={28} className="mx-auto mb-2 text-slate-300 group-hover:text-indigo-400 transition-colors" />
+              <p className="text-sm font-semibold text-slate-600 group-hover:text-indigo-700">Drop your CSV file here, or click to browse</p>
+              <p className="text-xs text-slate-400 mt-1">Supports .csv · Max 500 questions per file</p>
             </div>
-            <input type="file" accept=".csv,.xlsx" className="hidden" />
+            <input type="file" accept=".csv" className="hidden" />
           </label>
+
         </div>
       </Modal>
     </div>
