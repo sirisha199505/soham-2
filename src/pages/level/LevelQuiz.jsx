@@ -222,10 +222,24 @@ export default function LevelQuiz() {
   const id           = Number(levelId);
   const navigate     = useNavigate();
   const { user }     = useAuth();
-  const { getLevelStatus, markLevelComplete, levelSettings, refreshLevelSettings } = useLevel();
+  const { getLevelStatus, markLevelComplete, levelSettings, levelSettingsLoaded, refreshLevelSettings } = useLevel();
   const { colors }   = useTheme();
 
-  const level  = LEVELS.find(l => l.id === id);
+  const QUIZ_FALLBACK_COLORS = [
+    { from: '#f59e0b', to: '#d97706' },
+    { from: '#ec4899', to: '#db2777' },
+    { from: '#14b8a6', to: '#0d9488' },
+    { from: '#6366f1', to: '#4f46e5' },
+  ];
+  const staticLevel = LEVELS.find(l => l.id === id);
+  const dbLevel     = levelSettings[id];
+  const level       = staticLevel ?? (dbLevel ? {
+    id,
+    title:    dbLevel.title    || `Level ${id}`,
+    subtitle: dbLevel.subtitle || '',
+    color:    QUIZ_FALLBACK_COLORS[(id - 1) % QUIZ_FALLBACK_COLORS.length],
+  } : null);
+
   const status = getLevelStatus(user?.uniqueId, id);
 
   // Redirect if locked or already completed (but not after submitting in this session)
@@ -443,7 +457,20 @@ export default function LevelQuiz() {
     );
   }
 
-  if (!level) return null;
+  if (!level) {
+    if (!levelSettingsLoaded) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-10 text-center">
+            <div className="w-10 h-10 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin mx-auto mb-4" />
+            <p className="text-slate-500 text-sm">Loading…</p>
+          </div>
+        </div>
+      );
+    }
+    navigate('/dashboard', { replace: true });
+    return null;
+  }
 
   /* ── Rules & Regulations screen (shown before exam starts) ──────── */
   if (!quizStarted && !result) {
@@ -610,15 +637,6 @@ export default function LevelQuiz() {
               </div>
             ))}
           </div>
-
-          {/* Next level unlocked */}
-          {id < 3 && (
-            <div className="bg-white rounded-xl p-3.5 flex items-center gap-3 border shadow-sm"
-              style={{ borderColor: `${level.color.from}30` }}>
-              <CheckCircle size={18} style={{ color: level.color.from }} className="shrink-0" />
-              <p className="text-sm font-semibold text-slate-700">Level {id + 1} is now unlocked!</p>
-            </div>
-          )}
 
           {/* Action buttons */}
           <div className="flex gap-3">

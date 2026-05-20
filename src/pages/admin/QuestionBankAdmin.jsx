@@ -10,6 +10,7 @@ import {
 import Modal from '../../components/ui/Modal';
 import { api } from '../../utils/api';
 import { CATEGORIES, CATEGORY_META } from '../../utils/questionBank';
+import { useLevel } from '../../context/LevelContext';
 
 // ─── Category name → DB category key ─────────────────────────────────────
 const NAME_TO_CAT = Object.fromEntries(
@@ -561,7 +562,7 @@ function QuestionRow({ q, index, onEdit, onDelete }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Category Section — loads questions from API by cat.id
 // ═══════════════════════════════════════════════════════════════════════════
-function CategorySection({ cat, levelId, levelName, bankId, pal, onRenamed, onDeleted, showToast }) {
+function CategorySection({ cat, levelId, levelName, bankId, examLevelId, pal, onRenamed, onDeleted, showToast }) {
   const [questions,  setQuestions]  = useState([]);
   const [loaded,     setLoaded]     = useState(false);
   const [loading,    setLoading]    = useState(false);
@@ -592,6 +593,7 @@ function CategorySection({ cat, levelId, levelName, bankId, pal, onRenamed, onDe
         explanation:   q.explanation || '',
         qbCategoryId:  cat.id,
         qbLevelId:     levelId,
+        levelId:       examLevelId || undefined,
         category:      getCatFromName(cat.name),
         bankName:      'Question Bank',
         status:        'active',
@@ -726,6 +728,11 @@ function CategorySection({ cat, levelId, levelName, bankId, pal, onRenamed, onDe
 // ═══════════════════════════════════════════════════════════════════════════
 function LevelSection({ level, bankId, index, onRenamed, onDeleted, showToast }) {
   const pal = levelPal(index);
+  const { levelSettings, levelSettingsLoaded } = useLevel();
+  const examLevels = levelSettingsLoaded
+    ? Object.values(levelSettings).sort((a, b) => (a.order || a.id) - (b.order || b.id))
+    : [];
+  const [mappedExamLevelId, setMappedExamLevelId] = useState('');
   const [categories,  setCategories]  = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [collapsed,   setCollapsed]   = useState(false);
@@ -795,6 +802,7 @@ function LevelSection({ level, bankId, index, onRenamed, onDeleted, showToast })
           correctAnswer: q.correct, difficulty: q.difficulty,
           imageUrl: q.imageUrl || '', explanation: q.explanation || '',
           qbCategoryId: targetCatId, qbLevelId: level.id,
+          levelId: mappedExamLevelId ? Number(mappedExamLevelId) : undefined,
           category: getCatFromName(targetCatName),
           bankName: 'Question Bank', status: 'active',
         });
@@ -823,6 +831,21 @@ function LevelSection({ level, bankId, index, onRenamed, onDeleted, showToast })
                 <span className="text-white/70 text-xs font-semibold">
                   {loading ? '…' : `${categories.length} ${categories.length===1?'category':'categories'}`}
                 </span>
+                {examLevels.length > 0 && (
+                  <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                    <span className="text-white/60 text-xs">→ Exam:</span>
+                    <select
+                      value={mappedExamLevelId}
+                      onChange={e => setMappedExamLevelId(e.target.value)}
+                      className="text-xs font-semibold bg-white/20 text-white border border-white/30 rounded-lg px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-white/50"
+                    >
+                      <option value="">Not mapped</option>
+                      {examLevels.map(l => (
+                        <option key={l.id} value={l.id}>{l.title || `Level ${l.id}`}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -872,6 +895,7 @@ function LevelSection({ level, bankId, index, onRenamed, onDeleted, showToast })
               <CategorySection
                 key={cat.id} cat={cat}
                 levelId={level.id} levelName={level.name} bankId={bankId}
+                examLevelId={mappedExamLevelId ? Number(mappedExamLevelId) : undefined}
                 pal={pal}
                 onRenamed={(catId, name) => setCategories(prev => prev.map(c => c.id === catId ? { ...c, name } : c))}
                 onDeleted={(catId) => setCategories(prev => prev.filter(c => c.id !== catId))}
