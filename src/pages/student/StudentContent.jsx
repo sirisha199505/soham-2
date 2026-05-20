@@ -5,33 +5,72 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useLevel } from '../../context/LevelContext';
 import { LEVELS } from '../../utils/levelData';
 import { api } from '../../utils/api';
 import { downloadLevelContentAsPDF } from '../../utils/pdfExport';
 
+const FALLBACK_COLORS = [
+  { from: '#3BC0EF', to: '#1E3A8A' },
+  { from: '#8B5CF6', to: '#6d28d9' },
+  { from: '#10B981', to: '#047857' },
+  { from: '#F59E0B', to: '#D97706' },
+  { from: '#EF4444', to: '#B91C1C' },
+  { from: '#EC4899', to: '#BE185D' },
+];
+
 export default function StudentContent() {
   const { user }   = useAuth();
   const { colors } = useTheme();
+  const { levelSettings, levelSettingsLoaded } = useLevel();
 
-  const [allContent,    setAllContent]    = useState({ 1: [], 2: [], 3: [] });
+  // Build sorted level list from DB-driven levelSettings
+  const sortedLevels = Object.values(levelSettings)
+    .sort((a, b) => (a.order || a.id) - (b.order || b.id))
+    .map((dbLevel, idx) => {
+      const staticLevel = LEVELS.find(l => l.id === dbLevel.id);
+      if (staticLevel) return staticLevel;
+      return {
+        id:       dbLevel.id,
+        title:    dbLevel.title    || `Level ${dbLevel.id}`,
+        subtitle: dbLevel.subtitle || '',
+        color:    FALLBACK_COLORS[idx % FALLBACK_COLORS.length],
+      };
+    });
+
+  const [allContent,    setAllContent]    = useState({});
   const [loading,       setLoading]       = useState(true);
-  const [activeLevelId, setActiveLevelId] = useState(1);
+  const [activeLevelId, setActiveLevelId] = useState(null);
   const [pageIndex,     setPageIndex]     = useState(0);
   const [pdfOpened,     setPdfOpened]     = useState(false);
 
+  // Set the first level as active once settings are loaded
   useEffect(() => {
-    if (!user?.id) return;
+    if (sortedLevels.length > 0 && activeLevelId === null) {
+      setActiveLevelId(sortedLevels[0].id);
+    }
+  }, [sortedLevels.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch content for all levels once levelSettings is ready
+  useEffect(() => {
+    if (!user?.id || !levelSettingsLoaded) return;
+    if (sortedLevels.length === 0) { setLoading(false); return; }
     setLoading(true);
-    Promise.all([api.getContent(1), api.getContent(2), api.getContent(3)])
-      .then(([c1, c2, c3]) => setAllContent({ 1: c1 || [], 2: c2 || [], 3: c3 || [] }))
+    Promise.all(sortedLevels.map(l => api.getContent(l.id)))
+      .then(results => {
+        const map = {};
+        sortedLevels.forEach((l, i) => { map[l.id] = results[i] || []; });
+        setAllContent(map);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [user?.id]);
+  }, [user?.id, levelSettingsLoaded, sortedLevels.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const pages   = allContent[activeLevelId] || [];
+  const effectiveId = activeLevelId ?? sortedLevels[0]?.id;
+  const pages   = allContent[effectiveId] || [];
   const total   = pages.length;
   const current = pages[pageIndex];
-  const level   = LEVELS.find(l => l.id === activeLevelId);
+  const level   = sortedLevels.find(l => l.id === effectiveId) || sortedLevels[0];
 
   const handleLevelChange = (id) => {
     setActiveLevelId(id);
@@ -60,6 +99,31 @@ export default function StudentContent() {
     } catch { window.open(dataUrl, '_blank'); }
   };
 
+  // Show loading until both levelSettings and content are ready
+  if (loading || !levelSettingsLoaded) {
+    return (
+      <div className="min-h-full bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 size={32} className="animate-spin text-indigo-400" />
+          <p className="text-slate-400 text-sm">Loading content…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // No levels configured at all
+  if (sortedLevels.length === 0) {
+    return (
+      <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6">
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm py-20 text-center">
+          <BookOpen size={40} className="mx-auto text-slate-200 mb-3" />
+          <p className="text-slate-500 text-sm font-medium">No levels available yet</p>
+          <p className="text-slate-400 text-xs mt-1">Check back after your administrator configures exam levels.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-5">
 
@@ -71,7 +135,7 @@ export default function StudentContent() {
           </h1>
           <p className="text-sm text-slate-400 mt-0.5">Browse all level materials before attempting quizzes</p>
         </div>
-        {total > 0 && (
+        {total > 0 && level && (
           <button
             onClick={() => downloadLevelContentAsPDF(pages, level.title)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]"
@@ -84,8 +148,8 @@ export default function StudentContent() {
 
       {/* Level tabs */}
       <div className="flex gap-2 flex-wrap">
-        {LEVELS.map(l => {
-          const isActive  = l.id === activeLevelId;
+        {sortedLevels.map(l => {
+          const isActive  = l.id === effectiveId;
           const pageCount = (allContent[l.id] || []).length;
           return (
             <button
@@ -108,20 +172,14 @@ export default function StudentContent() {
                   ? { background: 'rgba(255,255,255,0.25)', color: '#fff' }
                   : { background: '#f1f5f9', color: '#94a3b8' }}
               >
-                {loading ? '…' : `${pageCount}p`}
+                {`${pageCount}p`}
               </span>
             </button>
           );
         })}
       </div>
 
-      {/* Loading */}
-      {loading ? (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm py-20 flex flex-col items-center gap-3">
-          <Loader2 size={32} className="animate-spin text-indigo-400" />
-          <p className="text-slate-400 text-sm">Loading content…</p>
-        </div>
-      ) : total === 0 || !current ? (
+      {total === 0 || !current || !level ? (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm py-20 text-center">
           <BookOpen size={40} className="mx-auto text-slate-200 mb-3" />
           <p className="text-slate-500 text-sm font-medium">No content yet for this level</p>
@@ -170,7 +228,7 @@ export default function StudentContent() {
               </div>
               <div>
                 <p className="text-white/70 text-xs font-semibold mb-1">
-                  {level.title} · {level.subtitle}
+                  {level.title}{level.subtitle ? ` · ${level.subtitle}` : ''}
                 </p>
                 <h2 className="text-xl font-bold" style={{ fontFamily: 'Space Grotesk' }}>
                   {current.title}

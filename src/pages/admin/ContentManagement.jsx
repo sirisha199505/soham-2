@@ -341,7 +341,7 @@ function LevelSection({ levelId, levelTitle, levelOrder, pages, onEdit, onDelete
 /* ── MAIN ── */
 export default function ContentManagement() {
   const { user } = useAuth();
-  const { levelSettings, createLevel, deleteLevel } = useLevel();
+  const { levelSettings, levelSettingsLoaded, createLevel, deleteLevel } = useLevel();
   const [content, setContent] = useState({});
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
@@ -355,7 +355,9 @@ export default function ContentManagement() {
     .sort((a, b) => (a.order || a.id) - (b.order || b.id));
 
   useEffect(() => {
-    if (!user?.id || sortedLevels.length === 0) return;
+    if (!user?.id || !levelSettingsLoaded) return;
+    if (sortedLevels.length === 0) { setLoading(false); return; }
+    setLoading(true);
     Promise.all(sortedLevels.map(l => api.getContent(l.id)))
       .then(results => {
         const map = {};
@@ -364,7 +366,7 @@ export default function ContentManagement() {
       })
       .catch(err => console.error('Failed to load content:', err))
       .finally(() => setLoading(false));
-  }, [user?.id, sortedLevels.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id, levelSettingsLoaded, sortedLevels.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const persistLevel = async (levelId, pages) => {
     try {

@@ -12,6 +12,34 @@ import { LEVELS } from '../../utils/levelData';
 import { TOTAL_QUIZ_QUESTIONS } from '../../utils/quizGenerator';
 import { getPerformanceLabel } from '../../utils/helpers';
 
+// Colors for admin-created levels that don't have a matching entry in the hardcoded LEVELS array
+const FALLBACK_COLORS = [
+  { from: '#3BC0EF', to: '#1E3A8A' },
+  { from: '#8B5CF6', to: '#6d28d9' },
+  { from: '#10B981', to: '#047857' },
+  { from: '#F59E0B', to: '#D97706' },
+  { from: '#EF4444', to: '#B91C1C' },
+  { from: '#EC4899', to: '#BE185D' },
+];
+
+// Build the visible level list from the DB-driven levelSettings map so that
+// admin-created levels with any DB ID are shown, not just hardcoded IDs 1–3.
+function buildLevelList(levelSettingsMap) {
+  return Object.values(levelSettingsMap)
+    .sort((a, b) => (a.order || a.id) - (b.order || b.id))
+    .map((dbLevel, idx) => {
+      const staticLevel = LEVELS.find(l => l.id === dbLevel.id);
+      if (staticLevel) return staticLevel;
+      return {
+        id:          dbLevel.id,
+        title:       dbLevel.title       || `Level ${dbLevel.id}`,
+        subtitle:    dbLevel.subtitle    || '',
+        description: dbLevel.description || '',
+        color:       FALLBACK_COLORS[idx % FALLBACK_COLORS.length],
+      };
+    });
+}
+
 /* ─────────────────────────────────────────────────────────────── */
 /*  Welcome banner                                                 */
 /* ─────────────────────────────────────────────────────────────── */
@@ -369,10 +397,10 @@ export default function StudentDashboard() {
   // the brief "Start Level 1" flash on every login/page-refresh.
   const isProgressLoading = userId ? !progressFetched[userId] : false;
 
-  // Once levelSettings has loaded from the DB, only show levels that still exist.
-  // While loading (levelSettingsLoaded = false) show all hardcoded levels to avoid flicker.
+  // Once levelSettings has loaded from the DB, build the level list from it.
+  // While loading show hardcoded LEVELS as placeholders to avoid flicker.
   const visibleLevels = levelSettingsLoaded
-    ? LEVELS.filter(l => levelSettings[l.id] !== undefined)
+    ? buildLevelList(levelSettings)
     : LEVELS;
 
   // Only compute real statuses once progress is available; otherwise everything
