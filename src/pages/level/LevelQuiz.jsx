@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useBlocker } from 'react-router-dom';
 import {
   Clock, ChevronLeft, ChevronRight, CheckCircle, XCircle, Minus,
   Trophy, Shuffle, LayoutGrid, X, BookOpen, ChevronDown, ChevronUp,
+  AlertTriangle,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
@@ -221,16 +222,20 @@ export default function LevelQuiz() {
   const id           = Number(levelId);
   const navigate     = useNavigate();
   const { user }     = useAuth();
-  const { getLevelStatus, markLevelComplete, levelSettings } = useLevel();
+  const { getLevelStatus, markLevelComplete, levelSettings, refreshLevelSettings } = useLevel();
   const { colors }   = useTheme();
 
   const level  = LEVELS.find(l => l.id === id);
   const status = getLevelStatus(user?.uniqueId, id);
 
-  // Redirect if locked
+  // Redirect if locked or already completed (but not after submitting in this session)
   useEffect(() => {
     if (status === 'locked') navigate('/dashboard', { replace: true });
-  }, [status, navigate]);
+    if (status === 'completed' && !quizStarted && !result) navigate('/dashboard', { replace: true });
+  }, [status, navigate, quizStarted, result]);
+
+  // Refresh level settings on mount so recently-deleted levels redirect immediately
+  useEffect(() => { refreshLevelSettings(); }, []);
 
   // Generate questions on mount (async API call)
   const [questions, setQuestions] = useState([]);
@@ -244,6 +249,7 @@ export default function LevelQuiz() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const [quizStarted, setQuizStarted] = useState(false);
   const [current,    setCurrent]    = useState(0);
   const [answers,    setAnswers]    = useState({});
   const [panelFilter,setPanelFilter]= useState('all');
@@ -251,12 +257,31 @@ export default function LevelQuiz() {
   const quizDuration                 = useRef(600);
   const [timesUp,    setTimesUp]    = useState(false);
   const [showSubmit, setShowSubmit] = useState(false);
-  const [result,     setResult]     = useState(null);
-  const [saved,      setSaved]      = useState(false);
+  const [result,       setResult]       = useState(null);
+  const [saveError,    setSaveError]    = useState(false);
+  const [saved,        setSaved]        = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showMobilePanel, setShowMobilePanel] = useState(false);
   const [showReview, setShowReview] = useState(false);
 
-  const startRef = useRef(new Date());
+  const startRef     = useRef(new Date());
+  const submittingRef = useRef(false);
+
+  // ── Navigation guard ────────────────────────────────────────────────────────
+  // Active only while the student is mid-quiz (started, not yet submitted).
+  const quizInProgress = quizStarted && !result && !isSubmitting;
+
+  // Block React Router in-app navigation (back button, link clicks, etc.)
+  const blocker = useBlocker(quizInProgress);
+
+  // Block browser refresh / tab close / OS back gesture
+  useEffect(() => {
+    if (!quizInProgress) return;
+    const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [quizInProgress]);
+  // ────────────────────────────────────────────────────────────────────────────
 
   // Initialize timer from API-backed levelSettings once questions finish loading
   useEffect(() => {
@@ -286,12 +311,12 @@ export default function LevelQuiz() {
     return { correct, wrong, total, pct, timeTaken: quizDuration.current - (timeLeft ?? 0) };
   }, [answers, questions, timeLeft]);
 
-  // Countdown
+  // Countdown — only runs after student clicks "Start Exam" on the rules screen
   useEffect(() => {
-    if (timesUp || timeLeft === null || timeLeft <= 0 || result) return;
+    if (!quizStarted || timesUp || timeLeft === null || timeLeft <= 0 || result) return;
     const t = setInterval(() => setTimeLeft(p => p - 1), 1000);
     return () => clearInterval(t);
-  }, [timesUp, timeLeft, result]);
+  }, [quizStarted, timesUp, timeLeft, result]);
 
   useEffect(() => {
     if (timeLeft !== null && timeLeft <= 0 && !timesUp) setTimesUp(true);
@@ -310,6 +335,11 @@ export default function LevelQuiz() {
   }, [answers]);
 
   const doSubmit = async (auto = false) => {
+    // Hard lock — prevents duplicate submissions even with concurrent clicks
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setIsSubmitting(true);
+
     const score = computeScore();
 
     // Strip base64 images — prevents quota overflow that would silently break Quiz History
@@ -325,23 +355,32 @@ export default function LevelQuiz() {
       explanation: q.explanation || '',
     });
 
-    // Save attempt FIRST while token is still valid.
-    // markLevelComplete may get a 401 on Render free-tier restarts which clears
-    // the token — so if saveQuizAttempt ran after, it would also fail.
-    await saveQuizAttempt(user.uniqueId, {
+    const attemptData = {
       levelId:    id,
       levelTitle: level?.title || `Level ${id}`,
       date:       new Date().toISOString(),
       questions:  questions.map(compactQ),
       answers:    { ...answers },
       score,
-    });
+    };
 
-    await markLevelComplete(user.uniqueId, id, score);
-    await recordUsedQuestions(user.uniqueId, questions.map(q => q.id));
+    // Run all three API calls in parallel. Local save in saveQuizAttempt is
+    // synchronous so history data is always preserved. Track if the progress
+    // save failed so we can warn the student on the result screen.
+    const [, progressSaved] = await Promise.allSettled([
+      saveQuizAttempt(user.uniqueId, attemptData),
+      markLevelComplete(user.uniqueId, id, score),
+      recordUsedQuestions(user.uniqueId, questions.map(q => q.id)),
+    ]);
+
+    if (progressSaved.status === 'rejected') {
+      console.error('Progress save failed:', progressSaved.reason?.message);
+      setSaveError(true);
+    }
 
     setResult({ ...score, auto });
     setShowSubmit(false);
+    // Keep isSubmitting true — exam is done, no need to re-enable the button
   };
 
   const goNext = () => setCurrent(c => Math.min(c + 1, questions.length - 1));
@@ -404,6 +443,109 @@ export default function LevelQuiz() {
     );
   }
 
+  if (!level) return null;
+
+  /* ── Rules & Regulations screen (shown before exam starts) ──────── */
+  if (!quizStarted && !result) {
+    const examRules = [
+      'Read each question carefully before selecting your answer.',
+      'You can navigate between questions using the question panel.',
+      'Answers are auto-saved as you proceed.',
+      'The timer starts when you click "Start Exam" and cannot be paused.',
+      'You can review and change answers before final submission.',
+      'Once submitted, answers cannot be changed.',
+      'Negative marking applies: –0.5 marks per wrong answer.',
+      'Do not refresh or close the browser tab during the exam.',
+      'Each level can only be attempted once — your score is final.',
+    ];
+    const timeLimit = Number(levelSettings[id]?.timeLimit) || 10;
+
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-xl max-w-lg w-full overflow-hidden">
+          {/* Coloured header */}
+          <div className="relative p-6 text-white overflow-hidden"
+            style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}>
+            <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-10 blur-[40px] bg-white" />
+            <div className="relative z-10 flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+                <BookOpen size={28} />
+              </div>
+              <div>
+                <p className="text-white/70 text-xs font-semibold uppercase tracking-wider">Rules & Regulations</p>
+                <h2 className="text-2xl font-bold" style={{ fontFamily: 'Space Grotesk' }}>{level.title}</h2>
+                <p className="text-white/80 text-sm">{level.subtitle}</p>
+              </div>
+            </div>
+            <div className="relative z-10 grid grid-cols-2 gap-3 mt-4">
+              {[
+                { label: 'Questions', value: `${questions.length} Qs` },
+                { label: 'Time Limit', value: `${timeLimit} Min` },
+              ].map(m => (
+                <div key={m.label} className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.15)' }}>
+                  <p className="text-white/70 text-xs">{m.label}</p>
+                  <p className="text-white font-bold">{m.value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-6 space-y-5">
+            {/* Rules list */}
+            <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100">
+              <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2 text-sm">
+                <AlertTriangle size={15} className="text-amber-500" /> Instructions
+              </h3>
+              <ul className="space-y-2">
+                {examRules.map((rule, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-sm text-slate-600">
+                    <span className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 mt-0.5"
+                      style={{ background: level.color.from }}>
+                      {i + 1}
+                    </span>
+                    {rule}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Marking scheme */}
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: 'Correct', value: '+2 marks', color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
+                { label: 'Wrong',   value: '–0.5 marks', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+                { label: 'Skipped', value: '0 marks',  color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' },
+              ].map(s => (
+                <div key={s.label} className="rounded-xl p-3 text-center border"
+                  style={{ background: s.bg, borderColor: s.border }}>
+                  <p className="text-sm font-bold" style={{ color: s.color }}>{s.value}</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{s.label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => navigate('/dashboard')}
+                className="px-5 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-all">
+                Cancel
+              </button>
+              <button
+                onClick={() => setQuizStarted(true)}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-white font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
+                style={{
+                  background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`,
+                  boxShadow: `0 4px 16px ${level.color.from}40`,
+                }}>
+                Start Exam <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!level || !q) return null;
 
   /* ── Result screen ─────────────────────────────────────────────── */
@@ -433,6 +575,18 @@ export default function LevelQuiz() {
 
         {/* Content */}
         <div className="max-w-2xl mx-auto px-4 py-5 space-y-4">
+
+          {/* Save-error warning — only shown if progress failed to persist */}
+          {saveError && (
+            <div className="rounded-xl px-4 py-3 flex items-start gap-3 text-sm"
+              style={{ background: '#fef9c3', border: '1px solid #fde047' }}>
+              <AlertTriangle size={16} className="text-yellow-600 shrink-0 mt-0.5" />
+              <span className="text-yellow-800">
+                Your score has been recorded locally, but we could not save your progress to the server right now.
+                Please stay on this page or contact your teacher if this message persists after refreshing.
+              </span>
+            </div>
+          )}
 
           {/* Score */}
           <div className="bg-white rounded-2xl shadow-sm p-5 text-center"
@@ -685,8 +839,8 @@ export default function LevelQuiz() {
               </div>
 
               {isLast ? (
-                <button onClick={() => setShowSubmit(true)}
-                  className="flex items-center gap-2 px-5 py-3 rounded-xl text-white text-sm font-semibold transition-all hover:scale-[1.02]"
+                <button onClick={() => setShowSubmit(true)} disabled={isSubmitting}
+                  className="flex items-center gap-2 px-5 py-3 rounded-xl text-white text-sm font-semibold transition-all hover:scale-[1.02] disabled:opacity-60 disabled:cursor-not-allowed"
                   style={{ background: 'linear-gradient(135deg,#10B981,#059669)', boxShadow: '0 4px 14px #10B98150' }}>
                   Finish <CheckCircle size={16} />
                 </button>
@@ -745,10 +899,10 @@ export default function LevelQuiz() {
               </p>
               <p className="text-xs text-slate-400">Answered</p>
             </div>
-            <button onClick={() => setShowSubmit(true)}
-              className="w-full text-white text-sm font-semibold py-2.5 rounded-xl transition-all hover:scale-[1.01]"
+            <button onClick={() => setShowSubmit(true)} disabled={isSubmitting}
+              className="w-full text-white text-sm font-semibold py-2.5 rounded-xl transition-all hover:scale-[1.01] disabled:opacity-60 disabled:cursor-not-allowed"
               style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}>
-              Submit Quiz
+              {isSubmitting ? 'Submitting…' : 'Submit Quiz'}
             </button>
           </div>
         </div>
@@ -766,10 +920,10 @@ export default function LevelQuiz() {
           <LayoutGrid size={14} /> Questions
         </button>
         <button
-          onClick={() => setShowSubmit(true)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-xs font-bold"
+          onClick={() => setShowSubmit(true)} disabled={isSubmitting}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-xs font-bold disabled:opacity-60 disabled:cursor-not-allowed"
           style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}>
-          Submit
+          {isSubmitting ? 'Saving…' : 'Submit'}
         </button>
       </div>
 
@@ -828,9 +982,10 @@ export default function LevelQuiz() {
               </div>
               <button
                 onClick={() => { setShowMobilePanel(false); setShowSubmit(true); }}
-                className="flex-[2] text-white text-sm font-semibold py-3 rounded-xl transition-all"
+                disabled={isSubmitting}
+                className="flex-[2] text-white text-sm font-semibold py-3 rounded-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}>
-                Submit Quiz
+                {isSubmitting ? 'Submitting…' : 'Submit Quiz'}
               </button>
             </div>
           </div>
@@ -838,10 +993,50 @@ export default function LevelQuiz() {
       )}
 
       {/* Submit modal */}
+      {/* ── Leave-quiz confirmation (React Router navigation guard) ── */}
+      {blocker.state === 'blocked' && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4"
+          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+          <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden">
+            {/* Warning header */}
+            <div className="px-6 pt-6 pb-4 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle size={28} className="text-amber-500" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>
+                Leave Quiz?
+              </h3>
+              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                Are you sure you want to leave this quiz?<br />
+                <span className="font-semibold text-red-600">Your current progress may be lost.</span>
+              </p>
+            </div>
+            {/* Buttons */}
+            <div className="px-6 pb-6 grid grid-cols-2 gap-3">
+              <button
+                onClick={() => blocker.reset()}
+                className="py-3 rounded-2xl text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
+              >
+                Stay on Quiz
+              </button>
+              <button
+                onClick={() => blocker.proceed()}
+                className="py-3 rounded-2xl text-sm font-bold text-white transition-colors"
+                style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)' }}
+              >
+                Leave Quiz
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Modal isOpen={showSubmit} onClose={() => setShowSubmit(false)} title="Submit Quiz?"
         footer={<>
-          <Button variant="secondary" onClick={() => { setCurrent(0); setShowSubmit(false); }}>Review Answers</Button>
-          <Button variant="success" onClick={() => doSubmit(false)} icon={<CheckCircle size={15} />}>Confirm Submit</Button>
+          <Button variant="secondary" disabled={isSubmitting} onClick={() => { setCurrent(0); setShowSubmit(false); }}>Review Answers</Button>
+          <Button variant="success" loading={isSubmitting} disabled={isSubmitting} onClick={() => doSubmit(false)} icon={<CheckCircle size={15} />}>
+            {isSubmitting ? 'Submitting…' : 'Confirm Submit'}
+          </Button>
         </>}>
         <div className="space-y-4">
           <div className="rounded-2xl p-4 text-center"

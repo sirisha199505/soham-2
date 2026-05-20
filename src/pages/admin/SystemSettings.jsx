@@ -1,21 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
-  Settings, Save, CheckCircle, RotateCcw, Clock, Target,
+  Settings, Save, CheckCircle, RotateCcw, Clock,
   RefreshCw, Eye, Shuffle, Users, Lock, Unlock,
   AlertTriangle, Info, ToggleLeft, ToggleRight, Shield,
-  Layers, ChevronDown, ChevronUp, BookOpen, Key, Timer, Loader2,
+  Layers, ChevronDown, ChevronUp, BookOpen, Timer, Loader2,
 } from 'lucide-react';
 import { api } from '../../utils/api';
 
 const DEFAULT_LEVEL_CFG = {
-  timerMinutes: 10, passingMark: 50, retryLimit: 1,
+  timerMinutes: 10, retryLimit: 1,
   randomize: false, locked: false, showHints: false, questionsCount: 10,
 };
 
 const DEFAULT_SETTINGS = {
   quizTimerMinutes:       10,
-  passingMark:            50,
   retryLimit:             1,
   randomizeQuestions:     false,
   showResultsImmediately: true,
@@ -25,9 +24,9 @@ const DEFAULT_SETTINGS = {
   maintenanceMode:        false,
   maxStudentsPerClass:    60,
   levels: {
-    1: { ...DEFAULT_LEVEL_CFG, timerMinutes: 10, passingMark: 50, locked: false },
-    2: { ...DEFAULT_LEVEL_CFG, timerMinutes: 15, passingMark: 60, locked: true  },
-    3: { ...DEFAULT_LEVEL_CFG, timerMinutes: 20, passingMark: 70, locked: true  },
+    1: { ...DEFAULT_LEVEL_CFG, timerMinutes: 10, locked: false },
+    2: { ...DEFAULT_LEVEL_CFG, timerMinutes: 15, locked: true  },
+    3: { ...DEFAULT_LEVEL_CFG, timerMinutes: 20, locked: true  },
   },
 };
 
@@ -91,7 +90,6 @@ function LevelSettingsPanel({ lvl, cfg, onChange }) {
 
   const stats = [
     { label:'Timer',    value:`${cfg.timerMinutes}m`,     color: pal.accent },
-    { label:'Pass',     value:`${cfg.passingMark}%`,      color: pal.accent },
     { label:'Retries',  value: cfg.retryLimit===0?'∞':cfg.retryLimit, color: pal.accent },
     { label:'Questions',value: cfg.questionsCount,        color: pal.accent },
   ];
@@ -138,18 +136,6 @@ function LevelSettingsPanel({ lvl, cfg, onChange }) {
                 icon={<Timer size={14}/>}
                 color={pal.accent}
                 min={1} max={120} suffix=" min"
-              />
-            </div>
-            {/* Passing mark */}
-            <div className="bg-white rounded-xl p-4 border border-slate-100">
-              <NumberRow
-                label="Passing Mark"
-                desc="Minimum score to pass this level"
-                value={cfg.passingMark}
-                onChange={v => set('passingMark', v)}
-                icon={<Target size={14}/>}
-                color={pal.accent}
-                min={1} max={100} suffix="%"
               />
             </div>
             {/* Retry limit */}
@@ -379,9 +365,6 @@ export default function SystemSettings() {
               <NumberRow label="Default Quiz Timer" desc="Fallback timer for levels without a custom timer"
                 value={settings.quizTimerMinutes} onChange={v => update('quizTimerMinutes',v)}
                 icon={<Clock size={15}/>} color="#3B82F6" min={1} max={60} suffix=" min"/>
-              <NumberRow label="Default Passing Mark" desc="Fallback passing score for levels without a custom mark"
-                value={settings.passingMark} onChange={v => update('passingMark',v)}
-                icon={<Target size={15}/>} color="#10B981" min={1} max={100} suffix="%"/>
               <NumberRow label="Default Retry Limit" desc="Fallback retry count (0 = unlimited)"
                 value={settings.retryLimit} onChange={v => update('retryLimit',v)}
                 icon={<RefreshCw size={15}/>} color="#F59E0B" min={0} max={10}/>
@@ -443,9 +426,9 @@ export default function SystemSettings() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 { label:'Default Timer',  value:`${settings.quizTimerMinutes} min`,  color:'#3B82F6' },
-                { label:'Default Pass',   value:`${settings.passingMark}%`,          color:'#10B981' },
                 { label:'Retry Limit',    value:settings.retryLimit===0?'∞':settings.retryLimit, color:'#F59E0B' },
                 { label:'Registration',   value:settings.registrationOpen?'Open':'Closed', color:settings.registrationOpen?'#10B981':'#EF4444' },
+                { label:'Maintenance',    value:settings.maintenanceMode?'ON':'OFF', color:settings.maintenanceMode?'#EF4444':'#10B981' },
               ].map(s => (
                 <div key={s.label} className="bg-slate-50 rounded-xl p-3 text-center">
                   <p className="text-xl font-bold" style={{ color:s.color, fontFamily:'Space Grotesk' }}>{s.value}</p>
@@ -499,7 +482,6 @@ export default function SystemSettings() {
                 <tbody className="divide-y divide-slate-50">
                   {[
                     { label:'Timer',       key:'timerMinutes',   fmt:(v)=>`${v} min`    },
-                    { label:'Pass Mark',   key:'passingMark',    fmt:(v)=>`${v}%`       },
                     { label:'Retries',     key:'retryLimit',     fmt:(v)=>v===0?'∞':v   },
                     { label:'Questions',   key:'questionsCount', fmt:(v)=>v             },
                     { label:'Locked',      key:'locked',         fmt:(v)=>v?'Yes':'No'  },
@@ -510,7 +492,7 @@ export default function SystemSettings() {
                       <td className="px-5 py-3 text-xs font-semibold text-slate-500">{row.label}</td>
                       {[1,2,3].map(lvl => {
                         const v = settings.levels[lvl][row.key];
-                        const isWarning = (row.key==='locked' && v) || (row.key==='passingMark' && v > 70);
+                        const isWarning = row.key === 'locked' && v;
                         return (
                           <td key={lvl} className="px-5 py-3">
                             <span className={`text-xs font-bold px-2 py-1 rounded-lg ${

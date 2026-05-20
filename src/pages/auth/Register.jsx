@@ -117,7 +117,7 @@ export default function Register() {
         >
           <p className="text-[13px] font-semibold text-amber-300 mb-1">Important — Save your ID</p>
           <p className="text-xs text-amber-200/70 leading-relaxed">
-            This is your <strong>only login credential</strong>. You will NOT see your name after logging in.
+            This is your <strong>only login credential</strong>. You will NOT see your Details after logging in.
             Write this ID down or save it securely. It cannot be recovered if lost.
           </p>
         </div>
@@ -174,34 +174,50 @@ export default function Register() {
         </div>
 
         {/* Class */}
-        <div className="relative">
-          <BookOpen
-            size={15}
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"
-          />
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+            Class / Grade
+          </label>
+          <div className="relative">
+            <BookOpen
+              size={15}
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"
+            />
+            <select
+              value={form.className || ""}
+              onChange={set('className')}
+              required
+              className={`${inputCls} pl-11 pr-4 appearance-none cursor-pointer`}
+              style={{
+                ...inputStyle,
+                ...(form.className ? inputFocusStyle : {}),
+                color: form.className ? 'white' : 'rgba(255,255,255,0.35)',
+              }}
+            >
+              <option value="">Select your Class</option>
+              {['VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'Other'].map((c) => (
+                <option key={c} value={c} style={{ color: 'white', background: '#1e293b' }}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          <select
-            value={form.className || ""}
-            onChange={set('className')}
-            required
-            className={`${inputCls} pl-11 pr-4 appearance-none cursor-pointer ${!form.className ? 'text-white' : 'text-slate-500'
-              }`}
-            style={{ ...inputStyle, ...(form.className ? inputFocusStyle : {}) }}
-          >
-            <option >
-              Select your Class
-            </option>
-
-            {['VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'Other'].map((c) => (
-              <option
-                key={c}
-                value={c}
-                className="text-white bg-slate-800"
-              >
-                {c}
-              </option>
-            ))}
-          </select>
+          {/* Custom class input shown when "Other" is selected */}
+          {form.className === 'Other' && (
+            <div className="relative mt-2">
+              <BookOpen size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                type="text"
+                placeholder="e.g. B.Tech 1st Year, Diploma..."
+                value={customClass}
+                onChange={e => setCustomClass(e.target.value)}
+                required
+                className={`${inputCls} pl-11 pr-4`}
+                style={{ ...inputStyle, ...(customClass ? inputFocusStyle : {}) }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Password */}

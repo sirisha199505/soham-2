@@ -15,7 +15,7 @@ import { getPerformanceLabel } from '../../utils/helpers';
 /* ─────────────────────────────────────────────────────────────── */
 /*  Welcome banner                                                 */
 /* ─────────────────────────────────────────────────────────────── */
-function WelcomeBanner({ greeting, displayId, colors, completedCount }) {
+function WelcomeBanner({ greeting, displayId, colors, completedCount, totalLevels }) {
   return (
     <div
       className="relative rounded-2xl lg:rounded-3xl overflow-hidden"
@@ -46,14 +46,14 @@ function WelcomeBanner({ greeting, displayId, colors, completedCount }) {
           >
             <Star size={18} className="text-amber-300" />
             <div>
-              <p className="text-white font-bold text-lg leading-none">{completedCount} / {LEVELS.length}</p>
+              <p className="text-white font-bold text-lg leading-none">{completedCount} / {totalLevels}</p>
               <p className="text-white/60 text-xs mt-0.5">Levels completed</p>
             </div>
           </div>
           <div className="w-48 h-1.5 bg-white/10 rounded-full overflow-hidden">
             <div
               className="h-1.5 rounded-full transition-all duration-700"
-              style={{ width: `${(completedCount / LEVELS.length) * 100}%`, background: '#facc15' }}
+              style={{ width: `${(completedCount / totalLevels) * 100}%`, background: '#facc15' }}
             />
           </div>
         </div>
@@ -127,7 +127,7 @@ function LevelCard({ level, status, levelData, levelSettings }) {
         </div>
 
         <div className="relative z-10 flex items-center gap-1.5 mt-3">
-          {isLocked    && <><Lock        size={11} className="text-white/60" /><span className="text-white/50 text-xs">Complete previous level to unlock</span></>}
+          {isLocked    && <><Lock size={11} className="text-white/60" /><span className="text-white/50 text-xs">Awaiting Admin unlock</span></>}
           {isCompleted && Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="h-1.5 rounded-full" style={{ width: i === 0 ? 20 : 8, background: 'rgba(255,255,255,0.9)' }} />
           ))}
@@ -219,8 +219,15 @@ function LevelCard({ level, status, levelData, levelSettings }) {
 
         {/* CTA */}
         {isLocked && (
-          <div className="flex items-center gap-2 w-full py-3 rounded-xl text-slate-400 text-sm font-semibold bg-slate-50 border border-slate-200 justify-center">
-            <Lock size={14} /> Locked
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 w-full py-3 rounded-xl text-slate-400 text-sm font-semibold bg-slate-50 border border-slate-200 justify-center cursor-not-allowed select-none">
+              <Lock size={14} /> Locked
+            </div>
+            <p className="text-[11px] text-slate-400 text-center leading-snug px-1">
+              {levelSettings?.[level.id]?.active === false
+                ? 'This level has been disabled by the Administrator.'
+                : 'This level is currently locked. Please wait for the Administrator to unlock it.'}
+            </p>
           </div>
         )}
 
@@ -250,10 +257,10 @@ function LevelCard({ level, status, levelData, levelSettings }) {
 /* ─────────────────────────────────────────────────────────────── */
 /*  Step path indicator                                            */
 /* ─────────────────────────────────────────────────────────────── */
-function LevelPath({ statuses }) {
+function LevelPath({ levels, statuses }) {
   return (
     <div className="flex items-center justify-center gap-0 mb-2">
-      {LEVELS.map((level, i) => {
+      {levels.map((level, i) => {
         const st = statuses[i];
         const isCompleted = st === 'completed';
         const isUnlocked  = st === 'unlocked';
@@ -277,10 +284,10 @@ function LevelPath({ statuses }) {
                 {level.title}
               </p>
             </div>
-            {i < LEVELS.length - 1 && (
+            {i < levels.length - 1 && (
               <div
                 className="w-16 md:w-24 h-0.5 mx-1 mb-4 rounded-full transition-all"
-                style={{ background: isCompleted ? `linear-gradient(90deg, ${level.color.from}, ${LEVELS[i + 1].color.from})` : '#e2e8f0' }}
+                style={{ background: isCompleted ? `linear-gradient(90deg, ${level.color.from}, ${levels[i + 1].color.from})` : '#e2e8f0' }}
               />
             )}
           </div>
@@ -291,15 +298,38 @@ function LevelPath({ statuses }) {
 }
 
 /* ─────────────────────────────────────────────────────────────── */
+/*  Skeleton card (shown while progress is loading)               */
+/* ─────────────────────────────────────────────────────────────── */
+function LevelCardSkeleton() {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden animate-pulse">
+      <div className="h-28 bg-slate-200" />
+      <div className="p-5 space-y-3">
+        <div className="h-3 bg-slate-100 rounded-full w-3/4" />
+        <div className="h-3 bg-slate-100 rounded-full w-1/2" />
+        <div className="grid grid-cols-2 gap-2">
+          <div className="h-12 bg-slate-100 rounded-xl" />
+          <div className="h-12 bg-slate-100 rounded-xl" />
+        </div>
+        <div className="h-10 bg-slate-100 rounded-xl" />
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────── */
 /*  Main Page                                                      */
 /* ─────────────────────────────────────────────────────────────── */
 export default function StudentDashboard() {
   const { user }  = useAuth();
-  const { getLevelStatus, getLevel, levelSettings, refreshLevelSettings } = useLevel();
+  const {
+    getLevelStatus, getLevel, levelSettings, levelSettingsLoaded,
+    refreshLevelSettings, progressFetched,
+  } = useLevel();
   const { colors } = useTheme();
 
   // Re-fetch level settings each time the student opens their dashboard
-  // so admin active/inactive changes are reflected without a full re-login
+  // so admin active/inactive/delete changes are reflected without a full re-login
   useEffect(() => { refreshLevelSettings(); }, []);
 
   const displayId = user?.uniqueId ? `#${formatUniqueId(user.uniqueId)}` : '#Student';
@@ -307,8 +337,28 @@ export default function StudentDashboard() {
   const greeting  = hours < 12 ? 'Good morning' : hours < 17 ? 'Good afternoon' : 'Good evening';
   const userId    = user?.uniqueId;
 
-  const statuses       = LEVELS.map(l => getLevelStatus(userId, l.id));
-  const completedCount = statuses.filter(s => s === 'completed').length;
+  // Progress is considered loaded once the fetch completed for this user.
+  // While loading we show skeletons instead of level cards — this prevents
+  // the brief "Start Level 1" flash on every login/page-refresh.
+  const isProgressLoading = userId ? !progressFetched[userId] : false;
+
+  // Once levelSettings has loaded from the DB, only show levels that still exist.
+  // While loading (levelSettingsLoaded = false) show all hardcoded levels to avoid flicker.
+  const visibleLevels = levelSettingsLoaded
+    ? LEVELS.filter(l => levelSettings[l.id] !== undefined)
+    : LEVELS;
+
+  // Only compute real statuses once progress is available; otherwise everything
+  // would show 'unlocked' which flickers to the correct state after the fetch.
+  const statuses = isProgressLoading
+    ? visibleLevels.map(() => 'loading')
+    : visibleLevels.map(l => getLevelStatus(userId, l.id));
+
+  const completedCount = isProgressLoading
+    ? 0
+    : statuses.filter(s => s === 'completed').length;
+
+  const noLevels = levelSettingsLoaded && visibleLevels.length === 0;
 
   return (
     <div className="min-h-full px-4 md:px-6 lg:px-8 py-6 space-y-6">
@@ -319,39 +369,66 @@ export default function StudentDashboard() {
         displayId={displayId}
         colors={colors}
         completedCount={completedCount}
+        totalLevels={visibleLevels.length || LEVELS.length}
       />
 
-      {/* 2 — Level path */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-6 py-5">
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 text-center">
-          Your Learning Path
-        </p>
-        <LevelPath statuses={statuses} />
-      </div>
+      {noLevels ? (
+        /* ── No levels configured by admin ── */
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-6 py-16 flex flex-col items-center gap-4 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center">
+            <BookOpen size={28} className="text-slate-400" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-lg font-bold text-slate-700" style={{ fontFamily: 'Space Grotesk' }}>
+              No Exam Levels Available
+            </h3>
+            <p className="text-sm text-slate-400 max-w-xs">
+              Your administrator hasn't configured any exam levels yet. Please check back later.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* 2 — Level path (only when levels exist and progress is loaded) */}
+          {!isProgressLoading && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-6 py-5">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 text-center">
+                Your Learning Path
+              </p>
+              <LevelPath levels={visibleLevels} statuses={statuses} />
+            </div>
+          )}
 
-      {/* 3 — Section label */}
-      <div className="flex items-center gap-3">
-        <div className="w-1 h-6 rounded-full" style={{ background: colors.primary }} />
-        <h2 className="text-lg font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>
-          Exam Levels
-        </h2>
-        <span className="text-xs text-slate-400 font-medium">
-          Complete each level in sequence to unlock the next
-        </span>
-      </div>
+          {/* 3 — Section label */}
+          <div className="flex items-center gap-3">
+            <div className="w-1 h-6 rounded-full" style={{ background: colors.primary }} />
+            <h2 className="text-lg font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>
+              Exam Levels
+            </h2>
+            {!isProgressLoading && (
+              <span className="text-xs text-slate-400 font-medium">
+                Levels are unlocked by your Administrator
+              </span>
+            )}
+          </div>
 
-      {/* 4 — Level cards grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {LEVELS.map((level, i) => (
-          <LevelCard
-            key={level.id}
-            level={level}
-            status={statuses[i]}
-            levelData={getLevel(userId, level.id)}
-            levelSettings={levelSettings}
-          />
-        ))}
-      </div>
+          {/* 4 — Level cards grid (skeletons while loading) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {isProgressLoading
+              ? visibleLevels.map((_, i) => <LevelCardSkeleton key={i} />)
+              : visibleLevels.map((level, i) => (
+                  <LevelCard
+                    key={level.id}
+                    level={level}
+                    status={statuses[i]}
+                    levelData={getLevel(userId, level.id)}
+                    levelSettings={levelSettings}
+                  />
+                ))
+            }
+          </div>
+        </>
+      )}
 
     </div>
   );

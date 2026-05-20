@@ -18,13 +18,17 @@ function toMap(data, keyFn, valFn) {
 
 export function LevelProvider({ children }) {
   const { user } = useAuth();
-  const [progress,      setProgress]      = useState({});
-  const [approvals,     setApprovals]     = useState({});
-  const [overrides,     setOverrides]     = useState({});
-  const [levelSettings, setLevelSettings] = useState({});
-  const [globalAccess,  setGlobalAccess]  = useState({});
+  const [progress,            setProgress]           = useState({});
+  const [approvals,           setApprovals]          = useState({});
+  const [overrides,           setOverrides]          = useState({});
+  const [levelSettings,       setLevelSettings]      = useState({});
+  const [globalAccess,        setGlobalAccess]       = useState({});
+  // true once the first successful /api/levels/settings response arrives
+  const [levelSettingsLoaded, setLevelSettingsLoaded] = useState(false);
+  // tracks which userIds have had their progress fully fetched from DB
+  const [progressFetched, setProgressFetched] = useState({});
 
-  // Track which userIds we've already fetched so we don't loop
+  // Track which userIds are currently being fetched (in-flight guard)
   const fetchedUsers = useRef(new Set());
 
   const refreshLevelSettings = useCallback(() => {
@@ -34,13 +38,27 @@ export function LevelProvider({ children }) {
         const map = {};
         arr.forEach(lvl => { if (lvl?.id) map[lvl.id] = lvl; });
         setLevelSettings(map);
+        setLevelSettingsLoaded(true);
       })
       .catch(() => {});
   }, []);
 
   // Reload whenever the logged-in user changes (login / logout)
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      // Logout: wipe all user-specific cached state so the next login starts clean
+      fetchedUsers.current.clear();
+      setProgress({});
+      setProgressFetched({});
+      return;
+    }
+
+    // Login: evict this user from the fetch cache so progress is always
+    // re-loaded fresh from the DB — critical after logout/re-login.
+    if (user.uniqueId) {
+      fetchedUsers.current.delete(user.uniqueId);
+      setProgressFetched(prev => { const n = { ...prev }; delete n[user.uniqueId]; return n; });
+    }
 
     // Level settings: backend returns [{id, title, open, ...}, ...]
     refreshLevelSettings();
@@ -93,6 +111,9 @@ export function LevelProvider({ children }) {
         setApprovals(prev => ({ ...prev, [userId]: userApprovals }));
       }
     } catch {}
+    // Mark as fetched regardless of success/failure to avoid showing stale
+    // "loading" state forever if the API is temporarily unavailable.
+    setProgressFetched(prev => ({ ...prev, [userId]: true }));
   }, []);
 
   const getLevel = useCallback((userId, levelId) => {
@@ -103,30 +124,33 @@ export function LevelProvider({ children }) {
   const getLevelStatus = useCallback((userId, levelId) => {
     if (userId && !fetchedUsers.current.has(userId)) fetchProgress(userId);
 
-    // 1. Admin deactivated → locked
+    // 1a. Level deleted entirely from DB — treat as locked.
+    //     Only apply after levelSettings has been fetched at least once so we
+    //     don't falsely lock everything during the initial load.
+    if (levelSettingsLoaded && !levelSettings[levelId]) return 'locked';
+
+    // 1b. Admin deactivated → locked
     if (levelSettings[levelId]?.active === false) return 'locked';
 
-    // 2. Global unlock
-    if (levelId !== 1 && globalAccess[levelId] === true) {
+    // 2. Admin globally opened this level (level.open = true in DB)
+    if (globalAccess[levelId] === true) {
       return progress[userId]?.[levelId]?.status ?? 'unlocked';
     }
 
-    // 3. Per-student override
+    // 3. Per-student override granted by admin
     if (overrides[userId]?.includes(levelId)) {
       return progress[userId]?.[levelId]?.status ?? 'unlocked';
     }
 
-    // 4. Level 1 always unlocked
+    // 4. Level 1 is the default entry point — accessible even before admin touches anything
     if (levelId === 1) {
       return progress[userId]?.[1]?.status ?? 'unlocked';
     }
 
-    // 5. Previous level must be completed (no approval step — admin locks/unlocks directly)
-    const prev = progress[userId]?.[levelId - 1];
-    if (prev?.status !== 'completed') return 'locked';
-
-    return progress[userId]?.[levelId]?.status ?? 'unlocked';
-  }, [progress, overrides, levelSettings, globalAccess, fetchProgress]);
+    // 5. All other levels stay locked until admin explicitly opens them.
+    //    Completing a previous level does NOT auto-unlock the next one.
+    return 'locked';
+  }, [progress, overrides, levelSettings, globalAccess, fetchProgress, levelSettingsLoaded]);
 
   const markContentRead = useCallback(async (userId, levelId) => {
     try {
@@ -164,11 +188,8 @@ export function LevelProvider({ children }) {
       };
     });
 
-    try {
-      await api.completeLevelProgress(userId, levelId, score);
-    } catch (err) {
-      console.error('markLevelComplete failed:', err.message);
-    }
+    // Persist to DB — re-throw so callers can show an error if this fails
+    await api.completeLevelProgress(userId, levelId, score);
   }, []);
 
   const isContentRead = useCallback((userId, levelId) => {
@@ -264,8 +285,8 @@ export function LevelProvider({ children }) {
     <LevelContext.Provider value={{
       getLevel, getLevelStatus, markContentRead, markLevelComplete, isContentRead,
       setApproval, approvals, setStudentOverride, setLevelActive,
-      setGlobalAccess: setGlobalAccessFn, levelSettings, globalAccess,
-      refreshLevelSettings, createLevel, deleteLevel,
+      setGlobalAccess: setGlobalAccessFn, levelSettings, levelSettingsLoaded, globalAccess,
+      refreshLevelSettings, createLevel, deleteLevel, progressFetched,
     }}>
       {children}
     </LevelContext.Provider>

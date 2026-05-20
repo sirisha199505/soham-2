@@ -14,7 +14,13 @@ function localSave(studentId, attempt) {
   try {
     const key = localKey(studentId);
     const existing = JSON.parse(localStorage.getItem(key) || '[]');
-    // Prepend so newest is first
+    // Dedup: skip if the same level was already saved within the last 2 minutes
+    const twoMinAgo = Date.now() - 2 * 60 * 1000;
+    const isDup = existing.some(a =>
+      Number(a.levelId) === Number(attempt.levelId) &&
+      new Date(a.date).getTime() > twoMinAgo
+    );
+    if (isDup) return;
     existing.unshift(attempt);
     localStorage.setItem(key, JSON.stringify(existing));
   } catch {}

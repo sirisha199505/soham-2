@@ -13,13 +13,18 @@ export default function LevelContent() {
   const id           = Number(levelId);
   const navigate     = useNavigate();
   const { user }     = useAuth();
-  const { markContentRead } = useLevel();
+  const { markContentRead, levelSettings, levelSettingsLoaded } = useLevel();
   const { colors }   = useTheme();
 
   const level   = LEVELS.find(l => l.id === id);
   const [pages,   setPages]   = useState([]);
   const [loading, setLoading] = useState(true);
   const total = pages.length;
+
+  // Redirect to dashboard if this level has been deleted by admin
+  useEffect(() => {
+    if (levelSettingsLoaded && !levelSettings[id]) navigate('/dashboard', { replace: true });
+  }, [levelSettingsLoaded, levelSettings, id, navigate]);
 
   useEffect(() => {
     if (!user?.id) return;

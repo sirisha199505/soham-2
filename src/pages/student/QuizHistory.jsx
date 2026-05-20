@@ -295,16 +295,19 @@ export default function QuizHistory() {
     }).catch(() => {});
   }, [user?.uniqueId, getLevel]);
 
-  const filtered = lvlFilter === 'all' ? attempts : attempts.filter(a => String(a.levelId) === lvlFilter);
+  const filtered = useMemo(
+    () => lvlFilter === 'all' ? attempts : attempts.filter(a => String(a.levelId) === lvlFilter),
+    [attempts, lvlFilter]
+  );
 
   const stats = useMemo(() => {
-    if (!attempts.length) return null;
-    const total  = attempts.length;
-    const passed = attempts.filter(a => (a.score?.pct ?? 0) >= 50).length;
-    const avg    = Math.round(attempts.reduce((s, a) => s + (a.score?.pct ?? 0), 0) / total);
-    const best   = Math.max(...attempts.map(a => a.score?.pct ?? 0));
+    if (!filtered.length) return null;
+    const total  = filtered.length;
+    const passed = filtered.filter(a => (a.score?.pct ?? 0) >= 50).length;
+    const avg    = Math.round(filtered.reduce((s, a) => s + (a.score?.pct ?? 0), 0) / total);
+    const best   = Math.max(...filtered.map(a => a.score?.pct ?? 0));
     return { total, passed, avg, best };
-  }, [attempts]);
+  }, [filtered]);
 
   return (
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-6">
@@ -368,7 +371,9 @@ export default function QuizHistory() {
                 }`}>{t.l}</button>
             ))}
             <span className="text-xs text-slate-400 ml-auto">
-              Showing {filtered.length} of {attempts.length} attempt{attempts.length !== 1 ? 's' : ''}
+              {lvlFilter === 'all'
+                ? `${filtered.length} total attempt${filtered.length !== 1 ? 's' : ''}`
+                : `${filtered.length} attempt${filtered.length !== 1 ? 's' : ''} for this level`}
             </span>
           </div>
 
