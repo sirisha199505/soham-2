@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import {
   Lock, CheckCircle, ArrowRight, Hash, Trophy, Clock,
-  BookOpen, Star, ChevronRight, Zap,
+  BookOpen, Star, ChevronRight, Zap, FileText,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -232,22 +232,49 @@ function LevelCard({ level, status, levelData, levelSettings }) {
         )}
 
         {isCompleted && (
-          <div className="flex items-center gap-2 w-full py-3 rounded-xl text-sm font-semibold bg-green-50 border border-green-200 text-green-700 justify-center">
-            <CheckCircle size={14} /> Completed
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 w-full py-3 rounded-xl text-sm font-semibold bg-green-50 border border-green-200 text-green-700 justify-center">
+              <CheckCircle size={14} /> Completed
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Link
+                to={`/level/${level.id}/content`}
+                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all"
+              >
+                <FileText size={13} /> Review Content
+              </Link>
+              <Link
+                to={`/level/${level.id}/quiz`}
+                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:scale-[1.02] active:scale-[0.98]"
+                style={{
+                  background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`,
+                }}
+              >
+                Retake Quiz <ArrowRight size={13} />
+              </Link>
+            </div>
           </div>
         )}
 
         {isUnlocked && (
-          <Link
-            to={`/level/${level.id}/quiz`}
-            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
-            style={{
-              background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`,
-              boxShadow: `0 4px 16px ${level.color.from}40`,
-            }}
-          >
-            Start Level <ArrowRight size={15} />
-          </Link>
+          <div className="space-y-2">
+            <Link
+              to={`/level/${level.id}/content`}
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
+              style={{
+                background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`,
+                boxShadow: `0 4px 16px ${level.color.from}40`,
+              }}
+            >
+              <BookOpen size={15} /> Start Level
+            </Link>
+            <Link
+              to={`/level/${level.id}/quiz`}
+              className="flex items-center justify-center gap-1.5 w-full py-2 rounded-xl text-xs font-semibold border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all"
+            >
+              Skip to Quiz <ArrowRight size={12} />
+            </Link>
+          </div>
         )}
       </div>
     </div>

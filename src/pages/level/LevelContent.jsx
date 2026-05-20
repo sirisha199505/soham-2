@@ -16,15 +16,33 @@ export default function LevelContent() {
   const { markContentRead, levelSettings, levelSettingsLoaded } = useLevel();
   const { colors }   = useTheme();
 
-  const level   = LEVELS.find(l => l.id === id);
+  const staticLevel = LEVELS.find(l => l.id === id);
+  const dbLevel     = levelSettings[id];
+
+  // Build display object: static LEVELS data takes priority; fall back to DB settings
+  // for admin-created levels that don't have a hardcoded entry in LEVELS.
+  const FALLBACK_COLORS = [
+    { from: '#f59e0b', to: '#d97706' },
+    { from: '#ec4899', to: '#db2777' },
+    { from: '#14b8a6', to: '#0d9488' },
+    { from: '#6366f1', to: '#4f46e5' },
+  ];
+  const fallbackColor = FALLBACK_COLORS[(id - 1) % FALLBACK_COLORS.length];
+  const level = staticLevel ?? (dbLevel ? {
+    id,
+    title:    dbLevel.title    || `Level ${id}`,
+    subtitle: dbLevel.subtitle || '',
+    color:    fallbackColor,
+  } : null);
+
   const [pages,   setPages]   = useState([]);
   const [loading, setLoading] = useState(true);
   const total = pages.length;
 
-  // Redirect to dashboard if this level has been deleted by admin
+  // Redirect to dashboard only if the level has been deleted from DB (not just missing from LEVELS)
   useEffect(() => {
-    if (levelSettingsLoaded && !levelSettings[id]) navigate('/dashboard', { replace: true });
-  }, [levelSettingsLoaded, levelSettings, id, navigate]);
+    if (levelSettingsLoaded && !dbLevel) navigate('/dashboard', { replace: true });
+  }, [levelSettingsLoaded, dbLevel, navigate]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -68,7 +86,17 @@ export default function LevelContent() {
     navigate(`/level/${id}/quiz`);
   };
 
-  if (!level) return null;
+  // While level settings are still loading, show the same spinner rather than a blank page
+  if (!level) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 size={36} className="animate-spin text-indigo-400" />
+          <p className="text-slate-400 text-sm">Loading…</p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
