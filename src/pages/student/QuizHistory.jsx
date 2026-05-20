@@ -145,6 +145,7 @@ function AttemptCard({ attempt }) {
   const lvl    = LEVEL_COLORS[attempt.levelId] || { from:'#4F46E5', to:'#6d28d9' };
   const passed = (attempt.score?.pct ?? 0) >= 50;
   const date   = attempt.date ? new Date(attempt.date) : null;
+  const attemptNum = attempt.attemptNum;
 
   const catBreakdown = useMemo(() => {
     const qs  = attempt.questions || [];
@@ -172,6 +173,11 @@ function AttemptCard({ attempt }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className="text-sm font-bold text-slate-800">{attempt.levelTitle || `Level ${attempt.levelId}`}</span>
+              {attemptNum && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                  Attempt #{attemptNum}
+                </span>
+              )}
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                 {passed ? '✓ Passed' : '✗ Failed'}
               </span>
@@ -295,9 +301,36 @@ export default function QuizHistory() {
     }).catch(() => {});
   }, [user?.uniqueId, getLevel]);
 
+  // Derive unique level filter options from the actual attempts (not hardcoded)
+  const levelFilterOptions = useMemo(() => {
+    const seen = new Map();
+    attempts.forEach(a => {
+      const k = String(a.levelId);
+      if (!seen.has(k)) seen.set(k, a.levelTitle || `Level ${a.levelId}`);
+    });
+    return Array.from(seen.entries())
+      .sort((a, b) => Number(a[0]) - Number(b[0]))
+      .map(([k, l]) => ({ k, l }));
+  }, [attempts]);
+
+  // Assign sequential attempt number per level (chronological order, shown newest-first)
+  const attemptsWithNumbers = useMemo(() => {
+    const countByLevel = {};
+    return [...attempts]
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .map(a => {
+        const k = String(a.levelId);
+        countByLevel[k] = (countByLevel[k] || 0) + 1;
+        return { ...a, attemptNum: countByLevel[k] };
+      })
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [attempts]);
+
   const filtered = useMemo(
-    () => lvlFilter === 'all' ? attempts : attempts.filter(a => String(a.levelId) === lvlFilter),
-    [attempts, lvlFilter]
+    () => lvlFilter === 'all'
+      ? attemptsWithNumbers
+      : attemptsWithNumbers.filter(a => String(a.levelId) === lvlFilter),
+    [attemptsWithNumbers, lvlFilter]
   );
 
   const stats = useMemo(() => {
@@ -364,7 +397,7 @@ export default function QuizHistory() {
           <div className="flex items-center gap-2 flex-wrap">
             <Filter size={14} className="text-slate-400"/>
             <span className="text-xs font-semibold text-slate-500">Filter by level:</span>
-            {[{k:'all',l:'All'},{k:'1',l:'Level 1'},{k:'2',l:'Level 2'},{k:'3',l:'Level 3'}].map(t => (
+            {[{k:'all',l:'All'}, ...levelFilterOptions].map(t => (
               <button key={t.k} onClick={() => setLvlFilter(t.k)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                   lvlFilter === t.k ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'

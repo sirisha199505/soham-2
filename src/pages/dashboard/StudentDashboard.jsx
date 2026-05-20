@@ -9,7 +9,6 @@ import { useLevel } from '../../context/LevelContext';
 import { useTheme } from '../../context/ThemeContext';
 import { formatUniqueId } from '../../utils/uniqueId';
 import { LEVELS } from '../../utils/levelData';
-import { TOTAL_QUIZ_QUESTIONS } from '../../utils/quizGenerator';
 import { getPerformanceLabel } from '../../utils/helpers';
 
 // Colors for admin-created levels that don't have a matching entry in the hardcoded LEVELS array
@@ -172,7 +171,7 @@ function LevelCard({ level, status, levelData, levelSettings }) {
         {/* Meta pills */}
         <div className="grid grid-cols-2 gap-2">
           {[
-            { icon: <BookOpen size={13} />, label: 'Questions', value: `${TOTAL_QUIZ_QUESTIONS} Qs` },
+            { icon: <BookOpen size={13} />, label: 'Questions', value: `${levelSettings?.[level.id]?.questionCount ?? 0} Qs` },
             { icon: <Clock    size={13} />, label: 'Time Limit', value: `${timeLimit} Min` },
           ].map(m => (
             <div key={m.label} className="bg-slate-50 rounded-xl px-3 py-2 flex items-center gap-2">
