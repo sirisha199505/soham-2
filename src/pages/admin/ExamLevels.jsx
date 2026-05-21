@@ -190,7 +190,7 @@ function EditModal({ levelId, settings, onSave, onClose }) {
 }
 
 /* ── Level Card ── */
-function LevelCard({ levelId, settings, stats, onEdit, onDelete }) {
+function LevelCard({ levelId, isFirst, settings, stats, onEdit, onDelete }) {
   const s = settings[levelId] || {};
   const color = levelColor(s.order || levelId);
 
@@ -216,10 +216,10 @@ function LevelCard({ levelId, settings, stats, onEdit, onDelete }) {
           </div>
         </div>
         <div className="relative z-10 flex items-center gap-1.5 mt-3">
-          {levelId === 1 ? (
+          {isFirst ? (
             <><Zap size={12} className="text-white/70" /><span className="text-white/60 text-xs">Unlocked by default</span></>
           ) : (
-            <><Lock size={12} className="text-white/70" /><span className="text-white/60 text-xs">Unlocks after previous level</span></>
+            <><Lock size={12} className="text-white/70" /><span className="text-white/60 text-xs">Admin must unlock for students</span></>
           )}
         </div>
       </div>
@@ -428,10 +428,11 @@ export default function ExamLevels() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {levelIds.map(levelId => (
+          {levelIds.map((levelId, i) => (
             <LevelCard
               key={levelId}
               levelId={levelId}
+              isFirst={i === 0}
               settings={levelSettings}
               stats={levelStats[levelId]}
               onEdit={setEditing}

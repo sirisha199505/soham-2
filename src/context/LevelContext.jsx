@@ -132,8 +132,10 @@ export function LevelProvider({ children }) {
     // 1b. Admin deactivated → locked
     if (levelSettings[levelId]?.active === false) return 'locked';
 
-    // 2. Admin globally opened this level (level.open = true in DB)
-    if (globalAccess[levelId] === true) {
+    // 2. Level is open — read from levelSettings (already loaded with its own
+    //    "loaded" flag) to avoid the race condition where globalAccess arrives
+    //    after the first render and leaves every non-ID-1 level stuck as locked.
+    if (levelSettings[levelId]?.open === true) {
       return progress[userId]?.[levelId]?.status ?? 'unlocked';
     }
 
@@ -219,6 +221,11 @@ export function LevelProvider({ children }) {
     try {
       await api.setGlobalAccess(levelId, open);
       setGlobalAccess(prev => ({ ...prev, [levelId]: open }));
+      // Keep levelSettings.open in sync so getLevelStatus reflects the change immediately
+      setLevelSettings(prev => ({
+        ...prev,
+        [levelId]: { ...(prev[levelId] || {}), open, active: open },
+      }));
     } catch (err) {
       console.error('setGlobalAccess failed:', err.message);
     }

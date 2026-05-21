@@ -12,32 +12,38 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../utils/api';
 
-function computeStats(students) {
-  let l1Done = 0, l2Done = 0, l3Done = 0;
-  const scores = [];
+// levels: sorted array of {id, title} from /api/levels/settings
+function computeStats(students, levels = []) {
+  const levelCounts = {}; // String(levelId) → completion count
+  const allScores = [];
   let passCount = 0, failCount = 0;
   let totalAttempts = 0;
 
   students.forEach(s => {
     totalAttempts += s.attemptsCount || 0;
-    [1, 2, 3].forEach(lvl => {
-      const lp = s.levels?.[lvl];
+    Object.entries(s.levels || {}).forEach(([lid, lp]) => {
       if (lp?.status === 'completed') {
-        if (lvl === 1) l1Done++;
-        if (lvl === 2) l2Done++;
-        if (lvl === 3) l3Done++;
+        levelCounts[lid] = (levelCounts[lid] || 0) + 1;
         const sc = lp.score?.pct;
         if (sc !== undefined && sc !== null) {
-          scores.push(sc);
+          allScores.push(sc);
           sc >= 50 ? passCount++ : failCount++;
         }
       }
     });
   });
 
-  const avgScore  = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-  const passRate  = passCount + failCount > 0 ? Math.round((passCount / (passCount + failCount)) * 100) : 0;
-  return { totalStudents: students.length, l1Done, l2Done, l3Done, totalAttempts, avgScore, passRate, passCount, failCount };
+  // Map first three levels (by order) to l1/l2/l3 so existing stat cards stay meaningful
+  const sortedIds = levels.length
+    ? levels.map(l => String(l.id))
+    : Object.keys(levelCounts).sort((a, b) => Number(a) - Number(b));
+  const l1Done = levelCounts[sortedIds[0]] || 0;
+  const l2Done = levelCounts[sortedIds[1]] || 0;
+  const l3Done = levelCounts[sortedIds[2]] || 0;
+
+  const avgScore = allScores.length ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length) : 0;
+  const passRate = passCount + failCount > 0 ? Math.round((passCount / (passCount + failCount)) * 100) : 0;
+  return { totalStudents: students.length, l1Done, l2Done, l3Done, totalAttempts, avgScore, passRate, passCount, failCount, levelCounts };
 }
 
 /* ── static chart data ── */
@@ -84,23 +90,29 @@ function QuickAction({ icon, label, to, color }) {
   );
 }
 
-const EMPTY_STATS = { totalStudents: 0, l1Done: 0, l2Done: 0, l3Done: 0, totalAttempts: 0, avgScore: 0, passRate: 0, passCount: 0, failCount: 0 };
+const EMPTY_STATS = { totalStudents: 0, l1Done: 0, l2Done: 0, l3Done: 0, totalAttempts: 0, avgScore: 0, passRate: 0, passCount: 0, failCount: 0, levelCounts: {} };
 
 export default function AdminDashboard() {
   const { user } = useAuth();
-  const [stats,     setStats]     = useState(EMPTY_STATS);
-  const [recent,    setRecent]    = useState([]);
-  const [refreshed, setRefreshed] = useState(false);
+  const [stats,      setStats]      = useState(EMPTY_STATS);
+  const [recent,     setRecent]     = useState([]);
+  const [refreshed,  setRefreshed]  = useState(false);
+  const [levelsList, setLevelsList] = useState([]); // sorted levels from DB
 
   const fetchData = () => {
-    api.getStudents().then(students => {
-      setStats(computeStats(students));
-      setRecent(students.slice(0, 5).map(s => ({
-        id:     s.uniqueId,
-        school: s.schoolName || '—',
-        class:  s.className  || '—',
-      })));
-    }).catch(() => {});
+    Promise.all([api.getStudents(), api.getLevelSettings()])
+      .then(([students, levelsData]) => {
+        const sorted = Array.isArray(levelsData)
+          ? levelsData.sort((a, b) => (a.order || a.id) - (b.order || b.id))
+          : [];
+        setLevelsList(sorted);
+        setStats(computeStats(students, sorted));
+        setRecent(students.slice(0, 5).map(s => ({
+          id:     s.uniqueId,
+          school: s.schoolName || '—',
+          class:  s.className  || '—',
+        })));
+      }).catch(() => {});
   };
 
   useEffect(() => {
@@ -123,11 +135,17 @@ export default function AdminDashboard() {
   ];
   const PIE_COLORS = ['#10B981', '#EF4444'];
 
-  const levelCompletionData = [
-    { level: 'Level 1', completed: stats.l1Done, color: '#3BC0EF' },
-    { level: 'Level 2', completed: stats.l2Done, color: '#8B5CF6' },
-    { level: 'Level 3', completed: stats.l3Done, color: '#10B981' },
-  ];
+  const levelCompletionData = levelsList.length > 0
+    ? levelsList.slice(0, 3).map((lvl, i) => ({
+        level:     lvl.title || `Level ${i + 1}`,
+        completed: stats.levelCounts?.[String(lvl.id)] || 0,
+        color:     LEVEL_COLORS[i],
+      }))
+    : [
+        { level: 'Level 1', completed: stats.l1Done, color: LEVEL_COLORS[0] },
+        { level: 'Level 2', completed: stats.l2Done, color: LEVEL_COLORS[1] },
+        { level: 'Level 3', completed: stats.l3Done, color: LEVEL_COLORS[2] },
+      ];
 
   return (
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-6">

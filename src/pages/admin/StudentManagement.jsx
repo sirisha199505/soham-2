@@ -8,8 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
 
-const LEVEL_COLORS = { 1: '#3BC0EF', 2: '#8B5CF6', 3: '#10B981' };
-const ADMIN_OVERRIDES_KEY = 'rqa_admin_overrides';
+const LEVEL_COLORS = ['#3BC0EF', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899'];
 const DISABLED_KEY = 'rqa_disabled_students';
 
 function saveDisabled(ids) {
@@ -39,8 +38,13 @@ function LevelBadge({ data, levelId, overrideIds }) {
 }
 
 /* ── Detail Modal ── */
-function StudentModal({ student, onClose }) {
+function StudentModal({ student, levelList, onClose }) {
   if (!student) return null;
+  // Use actual DB levels when available; fall back to generic placeholders
+  const levels = levelList.length > 0
+    ? levelList.map((lvl, i) => ({ id: lvl.id, label: lvl.title || `Level ${i + 1}`, idx: i }))
+    : [1, 2, 3].map((n, i) => ({ id: n, label: `Level ${n}`, idx: i }));
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
@@ -75,16 +79,16 @@ function StudentModal({ student, onClose }) {
 
           <div className="space-y-2">
             <p className="text-xs font-semibold text-slate-400 uppercase">Level Progress</p>
-            {[1, 2, 3].map(lvl => {
-              const d = student.levels[lvl];
+            {levels.map(({ id, label, idx }) => {
+              const d = student.levels?.[id];
               return (
-                <div key={lvl} className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-2.5">
+                <div key={id} className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-2.5">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-lg flex items-center justify-center text-white text-[10px] font-bold"
-                      style={{ background: LEVEL_COLORS[lvl] }}>
-                      {lvl}
+                      style={{ background: LEVEL_COLORS[idx] || '#94a3b8' }}>
+                      {idx + 1}
                     </div>
-                    <span className="text-sm font-medium text-slate-700">Level {lvl}</span>
+                    <span className="text-sm font-medium text-slate-700">{label}</span>
                   </div>
                   <div className="text-right">
                     {d?.status === 'completed' ? (
@@ -107,8 +111,13 @@ function StudentModal({ student, onClose }) {
 }
 
 /* ── Actions dropdown ── */
-function ActionsMenu({ student, onAction }) {
+function ActionsMenu({ student, levelList, onAction }) {
   const [open, setOpen] = useState(false);
+  // Levels that can be unlocked = all except the first
+  const unlockableLevels = levelList.length > 1
+    ? levelList.slice(1)
+    : [{ id: 2, title: 'Level 2' }, { id: 3, title: 'Level 3' }];
+
   return (
     <div className="relative">
       <button
@@ -127,10 +136,10 @@ function ActionsMenu({ student, onAction }) {
             </button>
             <div className="h-px bg-slate-100 my-1" />
             <p className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase">Unlock Level</p>
-            {[2, 3].map(lvl => (
-              <button key={lvl} onClick={() => { onAction('unlock', student, lvl); setOpen(false); }}
+            {unlockableLevels.map(lvl => (
+              <button key={lvl.id} onClick={() => { onAction('unlock', student, lvl.id); setOpen(false); }}
                 className="flex items-center gap-2 w-full px-3 py-2 text-xs text-slate-700 hover:bg-amber-50">
-                <Unlock size={13} className="text-amber-500" /> Unlock Level {lvl}
+                <Unlock size={13} className="text-amber-500" /> Unlock {lvl.title || `Level ${lvl.id}`}
               </button>
             ))}
             <div className="h-px bg-slate-100 my-1" />
@@ -154,12 +163,13 @@ function ActionsMenu({ student, onAction }) {
 export default function StudentManagement() {
   const { user } = useAuth();
   const { setStudentOverride } = useLevel();
-  const [data, setData] = useState([]);
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all');
-  const [page, setPage] = useState(1);
+  const [data,      setData]      = useState([]);
+  const [levelList, setLevelList] = useState([]); // sorted levels from DB
+  const [search,    setSearch]    = useState('');
+  const [filter,    setFilter]    = useState('all');
+  const [page,      setPage]      = useState(1);
   const [viewStudent, setViewStudent] = useState(null);
-  const [toast, setToast] = useState(null);
+  const [toast,     setToast]     = useState(null);
   const PER_PAGE = 10;
 
   const showToast = (msg, type = 'success') => {
@@ -169,19 +179,20 @@ export default function StudentManagement() {
 
   const fetchStudents = async () => {
     try {
-      const students = await api.getStudents();
-      const disabled = JSON.parse(localStorage.getItem(DISABLED_KEY) || '[]');
+      const [students, levelsData] = await Promise.all([api.getStudents(), api.getLevelSettings()]);
+      const sorted = Array.isArray(levelsData)
+        ? levelsData.sort((a, b) => (a.order || a.id) - (b.order || b.id))
+        : [];
+      setLevelList(sorted);
+
+      const localDisabled = JSON.parse(localStorage.getItem(DISABLED_KEY) || '[]');
       setData(students.map(s => ({
         uniqueId:   s.uniqueId,
         schoolName: s.schoolName || '—',
         className:  s.className  || '—',
-        disabled:   disabled.includes(s.uniqueId),
-        levels: {
-          1: s.levels?.['1'] || null,
-          2: s.levels?.['2'] || null,
-          3: s.levels?.['3'] || null,
-        },
-        overrides: s.overrideIds || [],
+        disabled:   s.disabled || localDisabled.includes(s.uniqueId),
+        levels:     s.levels || {}, // all level data keyed by DB level ID
+        overrides:  s.overrideIds || [],
       })));
     } catch {}
   };
@@ -190,28 +201,38 @@ export default function StudentManagement() {
 
   const refresh = () => fetchStudents();
 
+  // Build filter options from actual levels
+  const filterOptions = useMemo(() => [
+    { id: 'all',      label: 'All',      levelId: null },
+    ...levelList.slice(0, 3).map((l, i) => ({
+      id:      `l${i + 1}`,
+      label:   `${l.title || `L${i + 1}`} Done`,
+      levelId: l.id,
+    })),
+    { id: 'disabled', label: 'Disabled', levelId: null },
+  ], [levelList]);
+
   const filtered = useMemo(() => {
     return data.filter(s => {
       const matchSearch = !search || s.uniqueId.toLowerCase().includes(search.toLowerCase()) ||
         s.schoolName.toLowerCase().includes(search.toLowerCase()) ||
         s.className.toLowerCase().includes(search.toLowerCase());
-      const matchFilter = filter === 'all' ? true
-        : filter === 'l1' ? s.levels[1]?.status === 'completed'
-        : filter === 'l2' ? s.levels[2]?.status === 'completed'
-        : filter === 'l3' ? s.levels[3]?.status === 'completed'
+      const lf = filterOptions.find(f => f.id === filter && f.levelId != null);
+      const matchFilter = filter === 'all'      ? true
         : filter === 'disabled' ? s.disabled
+        : lf                    ? s.levels[lf.levelId]?.status === 'completed'
         : true;
       return matchSearch && matchFilter;
     });
-  }, [data, search, filter]);
+  }, [data, search, filter, filterOptions]);
 
   const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
 
-  const handleBulkUnlock = (lvl) => {
+  const handleBulkUnlock = (levelId, levelTitle) => {
     if (filtered.length === 0) return;
-    filtered.forEach(s => setStudentOverride(s.uniqueId, lvl));
-    showToast(`Level ${lvl} unlocked for ${filtered.length} student${filtered.length > 1 ? 's' : ''}`);
+    filtered.forEach(s => setStudentOverride(s.uniqueId, levelId));
+    showToast(`${levelTitle || `Level ${levelId}`} unlocked for ${filtered.length} student${filtered.length > 1 ? 's' : ''}`);
     refresh();
   };
 
@@ -240,9 +261,17 @@ export default function StudentManagement() {
   };
 
   const totalStudents = data.length;
-  const l1Count = data.filter(s => s.levels[1]?.status === 'completed').length;
-  const l2Count = data.filter(s => s.levels[2]?.status === 'completed').length;
-  const l3Count = data.filter(s => s.levels[3]?.status === 'completed').length;
+  // Use actual DB level IDs from levelList for completion stats
+  const [lvl1, lvl2, lvl3] = levelList;
+  const l1Count = lvl1 ? data.filter(s => s.levels[lvl1.id]?.status === 'completed').length : 0;
+  const l2Count = lvl2 ? data.filter(s => s.levels[lvl2.id]?.status === 'completed').length : 0;
+  const l3Count = lvl3 ? data.filter(s => s.levels[lvl3.id]?.status === 'completed').length : 0;
+  const miniStats = [
+    { label: 'Total',                              value: totalStudents, color: '#4F46E5' },
+    lvl1 ? { label: `${lvl1.title || 'L1'} Done`, value: l1Count,       color: '#3BC0EF' } : null,
+    lvl2 ? { label: `${lvl2.title || 'L2'} Done`, value: l2Count,       color: '#8B5CF6' } : null,
+    lvl3 ? { label: `${lvl3.title || 'L3'} Done`, value: l3Count,       color: '#10B981' } : null,
+  ].filter(Boolean);
 
   return (
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-5">
@@ -269,12 +298,7 @@ export default function StudentManagement() {
 
       {/* Mini stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'Total',      value: totalStudents, color: '#4F46E5' },
-          { label: 'L1 Passed',  value: l1Count,       color: '#3BC0EF' },
-          { label: 'L2 Passed',  value: l2Count,       color: '#8B5CF6' },
-          { label: 'L3 Passed',  value: l3Count,       color: '#10B981' },
-        ].map(s => (
+        {miniStats.map(s => (
           <div key={s.label} className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3 flex items-center justify-between">
             <div>
               <p className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>{s.value}</p>
@@ -297,13 +321,7 @@ export default function StudentManagement() {
           />
         </div>
         <div className="flex gap-2 flex-wrap">
-          {[
-            { id: 'all',      label: 'All' },
-            { id: 'l1',       label: 'L1 Done' },
-            { id: 'l2',       label: 'L2 Done' },
-            { id: 'l3',       label: 'L3 Done' },
-            { id: 'disabled', label: 'Disabled' },
-          ].map(f => (
+          {filterOptions.map(f => (
             <button key={f.id} onClick={() => { setFilter(f.id); setPage(1); }}
               className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all
                 ${filter === f.id ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
@@ -320,7 +338,7 @@ export default function StudentManagement() {
       </div>
 
       {/* Bulk Actions bar — visible whenever a level filter is active */}
-      {['l1', 'l2', 'l3'].includes(filter) && filtered.length > 0 && (
+      {filterOptions.some(f => f.id === filter && f.levelId != null) && filtered.length > 0 && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -335,15 +353,16 @@ export default function StudentManagement() {
               </div>
             </div>
             <div className="flex gap-2 flex-wrap">
-              {[2, 3].map(lvl => (
-                <button
-                  key={lvl}
-                  onClick={() => handleBulkUnlock(lvl)}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-white border border-amber-300 text-amber-700 hover:bg-amber-100 active:scale-[0.97] transition-all shadow-sm"
-                >
-                  <Unlock size={12} /> Unlock Level {lvl} for All
-                </button>
-              ))}
+              {(levelList.length > 1 ? levelList.slice(1) : [{ id: 2, title: 'Level 2' }, { id: 3, title: 'Level 3' }])
+                .map(lvl => (
+                  <button
+                    key={lvl.id}
+                    onClick={() => handleBulkUnlock(lvl.id, lvl.title)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-white border border-amber-300 text-amber-700 hover:bg-amber-100 active:scale-[0.97] transition-all shadow-sm"
+                  >
+                    <Unlock size={12} /> Unlock {lvl.title || `Level ${lvl.id}`} for All
+                  </button>
+                ))}
             </div>
           </div>
         </div>
@@ -364,7 +383,13 @@ export default function StudentManagement() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                {['#', 'Student ID', 'School', 'Class', 'Level 1', 'Level 2', 'Level 3', 'Status', 'Actions'].map(h => (
+                {[
+                  '#', 'Student ID', 'School', 'Class',
+                  ...(levelList.length > 0
+                    ? levelList.slice(0, 3).map(l => l.title || `Level ${l.id}`)
+                    : ['Level 1', 'Level 2', 'Level 3']),
+                  'Status', 'Actions',
+                ].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -387,9 +412,12 @@ export default function StudentManagement() {
                   <td className="px-4 py-3.5">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">{s.className}</span>
                   </td>
-                  {[1, 2, 3].map(lvl => (
-                    <td key={lvl} className="px-4 py-3.5">
-                      <LevelBadge data={s.levels[lvl]} levelId={lvl} overrideIds={s.overrides} />
+                  {(levelList.length > 0
+                    ? levelList.slice(0, 3)
+                    : [{ id: 1 }, { id: 2 }, { id: 3 }]
+                  ).map(lvl => (
+                    <td key={lvl.id} className="px-4 py-3.5">
+                      <LevelBadge data={s.levels[lvl.id]} levelId={lvl.id} overrideIds={s.overrides} />
                     </td>
                   ))}
                   <td className="px-4 py-3.5">
@@ -400,7 +428,7 @@ export default function StudentManagement() {
                     </span>
                   </td>
                   <td className="px-4 py-3.5">
-                    <ActionsMenu student={s} onAction={handleAction} />
+                    <ActionsMenu student={s} levelList={levelList} onAction={handleAction} />
                   </td>
                 </tr>
               ))}
@@ -432,7 +460,7 @@ export default function StudentManagement() {
         )}
       </div>
 
-      {viewStudent && <StudentModal student={viewStudent} onClose={() => setViewStudent(null)} />}
+      {viewStudent && <StudentModal student={viewStudent} levelList={levelList} onClose={() => setViewStudent(null)} />}
     </div>
   );
 }
