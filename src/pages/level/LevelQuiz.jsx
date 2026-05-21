@@ -242,6 +242,31 @@ export default function LevelQuiz() {
 
   const status = getLevelStatus(user?.uniqueId, id);
 
+  // ── All state declarations must come before any useEffect ───────────────────
+  const [questions,       setQuestions]       = useState([]);
+  const [loading,         setLoading]         = useState(true);
+  const [quizStarted,     setQuizStarted]     = useState(false);
+  const [current,         setCurrent]         = useState(0);
+  const [answers,         setAnswers]         = useState({});
+  const [panelFilter,     setPanelFilter]     = useState('all');
+  const [timeLeft,        setTimeLeft]        = useState(null);
+  const [timesUp,         setTimesUp]         = useState(false);
+  const [showSubmit,      setShowSubmit]      = useState(false);
+  const [result,          setResult]          = useState(null);
+  const [saveError,       setSaveError]       = useState(false);
+  const [saved,           setSaved]           = useState(false);
+  const [isSubmitting,    setIsSubmitting]    = useState(false);
+  const [showMobilePanel, setShowMobilePanel] = useState(false);
+  const [showReview,      setShowReview]      = useState(false);
+
+  const quizDuration  = useRef(600);
+  const startRef      = useRef(new Date());
+  const submittingRef = useRef(false);
+
+  // ── Navigation guard ────────────────────────────────────────────────────────
+  const quizInProgress = quizStarted && !result && !isSubmitting;
+  const blocker = useBlocker(quizInProgress);
+
   // Redirect if locked or already completed (but not after submitting in this session)
   useEffect(() => {
     if (status === 'locked') navigate('/dashboard', { replace: true });
@@ -252,41 +277,13 @@ export default function LevelQuiz() {
   useEffect(() => { refreshLevelSettings(); }, []);
 
   // Generate questions on mount (async API call)
-  const [questions, setQuestions] = useState([]);
-  const [loading,   setLoading]   = useState(true);
   useEffect(() => {
     generateLevelQuiz(user?.uniqueId, id).then(qs => {
-      // Normalize 'truefalse' → 'tf' so the renderer handles both admin-saved and legacy questions
       setQuestions(qs.map(q => q.type === 'truefalse' ? { ...q, type: 'tf' } : q));
       setLoading(false);
     }).catch(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const [quizStarted, setQuizStarted] = useState(false);
-  const [current,    setCurrent]    = useState(0);
-  const [answers,    setAnswers]    = useState({});
-  const [panelFilter,setPanelFilter]= useState('all');
-  const [timeLeft,   setTimeLeft]   = useState(null);
-  const quizDuration                 = useRef(600);
-  const [timesUp,    setTimesUp]    = useState(false);
-  const [showSubmit, setShowSubmit] = useState(false);
-  const [result,       setResult]       = useState(null);
-  const [saveError,    setSaveError]    = useState(false);
-  const [saved,        setSaved]        = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showMobilePanel, setShowMobilePanel] = useState(false);
-  const [showReview, setShowReview] = useState(false);
-
-  const startRef     = useRef(new Date());
-  const submittingRef = useRef(false);
-
-  // ── Navigation guard ────────────────────────────────────────────────────────
-  // Active only while the student is mid-quiz (started, not yet submitted).
-  const quizInProgress = quizStarted && !result && !isSubmitting;
-
-  // Block React Router in-app navigation (back button, link clicks, etc.)
-  const blocker = useBlocker(quizInProgress);
 
   // Block browser refresh / tab close / OS back gesture
   useEffect(() => {
@@ -295,7 +292,6 @@ export default function LevelQuiz() {
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [quizInProgress]);
-  // ────────────────────────────────────────────────────────────────────────────
 
   // Initialize timer from API-backed levelSettings once questions finish loading
   useEffect(() => {
