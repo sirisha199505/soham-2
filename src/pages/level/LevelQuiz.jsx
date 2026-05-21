@@ -11,6 +11,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { LEVELS } from '../../utils/levelData';
 import { formatDuration } from '../../utils/helpers';
 import { generateLevelQuiz, recordUsedQuestions, saveQuizAttempt } from '../../utils/quizGenerator';
+import { api } from '../../utils/api';
 import { CATEGORY_META, CATEGORIES } from '../../utils/questionBank';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
@@ -277,8 +278,15 @@ export default function LevelQuiz() {
 
   // Generate questions on mount (async API call)
   useEffect(() => {
-    generateLevelQuiz(user?.uniqueId, id).then(qs => {
-      setQuestions(qs.map(q => q.type === 'truefalse' ? { ...q, type: 'tf' } : q));
+    Promise.all([
+      generateLevelQuiz(user?.uniqueId, id),
+      api.getSettings().catch(() => ({})),
+    ]).then(([qs, settings]) => {
+      // Enforce admin-configured question count for this level
+      const levelCfg = settings?.levels?.[id] ?? settings?.levels?.[String(id)] ?? {};
+      const maxQ = Number(levelCfg?.questionsCount) || 0;
+      const limited = maxQ > 0 ? qs.slice(0, maxQ) : qs;
+      setQuestions(limited.map(q => q.type === 'truefalse' ? { ...q, type: 'tf' } : q));
       setLoading(false);
     }).catch(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
