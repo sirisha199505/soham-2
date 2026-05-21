@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
   Settings, Save, CheckCircle, RotateCcw, Clock,
-  RefreshCw, Eye, Shuffle, Users, Lock, Unlock,
+  Eye, Shuffle, Users, Lock, Unlock,
   AlertTriangle, Info, ToggleLeft, ToggleRight, Shield,
   Layers, ChevronDown, ChevronUp, BookOpen, Timer, Loader2,
 } from 'lucide-react';
@@ -10,14 +10,11 @@ import { api } from '../../utils/api';
 
 const DEFAULT_GLOBAL = {
   quizTimerMinutes:       10,
-  retryLimit:             1,
   randomizeQuestions:     false,
   showResultsImmediately: true,
   registrationOpen:       true,
-  showLeaderboard:        false,
   allowSelfReset:         false,
   maintenanceMode:        false,
-  maxStudentsPerClass:    60,
 };
 
 // Per-level cfg built dynamically from DB levels
@@ -27,7 +24,6 @@ const defaultLevelCfg = (level) => ({
   locked:         !(level.active ?? level.open ?? true),
   randomize:      false,
   showHints:      false,
-  retryLimit:     1,
 });
 
 /* ── Palette cycles for any number of levels ── */
@@ -111,9 +107,6 @@ function LevelSettingsPanel({ level, idx, cfg, onChange }) {
             <span className="text-white/80 text-xs font-semibold">
               Questions: <span className="text-white">{cfg.questionsCount}</span>
             </span>
-            <span className="text-white/80 text-xs font-semibold">
-              Retries: <span className="text-white">{cfg.retryLimit === 0 ? '∞' : cfg.retryLimit}</span>
-            </span>
             {cfg.locked && (
               <span className="flex items-center gap-1 text-amber-200 text-xs font-bold">
                 <Lock size={11}/> Locked
@@ -149,17 +142,6 @@ function LevelSettingsPanel({ level, idx, cfg, onChange }) {
                 icon={<BookOpen size={14}/>}
                 color={p.accent}
                 min={1} max={100}
-              />
-            </div>
-            <div className="bg-white rounded-xl p-4 border border-slate-100">
-              <NumberRow
-                label="Retry Limit"
-                desc="Max attempts (0 = unlimited)"
-                value={cfg.retryLimit}
-                onChange={v => set('retryLimit', v)}
-                icon={<RefreshCw size={14}/>}
-                color={p.accent}
-                min={0} max={10}
               />
             </div>
           </div>
@@ -388,12 +370,6 @@ export default function SystemSettings() {
               <NumberRow label="Default Quiz Timer" desc="Fallback timer for levels without a custom timer"
                 value={global.quizTimerMinutes} onChange={v => setGlobal(p => ({ ...p, quizTimerMinutes: v }))}
                 icon={<Clock size={15}/>} color="#3B82F6" min={1} max={60} suffix=" min"/>
-              <NumberRow label="Default Retry Limit" desc="Fallback retry count (0 = unlimited)"
-                value={global.retryLimit} onChange={v => setGlobal(p => ({ ...p, retryLimit: v }))}
-                icon={<RefreshCw size={15}/>} color="#F59E0B" min={0} max={10}/>
-              <NumberRow label="Max Students / Class" desc="Maximum registrations per class code"
-                value={global.maxStudentsPerClass} onChange={v => setGlobal(p => ({ ...p, maxStudentsPerClass: v }))}
-                icon={<Users size={15}/>} color="#8B5CF6" min={1} max={200}/>
             </div>
 
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
@@ -407,9 +383,6 @@ export default function SystemSettings() {
               <ToggleRow label="Show Results Immediately" desc="Students see score right after submission"
                 value={global.showResultsImmediately} onChange={v => setGlobal(p => ({ ...p, showResultsImmediately: v }))}
                 icon={<Eye size={14}/>} color="#3BC0EF"/>
-              <ToggleRow label="Show Leaderboard" desc="Display ranking on student dashboard"
-                value={global.showLeaderboard} onChange={v => setGlobal(p => ({ ...p, showLeaderboard: v }))}
-                icon={<Users size={14}/>} color="#F59E0B"/>
             </div>
 
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
@@ -445,7 +418,6 @@ export default function SystemSettings() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 { label:'Default Timer',  value:`${global.quizTimerMinutes} min`,  color:'#3B82F6' },
-                { label:'Retry Limit',    value: global.retryLimit===0?'∞':global.retryLimit, color:'#F59E0B' },
                 { label:'Registration',   value: global.registrationOpen?'Open':'Closed', color: global.registrationOpen?'#10B981':'#EF4444' },
                 { label:'Maintenance',    value: global.maintenanceMode?'ON':'OFF', color: global.maintenanceMode?'#EF4444':'#10B981' },
               ].map(s => (
@@ -510,12 +482,11 @@ export default function SystemSettings() {
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {[
-                      { label:'Timer',      key:'timerMinutes',   fmt: v => `${v} min`         },
-                      { label:'Questions',  key:'questionsCount', fmt: v => v                   },
-                      { label:'Retries',    key:'retryLimit',     fmt: v => v === 0 ? '∞' : v  },
-                      { label:'Locked',     key:'locked',         fmt: v => v ? 'Yes' : 'No'   },
-                      { label:'Randomize',  key:'randomize',      fmt: v => v ? 'Yes' : 'No'   },
-                      { label:'Hints',      key:'showHints',      fmt: v => v ? 'Yes' : 'No'   },
+                      { label:'Timer',      key:'timerMinutes',   fmt: v => `${v} min`       },
+                      { label:'Questions',  key:'questionsCount', fmt: v => v                 },
+                      { label:'Locked',     key:'locked',         fmt: v => v ? 'Yes' : 'No' },
+                      { label:'Randomize',  key:'randomize',      fmt: v => v ? 'Yes' : 'No' },
+                      { label:'Hints',      key:'showHints',      fmt: v => v ? 'Yes' : 'No' },
                     ].map(row => (
                       <tr key={row.label} className="hover:bg-slate-50/50">
                         <td className="px-5 py-3 text-xs font-semibold text-slate-500">{row.label}</td>
