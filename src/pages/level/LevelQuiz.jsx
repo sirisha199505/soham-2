@@ -474,7 +474,6 @@ export default function LevelQuiz() {
       'The timer starts when you click "Start Exam" and cannot be paused.',
       'You can review and change answers before final submission.',
       'Once submitted, answers cannot be changed.',
-      'Negative marking applies: –0.5 marks per wrong answer.',
       'Do not refresh or close the browser tab during the exam.',
       'Each level can only be attempted once — your score is final.',
     ];
@@ -527,21 +526,6 @@ export default function LevelQuiz() {
                   </li>
                 ))}
               </ul>
-            </div>
-
-            {/* Marking scheme */}
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { label: 'Correct', value: '+2 marks', color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
-                { label: 'Wrong',   value: '–0.5 marks', color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
-                { label: 'Skipped', value: '0 marks',  color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' },
-              ].map(s => (
-                <div key={s.label} className="rounded-xl p-3 text-center border"
-                  style={{ background: s.bg, borderColor: s.border }}>
-                  <p className="text-sm font-bold" style={{ color: s.color }}>{s.value}</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">{s.label}</p>
-                </div>
-              ))}
             </div>
 
             {/* Actions */}

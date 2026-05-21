@@ -122,7 +122,12 @@ export default function AdminReports() {
     fetchReportData().then(setData).catch(() => {}).finally(() => setLoading(false));
   };
 
-  useEffect(() => { if (!user?.id) return; loadData(); }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!user?.id) return;
+    loadData();
+    const timer = setInterval(loadData, 30_000);
+    return () => clearInterval(timer);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = loadData;
 

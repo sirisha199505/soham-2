@@ -77,6 +77,7 @@ export default function LiveMonitoring() {
   const [search,       setSearch]       = useState('');
   const [actionModal,  setActionModal]  = useState(null);
   const [toast,        setToast]        = useState('');
+  const [lastUpdated,  setLastUpdated]  = useState(null);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -96,6 +97,7 @@ export default function LiveMonitoring() {
         school:    a.student?.schoolName || '—',
       }));
       setSessions(mapped);
+      setLastUpdated(new Date());
     } catch (err) {
       console.error('Failed to load sessions:', err);
     } finally {
@@ -103,7 +105,12 @@ export default function LiveMonitoring() {
     }
   }, []);
 
-  useEffect(() => { if (!user?.id) return; loadSessions(); }, [user?.id, loadSessions]);
+  useEffect(() => {
+    if (!user?.id) return;
+    loadSessions();
+    const timer = setInterval(loadSessions, 15_000);
+    return () => clearInterval(timer);
+  }, [user?.id, loadSessions]);
 
   const refresh = async () => {
     setLoading(true);
@@ -188,7 +195,14 @@ export default function LiveMonitoring() {
                 <span className="text-xs font-bold text-green-700">LIVE</span>
               </div>
             </div>
-            <p className="text-sm text-slate-400 mt-0.5">Real-time exam session monitoring · {sessions.length} total sessions</p>
+            <p className="text-sm text-slate-400 mt-0.5">
+              Real-time exam session monitoring · {sessions.length} total sessions
+              {lastUpdated && (
+                <span className="ml-2 text-[11px] text-slate-300">
+                  · Updated {lastUpdated.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+              )}
+            </p>
           </div>
         </div>
         <button onClick={refresh}

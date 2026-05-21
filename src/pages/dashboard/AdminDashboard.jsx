@@ -98,10 +98,24 @@ export default function AdminDashboard() {
           : [];
         setLevelsList(sorted);
         setStats(computeStats(students));
-        setRecent(students.slice(0, 5).map(s => ({
-          id:     s.uniqueId,
-          school: s.schoolName || '—',
-          class:  s.className  || '—',
+
+        // Show students who most recently completed any level
+        const withCompletion = students
+          .map(s => {
+            const entries = Object.values(s.levels || {}).filter(l => l?.status === 'completed');
+            const latestTs = entries.reduce((best, l) => {
+              const t = l.lastCompletedAt || l.completedAt || '';
+              return t > best ? t : best;
+            }, '');
+            const completedCount = entries.length;
+            return { id: s.uniqueId, school: s.schoolName || '—', class: s.className || '—', latestTs, completedCount };
+          })
+          .filter(s => s.completedCount > 0)
+          .sort((a, b) => b.latestTs.localeCompare(a.latestTs))
+          .slice(0, 5);
+
+        setRecent(withCompletion.length > 0 ? withCompletion : students.slice(0, 5).map(s => ({
+          id: s.uniqueId, school: s.schoolName || '—', class: s.className || '—', latestTs: '', completedCount: 0,
         })));
       }).catch(() => {});
   };
@@ -109,6 +123,8 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!user?.id) return;
     fetchData();
+    const timer = setInterval(fetchData, 30_000);
+    return () => clearInterval(timer);
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = () => {
@@ -273,10 +289,13 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        {/* Recent registrations */}
+        {/* Recent completions */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Recent Students</h3>
+            <div>
+              <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Recent Completions</h3>
+              <p className="text-[10px] text-slate-400 mt-0.5">Students who finished a level last</p>
+            </div>
             <Link to="/admin/students" className="text-xs font-semibold text-indigo-500 hover:text-indigo-700 flex items-center gap-1">
               View all <ArrowRight size={11} />
             </Link>
@@ -284,7 +303,7 @@ export default function AdminDashboard() {
           {recent.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <AlertCircle size={32} className="text-slate-200 mb-2" />
-              <p className="text-sm text-slate-400">No students registered yet</p>
+              <p className="text-sm text-slate-400">No levels completed yet</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -297,6 +316,11 @@ export default function AdminDashboard() {
                     <p className="text-xs font-mono font-bold text-slate-700 truncate">{s.id}</p>
                     <p className="text-[10px] text-slate-400">{s.school} · Class {s.class}</p>
                   </div>
+                  {s.completedCount > 0 && (
+                    <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-green-50 text-green-600 border border-green-100">
+                      {s.completedCount}✓
+                    </span>
+                  )}
                 </div>
               ))}
             </div>

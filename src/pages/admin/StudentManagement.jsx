@@ -197,7 +197,12 @@ export default function StudentManagement() {
     } catch {}
   };
 
-  useEffect(() => { if (!user?.id) return; fetchStudents(); }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchStudents();
+    const timer = setInterval(fetchStudents, 30_000);
+    return () => clearInterval(timer);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = () => fetchStudents();
 
