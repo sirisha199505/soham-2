@@ -532,7 +532,7 @@ export default function LevelQuiz() {
             </div>
             <div className="relative z-10 grid grid-cols-2 gap-3 mt-4">
               {[
-                { label: 'Questions', value: `${questions.length} Qs` },
+                { label: 'Questions', value: `${Number(levelSettings[id]?.questionCount) || questions.length} Qs` },
                 { label: 'Time Limit', value: `${timeLimit} Min` },
               ].map(m => (
                 <div key={m.label} className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.15)' }}>

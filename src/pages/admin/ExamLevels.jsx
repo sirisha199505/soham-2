@@ -20,12 +20,13 @@ const levelColor = (order) => DEFAULT_COLORS[(order - 1) % DEFAULT_COLORS.length
 
 /* ── Add Level Modal ── */
 function AddLevelModal({ onSave, onClose }) {
-  const [form, setForm] = useState({ title: '', subtitle: '', description: '', timeLimit: 10 });
+  const [form, setForm] = useState({ title: '', subtitle: '', description: '', timeLimit: 10, questionCount: 20 });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const handleSave = async () => {
     if (!form.title.trim()) { setError('Title is required'); return; }
+    if (!form.questionCount || Number(form.questionCount) < 1) { setError('Question count must be at least 1'); return; }
     setSaving(true);
     try {
       await onSave(form);
@@ -63,11 +64,19 @@ function AddLevelModal({ onSave, onClose }) {
             <textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} rows={3}
               className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none" />
           </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Time Limit (minutes)</label>
-            <input type="number" min="1" max="120" value={form.timeLimit}
-              onChange={e => setForm(p => ({ ...p, timeLimit: Number(e.target.value) }))}
-              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Time Limit (minutes)</label>
+              <input type="number" min="1" max="120" value={form.timeLimit}
+                onChange={e => setForm(p => ({ ...p, timeLimit: Number(e.target.value) }))}
+                className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Questions per Quiz <span className="text-red-400">*</span></label>
+              <input type="number" min="1" max="500" value={form.questionCount}
+                onChange={e => setForm(p => ({ ...p, questionCount: e.target.value }))}
+                className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+            </div>
           </div>
           {error && (
             <div className="flex items-center gap-2 px-3 py-2 bg-red-50 rounded-xl border border-red-100 text-sm text-red-600">
@@ -126,11 +135,12 @@ function DeleteModal({ level, onConfirm, onClose }) {
 function EditModal({ levelId, settings, onSave, onClose }) {
   const s = settings[levelId] || {};
   const [form, setForm] = useState({
-    title:       s.title       || '',
-    subtitle:    s.subtitle    || '',
-    description: s.description || '',
-    timeLimit:   s.timeLimit   ?? 10,
-    active:      s.active      ?? true,
+    title:         s.title         || '',
+    subtitle:      s.subtitle      || '',
+    description:   s.description   || '',
+    timeLimit:     s.timeLimit     ?? 10,
+    questionCount: s.questionCount ?? 20,
+    active:        s.active        ?? true,
   });
   const f = v => e => setForm(p => ({ ...p, [v]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
 
@@ -160,10 +170,17 @@ function EditModal({ levelId, settings, onSave, onClose }) {
             <textarea value={form.description} onChange={f('description')} rows={3}
               className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none" />
           </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Time Limit (minutes)</label>
-            <input type="number" min="1" max="120" value={form.timeLimit} onChange={f('timeLimit')}
-              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Time Limit (minutes)</label>
+              <input type="number" min="1" max="120" value={form.timeLimit} onChange={f('timeLimit')}
+                className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Questions per Quiz <span className="text-red-400">*</span></label>
+              <input type="number" min="1" max="500" value={form.questionCount} onChange={f('questionCount')}
+                className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+            </div>
           </div>
           <label className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3 cursor-pointer">
             <div>
@@ -230,7 +247,7 @@ function LevelCard({ levelId, isFirst, settings, stats, onEdit, onDelete }) {
 
         <div className="grid grid-cols-3 gap-2">
           {[
-            { icon: <BookOpen size={12} />, label: 'Questions',   val: `${s.questionCount ?? 0} active` },
+            { icon: <BookOpen size={12} />, label: 'Questions',   val: `${s.questionCount ?? 20} Qs` },
             { icon: <Clock size={12} />,    label: 'Time Limit',  val: `${s.timeLimit ?? 10} min` },
             { icon: <Users size={12} />,    label: 'Completions', val: stats?.completed ?? 0 },
           ].map(m => (
@@ -299,11 +316,12 @@ export default function ExamLevels() {
 
   const handleSave = async (levelId, form) => {
     await setLevelActive(levelId, {
-      title:       form.title,
-      subtitle:    form.subtitle,
-      description: form.description,
-      timeLimit:   Number(form.timeLimit) || 10,
-      active:      form.active,
+      title:         form.title,
+      subtitle:      form.subtitle,
+      description:   form.description,
+      timeLimit:     Number(form.timeLimit) || 10,
+      questionCount: Number(form.questionCount) || 20,
+      active:        form.active,
     });
     setEditing(null);
     setSaved(true);
@@ -314,10 +332,11 @@ export default function ExamLevels() {
     setLoading(true);
     try {
       await createLevel({
-        title:       form.title,
-        subtitle:    form.subtitle,
-        description: form.description,
-        timeLimit:   Number(form.timeLimit) || 10,
+        title:         form.title,
+        subtitle:      form.subtitle,
+        description:   form.description,
+        timeLimit:     Number(form.timeLimit) || 10,
+        questionCount: Number(form.questionCount) || 20,
       });
 
       // Auto-sync: create a matching QB level so the Question Bank stays in step
