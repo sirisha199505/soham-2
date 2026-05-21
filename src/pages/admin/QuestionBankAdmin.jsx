@@ -786,9 +786,19 @@ function LevelSection({ level, bankId, index, onRenamed, onDeleted, showToast })
       }
     }
 
+    // Deduplicate within the imported batch by question text (case-insensitive)
+    const seen = new Set();
+    const unique = questions.filter(q => {
+      const key = q.text.trim().toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
     const targetCatName = categories.find(c => c.id == targetCatId)?.name || newCatName || '';
     let count = 0;
-    for (const q of questions) {
+    let skipped = 0;
+    for (const q of unique) {
       try {
         await api.addQuestion({
           text: q.text, type: q.type,
@@ -801,9 +811,12 @@ function LevelSection({ level, bankId, index, onRenamed, onDeleted, showToast })
           bankName: 'Question Bank', status: 'active',
         });
         count++;
-      } catch {}
+      } catch { skipped++; }
     }
-    showToast?.(`${count} question${count !== 1 ? 's' : ''} imported!`);
+    const msg = skipped > 0
+      ? `${count} imported, ${skipped} skipped (duplicates).`
+      : `${count} question${count !== 1 ? 's' : ''} imported!`;
+    showToast?.(msg);
     setImportOpen(false);
   };
 
