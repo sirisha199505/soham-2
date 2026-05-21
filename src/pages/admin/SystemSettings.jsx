@@ -19,8 +19,8 @@ const DEFAULT_GLOBAL = {
 
 // Per-level cfg built dynamically from DB levels
 const defaultLevelCfg = (level) => ({
-  timerMinutes:   level.timeLimit ?? 10,
-  questionsCount: level.questionCount ?? 10,
+  timerMinutes:   level.timeLimit     ?? 10,
+  questionsCount: level.questionCount ?? 20,
   locked:         !(level.active ?? level.open ?? true),
   randomize:      false,
   showHints:      false,
@@ -173,6 +173,17 @@ function LevelSettingsPanel({ level, idx, cfg, onChange }) {
             />
           </div>
 
+          {/* Validation: configured questions > available in QB */}
+          {level.availableQuestions != null && cfg.questionsCount > level.availableQuestions && (
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">
+              <AlertTriangle size={13} className="text-red-500 shrink-0 mt-0.5"/>
+              <p className="text-xs font-semibold text-red-700">
+                Only <span className="font-bold">{level.availableQuestions}</span> questions available in the Question Bank for this level.
+                Students will receive {level.availableQuestions} question{level.availableQuestions !== 1 ? 's' : ''} — reduce the count or add more questions to the bank.
+              </p>
+            </div>
+          )}
+
           {cfg.locked && (
             <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
               <Lock size={13} className="text-amber-500 shrink-0"/>
@@ -238,13 +249,15 @@ export default function SystemSettings() {
       // Save global + per-level cfgs to system_settings
       await api.saveSettings({ ...global, levels: levelCfgs });
 
-      // Push timer, questionsCount, and locked directly into the levels table
+      // Push timer, questionCount, and locked directly into the levels table
       await Promise.all(
         levels.map(lvl => {
           const cfg = levelCfgs[lvl.id] || {};
+          const qc  = Number(cfg.questionsCount);
           return api.saveLevelSettings(lvl.id, {
-            timeLimit: cfg.timerMinutes ?? lvl.timeLimit ?? 10,
-            active:    !cfg.locked,
+            timeLimit:     cfg.timerMinutes ?? lvl.timeLimit ?? 10,
+            questionCount: qc > 0 ? qc : 20,
+            active:        !cfg.locked,
           }).catch(err => console.error(`Level ${lvl.id} sync failed:`, err));
         })
       );

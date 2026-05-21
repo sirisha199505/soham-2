@@ -257,8 +257,9 @@ export default function LevelQuiz() {
   const [saveError,       setSaveError]       = useState(false);
   const [saved,           setSaved]           = useState(false);
   const [isSubmitting,    setIsSubmitting]    = useState(false);
-  const [showMobilePanel, setShowMobilePanel] = useState(false);
-  const [showReview,      setShowReview]      = useState(false);
+  const [showMobilePanel,      setShowMobilePanel]      = useState(false);
+  const [showReview,           setShowReview]           = useState(false);
+  const [insufficientWarning,  setInsufficientWarning]  = useState('');
 
   const quizDuration  = useRef(600);
   const startRef      = useRef(new Date());
@@ -276,16 +277,20 @@ export default function LevelQuiz() {
   // Refresh level settings on mount so recently-deleted levels redirect immediately
   useEffect(() => { refreshLevelSettings(); }, []);
 
-  // Generate questions on mount (async API call)
+  // Generate questions on mount — enforce admin-configured question count
   useEffect(() => {
     Promise.all([
       generateLevelQuiz(user?.uniqueId, id),
-      api.getSettings().catch(() => ({})),
-    ]).then(([qs, settings]) => {
-      // Enforce admin-configured question count for this level
-      const levelCfg = settings?.levels?.[id] ?? settings?.levels?.[String(id)] ?? {};
-      const maxQ = Number(levelCfg?.questionsCount) || 0;
+      api.getLevelSettings().catch(() => []),
+    ]).then(([qs, lvls]) => {
+      const lvlData = Array.isArray(lvls) ? lvls.find(l => l.id === id) : null;
+      const maxQ    = Number(lvlData?.questionCount) || 0;
       const limited = maxQ > 0 ? qs.slice(0, maxQ) : qs;
+      if (maxQ > 0 && qs.length < maxQ && qs.length > 0) {
+        setInsufficientWarning(
+          `Only ${qs.length} of ${maxQ} configured questions are available in the Question Bank for this level.`
+        );
+      }
       setQuestions(limited.map(q => q.type === 'truefalse' ? { ...q, type: 'tf' } : q));
       setLoading(false);
     }).catch(() => setLoading(false));
@@ -539,6 +544,14 @@ export default function LevelQuiz() {
           </div>
 
           <div className="p-6 space-y-5">
+            {/* Insufficient questions warning */}
+            {insufficientWarning && (
+              <div className="flex items-start gap-2 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
+                <AlertTriangle size={15} className="text-orange-500 shrink-0 mt-0.5"/>
+                <p className="text-sm font-semibold text-orange-700">{insufficientWarning}</p>
+              </div>
+            )}
+
             {/* Rules list */}
             <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100">
               <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2 text-sm">
