@@ -345,14 +345,16 @@ export default function LevelQuiz() {
 
   // Retry a promise-returning function with exponential backoff.
   // Render free-tier can cold-start in 30–50 s; the api.js timeout is 55 s.
-  // Three retries with 3 s / 8 s / 15 s gaps give the server time to warm up
-  // without holding the student on the submission screen for too long.
+  // Three retries with 3 s / 8 s / 15 s gaps give the server time to warm up.
+  // 4xx errors are NOT retried — they are server-side validation rejections and
+  // will never recover with a retry (e.g. routing bugs, missing fields).
   const withRetry = async (fn, retries = 3) => {
     const delays = [3000, 8000, 15000];
     let lastErr;
     for (let i = 0; i <= retries; i++) {
       try { return await fn(); } catch (err) {
         lastErr = err;
+        if (err?.status >= 400 && err?.status < 500) throw err;
         if (i < retries) await new Promise(r => setTimeout(r, delays[i] ?? 15000));
       }
     }

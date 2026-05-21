@@ -87,15 +87,31 @@ export default function LiveMonitoring() {
   const loadSessions = useCallback(async () => {
     try {
       const raw = await api.getMonitoringSessions();
-      const mapped = (raw || []).map(a => ({
-        id:        a.id,
-        studentId: a.student?.uniqueId || `User#${a.userId}`,
-        level:     a.levelId || 1,
-        answered:  a.score   || 0,
-        total:     a.total   || 10,
-        status:    'active',
-        school:    a.student?.schoolName || '—',
-      }));
+      const now = Date.now();
+      const mapped = (raw || []).map(a => {
+        // Determine display status based on how recently the attempt was created.
+        // Attempts < 5 min ago = "active" (student may still be reviewing),
+        // 5–30 min = "progress" (recently finished), > 30 min = "abandoned".
+        const ageMs = now - new Date(a.createdAt || 0).getTime();
+        const status = ageMs < 5 * 60_000 ? 'active'
+          : ageMs < 30 * 60_000 ? 'progress'
+          : 'abandoned';
+
+        return {
+          id:        a.id,
+          studentId: a.student?.uniqueId || a.student?.name || `User#${a.userId}`,
+          level:     a.levelId || 1,
+          levelTitle: a.levelTitle || `Level ${a.levelId || 1}`,
+          score:     a.score     || 0,   // percentage (0-100)
+          correct:   a.correctCount  || 0,
+          wrong:     a.wrongCount    || 0,
+          total:     a.total     || 20,
+          timeSecs:  a.timeTakenSecs || 0,
+          status,
+          school:    a.student?.schoolName || '—',
+          createdAt: a.createdAt,
+        };
+      });
       setSessions(mapped);
       setLastUpdated(new Date());
     } catch (err) {
@@ -291,10 +307,10 @@ export default function LiveMonitoring() {
                 </td>
               </tr>
             ) : filtered.map(sess => {
-              const st       = STATUS_CONFIG[sess.status] || STATUS_CONFIG.active;
-              const lvlColor = LEVEL_COLORS[sess.level];
-              const pct      = Math.round((sess.answered / sess.total) * 100);
-              const isAnon   = sess.status === 'anonymous';
+              const st          = STATUS_CONFIG[sess.status] || STATUS_CONFIG.active;
+              const lvlColor    = LEVEL_COLORS[sess.level] || '#6366f1';
+              const pct         = Math.min(sess.score || 0, 100); // score is already 0-100%
+              const isAnon      = sess.status === 'anonymous';
               const isAbandoned = sess.status === 'abandoned';
 
               return (
@@ -327,7 +343,7 @@ export default function LiveMonitoring() {
                   <td className="px-4 py-3.5 min-w-[130px]">
                     <div className="space-y-1">
                       <div className="flex justify-between text-[10px] text-slate-400">
-                        <span>{sess.answered}/{sess.total} answered</span>
+                        <span>{sess.correct}/{sess.total} correct</span>
                         <span className="font-semibold">{pct}%</span>
                       </div>
                       <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
