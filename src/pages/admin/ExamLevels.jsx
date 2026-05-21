@@ -6,7 +6,6 @@ import {
   Plus, Trash2, AlertCircle, Loader2,
 } from 'lucide-react';
 import { loadQuestionBank, CATEGORY_META } from '../../utils/questionBank';
-import { TOTAL_QUIZ_QUESTIONS } from '../../utils/quizGenerator';
 import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
 
@@ -232,7 +231,7 @@ function LevelCard({ levelId, settings, stats, onEdit, onDelete }) {
 
         <div className="grid grid-cols-3 gap-2">
           {[
-            { icon: <BookOpen size={12} />, label: 'Questions',   val: `${TOTAL_QUIZ_QUESTIONS} per quiz` },
+            { icon: <BookOpen size={12} />, label: 'Questions',   val: `${s.questionCount ?? 0} active` },
             { icon: <Clock size={12} />,    label: 'Time Limit',  val: `${s.timeLimit ?? 10} min` },
             { icon: <Users size={12} />,    label: 'Completions', val: stats?.completed ?? 0 },
           ].map(m => (

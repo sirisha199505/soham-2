@@ -378,17 +378,15 @@ export default function LevelQuiz() {
       score,
     };
 
-    // Run all three API calls in parallel. Local save in saveQuizAttempt is
-    // synchronous so history data is always preserved. Track if the progress
-    // save failed so we can warn the student on the result screen.
-    const [, progressSaved] = await Promise.allSettled([
+    // Run all three API calls in parallel and show an error if any fail.
+    const [attemptSaved, progressSaved] = await Promise.allSettled([
       saveQuizAttempt(user.uniqueId, attemptData),
       markLevelComplete(user.uniqueId, id, score),
       recordUsedQuestions(user.uniqueId, questions.map(q => q.id)),
     ]);
 
-    if (progressSaved.status === 'rejected') {
-      console.error('Progress save failed:', progressSaved.reason?.message);
+    if (attemptSaved.status === 'rejected' || progressSaved.status === 'rejected') {
+      console.error('Save failed:', (attemptSaved.reason || progressSaved.reason)?.message);
       setSaveError(true);
     }
 

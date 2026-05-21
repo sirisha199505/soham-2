@@ -1,19 +1,14 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Clock, CheckCircle, XCircle, Minus, Trophy, ChevronDown, ChevronUp,
-  Calendar, Target, BookOpen, ArrowRight, Filter } from 'lucide-react';
+import {
+  Clock, CheckCircle, XCircle, Minus, Trophy, ChevronDown, ChevronUp,
+  Calendar, Target, BookOpen, ArrowRight, Filter, RefreshCw,
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useLevel } from '../../context/LevelContext';
-import { getStudentAttempts } from '../../utils/quizGenerator';
+import { api } from '../../utils/api';
 import { CATEGORY_META, CATEGORIES } from '../../utils/questionBank';
 import { formatDuration, getPerformanceLabel } from '../../utils/helpers';
-import { LEVELS } from '../../utils/levelData';
 
-const LEVEL_COLORS = {
-  1: { from: '#3BC0EF', to: '#1E3A8A' },
-  2: { from: '#8B5CF6', to: '#6d28d9' },
-  3: { from: '#10B981', to: '#047857' },
-};
-
+// ─── Score badge ──────────────────────────────────────────────────────────────
 function ScoreBadge({ pct }) {
   const p = getPerformanceLabel(pct);
   return (
@@ -28,14 +23,14 @@ function ScoreBadge({ pct }) {
   );
 }
 
-// Handles both old object options {text,imageUrl} and new string options
+// ─── Option text helper ───────────────────────────────────────────────────────
 const optText = (o) => (typeof o === 'string' ? o : (o?.text || ''));
 
-// ─── Single question review ───────────────────────────────────────────────
+// ─── Single question review ───────────────────────────────────────────────────
 function QuestionReview({ q, answer, index }) {
-  const catMeta  = CATEGORY_META[q.category] || { label: q.category, color: '#64748b', bg: '#f8fafc' };
+  const catMeta    = CATEGORY_META[q.category] || { label: q.category, color: '#64748b', bg: '#f8fafc' };
   const correctIdx = q.correct ?? q.correctAnswer;
-  const isSkipped = answer === undefined || answer === null;
+  const isSkipped  = answer === undefined || answer === null;
   let isCorrect = false;
   if (!isSkipped) {
     if (q.type === 'match') {
@@ -51,7 +46,7 @@ function QuestionReview({ q, answer, index }) {
     <div className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: statusColor + '30' }}>
       <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ background: statusBg, borderColor: statusColor + '20' }}>
         <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-          style={{ background: statusColor, color:'#fff' }}>
+          style={{ background: statusColor, color: '#fff' }}>
           {index}
         </div>
         <div className="flex-1 min-w-0">
@@ -82,7 +77,7 @@ function QuestionReview({ q, answer, index }) {
               const isSelected        = answer === i;
               const isActuallyCorrect = i === correctIdx;
               let cls = 'border-slate-200 bg-slate-50 text-slate-500';
-              if (isActuallyCorrect) cls = 'border-green-300 bg-green-50 text-green-700 font-semibold';
+              if (isActuallyCorrect)             cls = 'border-green-300 bg-green-50 text-green-700 font-semibold';
               if (isSelected && !isActuallyCorrect) cls = 'border-red-300 bg-red-50 text-red-700 font-semibold';
               return (
                 <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs ${cls}`}>
@@ -139,13 +134,15 @@ function QuestionReview({ q, answer, index }) {
   );
 }
 
-// ─── Attempt card ─────────────────────────────────────────────────────────
+// ─── Attempt card ─────────────────────────────────────────────────────────────
+const LEVEL_PALETTE = ['#3BC0EF', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#6366f1', '#14b8a6'];
+function lvlColor(id) { return LEVEL_PALETTE[(Number(id) - 1) % LEVEL_PALETTE.length] || '#4F46E5'; }
+
 function AttemptCard({ attempt }) {
   const [open, setOpen] = useState(false);
-  const lvl    = LEVEL_COLORS[attempt.levelId] || { from:'#4F46E5', to:'#6d28d9' };
+  const col    = lvlColor(attempt.levelId);
   const passed = (attempt.score?.pct ?? 0) >= 50;
   const date   = attempt.date ? new Date(attempt.date) : null;
-  const attemptNum = attempt.attemptNum;
 
   const catBreakdown = useMemo(() => {
     const qs  = attempt.questions || [];
@@ -153,13 +150,13 @@ function AttemptCard({ attempt }) {
     return CATEGORIES.map(cat => {
       const catQs   = qs.filter(q => q.category === cat);
       const correct = catQs.filter(q => {
-        const a = ans[q.id];
+        const a = ans[q.id] ?? ans[String(q.id)];
         if (a == null) return false;
-        if (q.type === 'match') return typeof a === 'object' && q.pairs.every((_, i) => a[i] === i);
+        if (q.type === 'match') return typeof a === 'object' && (q.pairs || []).every((_, i) => a[i] === i);
         return a === q.correct;
       }).length;
-      return { cat, meta: CATEGORY_META[cat] || { label: cat, color:'#64748b', bg:'#f8fafc' }, total: catQs.length, correct };
-    });
+      return { cat, meta: CATEGORY_META[cat] || { label: cat, color: '#64748b', bg: '#f8fafc' }, total: catQs.length, correct };
+    }).filter(b => b.total > 0);
   }, [attempt]);
 
   return (
@@ -167,15 +164,15 @@ function AttemptCard({ attempt }) {
       <button onClick={() => setOpen(p => !p)} className="w-full text-left">
         <div className="flex items-center gap-4 p-4">
           <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shrink-0"
-            style={{ background: `linear-gradient(135deg, ${lvl.from}, ${lvl.to})` }}>
+            style={{ background: `linear-gradient(135deg, ${col}, ${col}cc)` }}>
             L{attempt.levelId}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className="text-sm font-bold text-slate-800">{attempt.levelTitle || `Level ${attempt.levelId}`}</span>
-              {attemptNum && (
+              {attempt.attemptNum && (
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
-                  Attempt #{attemptNum}
+                  Attempt #{attempt.attemptNum}
                 </span>
               )}
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
@@ -185,11 +182,11 @@ function AttemptCard({ attempt }) {
             <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
               {date && (
                 <span className="flex items-center gap-1">
-                  <Calendar size={10}/> {date.toLocaleDateString()} {date.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
+                  <Calendar size={10}/> {date.toLocaleDateString()} {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}
               <span className="flex items-center gap-1"><Clock size={10}/> {formatDuration(attempt.score?.timeTaken || 0)}</span>
-              <span className="flex items-center gap-1"><Target size={10}/> {attempt.score?.correct || 0}/{attempt.score?.total || 0}</span>
+              <span className="flex items-center gap-1"><Target size={10}/> {attempt.score?.correct ?? 0}/{attempt.score?.total ?? 0}</span>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -201,26 +198,28 @@ function AttemptCard({ attempt }) {
 
       {open && (
         <div className="border-t border-slate-100 p-4 space-y-4">
-          {/* Category breakdown */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {catBreakdown.map(({ cat, meta, total, correct }) => (
-              <div key={cat} className="rounded-xl p-3 text-center" style={{ background: meta.bg }}>
-                <p className="text-base font-bold" style={{ color: meta.color }}>{correct}/{total}</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">{meta.label}</p>
-                <div className="mt-1.5 h-1.5 bg-white/60 rounded-full overflow-hidden">
-                  <div className="h-1.5 rounded-full" style={{ width: `${total ? (correct/total)*100 : 0}%`, background: meta.color }}/>
+          {/* Category breakdown — only shown when questions are available */}
+          {catBreakdown.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {catBreakdown.map(({ cat, meta, total, correct }) => (
+                <div key={cat} className="rounded-xl p-3 text-center" style={{ background: meta.bg }}>
+                  <p className="text-base font-bold" style={{ color: meta.color }}>{correct}/{total}</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">{meta.label}</p>
+                  <div className="mt-1.5 h-1.5 bg-white/60 rounded-full overflow-hidden">
+                    <div className="h-1.5 rounded-full" style={{ width: `${total ? (correct / total) * 100 : 0}%`, background: meta.color }}/>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           {/* Score grid */}
           <div className="grid grid-cols-3 gap-2 text-center">
             {[
-              { label:'Correct', val: attempt.score?.correct ?? 0, color:'#16a34a', bg:'#f0fdf4' },
-              { label:'Wrong',   val: attempt.score?.wrong ?? 0,   color:'#dc2626', bg:'#fef2f2' },
-              { label:'Skipped', val: (attempt.score?.total ?? 0) - (attempt.score?.correct ?? 0) - (attempt.score?.wrong ?? 0),
-                color:'#64748b', bg:'#f8fafc' },
+              { label: 'Correct', val: attempt.score?.correct ?? 0,  color: '#16a34a', bg: '#f0fdf4' },
+              { label: 'Wrong',   val: attempt.score?.wrong   ?? 0,  color: '#dc2626', bg: '#fef2f2' },
+              { label: 'Skipped', val: (attempt.score?.total ?? 0) - (attempt.score?.correct ?? 0) - (attempt.score?.wrong ?? 0),
+                color: '#64748b', bg: '#f8fafc' },
             ].map(s => (
               <div key={s.label} className="rounded-xl p-3" style={{ background: s.bg }}>
                 <p className="text-xl font-bold" style={{ color: s.color }}>{s.val}</p>
@@ -244,9 +243,8 @@ function AttemptCard({ attempt }) {
             ) : (
               <div className="space-y-3">
                 {(attempt.questions || []).map((q, i) => {
-                  // Support both string and number question ids in the answers map
                   const ans = attempt.answers?.[q.id] ?? attempt.answers?.[String(q.id)] ?? attempt.answers?.[Number(q.id)];
-                  return <QuestionReview key={q.id || i} q={q} answer={ans} index={i + 1}/>;
+                  return <QuestionReview key={q.id ?? i} q={q} answer={ans} index={i + 1}/>;
                 })}
               </div>
             )}
@@ -257,63 +255,32 @@ function AttemptCard({ attempt }) {
   );
 }
 
-// ─── MAIN ─────────────────────────────────────────────────────────────────
+// ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function QuizHistory() {
-  const { user }      = useAuth();
-  const { getLevel }  = useLevel();
-  const [attempts,    setAttempts]  = useState([]);
-  const [lvlFilter,   setLvlFilter] = useState('all');
+  const { user }                   = useAuth();
+  const [attempts,  setAttempts]   = useState([]);
+  const [loading,   setLoading]    = useState(true);
+  const [error,     setError]      = useState(null);
+  const [lvlFilter, setLvlFilter]  = useState('all');
 
-  useEffect(() => {
+  const load = () => {
     if (!user?.uniqueId) return;
-    getStudentAttempts(user.uniqueId).then(apiAttempts => {
-      if (apiAttempts.length > 0) {
-        setAttempts(apiAttempts);
-        return;
-      }
-      // Both API and localStorage empty — synthesize from LevelContext progress
-      // so students who completed before localStorage persistence was added still
-      // see their history.
-      const synthetic = LEVELS
-        .map(lvl => {
-          const data = getLevel(user.uniqueId, lvl.id);
-          if (!data || data.status !== 'completed') return null;
-          const score = data.score || {};
-          return {
-            id:         `ctx_${lvl.id}`,
-            levelId:    lvl.id,
-            levelTitle: lvl.title,
-            date:       data.completedAt || data.lastCompletedAt || new Date().toISOString(),
-            score:      {
-              pct:       score.pct ?? 0,
-              total:     score.total ?? 0,
-              correct:   score.correct ?? 0,
-              wrong:     score.wrong ?? 0,
-              timeTaken: 0,
-            },
-            answers:     {},
-            questions:   [],
-            questionIds: [],
-          };
-        })
-        .filter(Boolean);
-      setAttempts(synthetic);
-    }).catch(() => {});
-  }, [user?.uniqueId, getLevel]);
+    setLoading(true);
+    setError(null);
+    api.getAttempts(user.uniqueId)
+      .then(data => {
+        setAttempts(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
+      .catch(err => {
+        setError(err.message || 'Failed to load quiz history.');
+        setLoading(false);
+      });
+  };
 
-  // Derive unique level filter options from the actual attempts (not hardcoded)
-  const levelFilterOptions = useMemo(() => {
-    const seen = new Map();
-    attempts.forEach(a => {
-      const k = String(a.levelId);
-      if (!seen.has(k)) seen.set(k, a.levelTitle || `Level ${a.levelId}`);
-    });
-    return Array.from(seen.entries())
-      .sort((a, b) => Number(a[0]) - Number(b[0]))
-      .map(([k, l]) => ({ k, l }));
-  }, [attempts]);
+  useEffect(load, [user?.uniqueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Assign sequential attempt number per level (chronological order, shown newest-first)
+  // Assign sequential attempt number per level (chronological order)
   const attemptsWithNumbers = useMemo(() => {
     const countByLevel = {};
     return [...attempts]
@@ -325,6 +292,18 @@ export default function QuizHistory() {
       })
       .sort((a, b) => new Date(b.date) - new Date(a.date));
   }, [attempts]);
+
+  // Level filter options derived from actual data — no hardcoded list
+  const levelFilterOptions = useMemo(() => {
+    const seen = new Map();
+    attemptsWithNumbers.forEach(a => {
+      const k = String(a.levelId);
+      if (!seen.has(k)) seen.set(k, a.levelTitle || `Level ${a.levelId}`);
+    });
+    return Array.from(seen.entries())
+      .sort((a, b) => Number(a[0]) - Number(b[0]))
+      .map(([k, l]) => ({ k, l }));
+  }, [attemptsWithNumbers]);
 
   const filtered = useMemo(
     () => lvlFilter === 'all'
@@ -342,86 +321,158 @@ export default function QuizHistory() {
     return { total, passed, avg, best };
   }, [filtered]);
 
-  return (
-    <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily:'Space Grotesk' }}>Quiz History</h1>
-        <p className="text-sm text-slate-400 mt-0.5">Review all attempts with answer analysis and explanations</p>
+  // ── Loading state ────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Quiz History</h1>
+          <p className="text-sm text-slate-400 mt-0.5">Review all attempts with answer analysis and explanations</p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 animate-pulse">
+              <div className="w-10 h-10 bg-slate-100 rounded-xl mb-3"/>
+              <div className="h-6 bg-slate-100 rounded w-16 mb-1"/>
+              <div className="h-3 bg-slate-100 rounded w-20"/>
+            </div>
+          ))}
+        </div>
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 animate-pulse">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-slate-100 rounded-xl shrink-0"/>
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-slate-100 rounded w-1/3"/>
+                  <div className="h-3 bg-slate-100 rounded w-1/2"/>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
+    );
+  }
 
-      {attempts.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center">
+  // ── Error state ──────────────────────────────────────────────────────────
+  if (error) {
+    return (
+      <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Quiz History</h1>
+        </div>
+        <div className="mt-6 bg-white rounded-2xl border border-red-100 shadow-sm p-12 text-center">
+          <XCircle size={40} className="text-red-300 mx-auto mb-4"/>
+          <h2 className="text-lg font-bold text-slate-700 mb-2">Failed to load history</h2>
+          <p className="text-slate-400 text-sm mb-6">{error}</p>
+          <button onClick={load}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 transition-all">
+            <RefreshCw size={15}/> Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Empty state ───────────────────────────────────────────────────────────
+  if (attempts.length === 0) {
+    return (
+      <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Quiz History</h1>
+          <p className="text-sm text-slate-400 mt-0.5">Review all attempts with answer analysis and explanations</p>
+        </div>
+        <div className="mt-6 bg-white rounded-2xl border border-slate-100 shadow-sm p-12 text-center">
           <BookOpen size={40} className="text-slate-300 mx-auto mb-4"/>
           <h2 className="text-lg font-bold text-slate-700 mb-2">No attempts yet</h2>
           <p className="text-slate-400 text-sm mb-6">Complete a level quiz to see your history here.</p>
           <a href="/dashboard"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm">
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 transition-all">
             Go to Dashboard <ArrowRight size={15}/>
           </a>
         </div>
-      ) : (
-        <>
-          {/* Stats */}
-          {stats && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {[
-                { label:'Attempts',   val: stats.total,        color:'#4F46E5', icon:<BookOpen size={18}/> },
-                { label:'Passed',     val: stats.passed,       color:'#10B981', icon:<CheckCircle size={18}/> },
-                { label:'Avg Score',  val: `${stats.avg}%`,    color:'#F59E0B', icon:<Target size={18}/> },
-                { label:'Best Score', val: `${stats.best}%`,   color:'#EF4444', icon:<Trophy size={18}/> },
-              ].map(s => (
-                <div key={s.label} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: s.color+'15', color: s.color }}>
-                    {s.icon}
-                  </div>
-                  <div>
-                    <p className="text-xl font-bold text-slate-800" style={{ fontFamily:'Space Grotesk' }}>{s.val}</p>
-                    <p className="text-xs text-slate-400">{s.label}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+      </div>
+    );
+  }
 
-          {/* Color legend */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-3">
-            <p className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Answer Color Key</p>
-            <div className="flex flex-wrap gap-4 text-xs text-slate-600">
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-green-100 border border-green-300 inline-block"/> Correct Answer</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-100 border border-red-300 inline-block"/> Wrong Answer</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-slate-100 border border-slate-200 inline-block"/> Unattempted / Skipped</span>
-            </div>
-          </div>
+  // ── Data view ─────────────────────────────────────────────────────────────
+  return (
+    <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-6">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Quiz History</h1>
+          <p className="text-sm text-slate-400 mt-0.5">Review all attempts with answer analysis and explanations</p>
+        </div>
+        <button onClick={load} title="Refresh"
+          className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all">
+          <RefreshCw size={15}/>
+        </button>
+      </div>
 
-          {/* Filter */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <Filter size={14} className="text-slate-400"/>
-            <span className="text-xs font-semibold text-slate-500">Filter by level:</span>
-            {[{k:'all',l:'All'}, ...levelFilterOptions].map(t => (
-              <button key={t.k} onClick={() => setLvlFilter(t.k)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
-                  lvlFilter === t.k ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}>{t.l}</button>
-            ))}
-            <span className="text-xs text-slate-400 ml-auto">
-              {lvlFilter === 'all'
-                ? `${filtered.length} total attempt${filtered.length !== 1 ? 's' : ''}`
-                : `${filtered.length} attempt${filtered.length !== 1 ? 's' : ''} for this level`}
-            </span>
-          </div>
-
-          {/* List */}
-          <div className="space-y-3">
-            {filtered.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center">
-                <p className="text-slate-400 text-sm">No attempts for this level yet.</p>
+      {/* Stats */}
+      {stats && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { label: 'Attempts',   val: stats.total,       color: '#4F46E5', icon: <BookOpen size={18}/> },
+            { label: 'Passed',     val: stats.passed,      color: '#10B981', icon: <CheckCircle size={18}/> },
+            { label: 'Avg Score',  val: `${stats.avg}%`,   color: '#F59E0B', icon: <Target size={18}/> },
+            { label: 'Best Score', val: `${stats.best}%`,  color: '#EF4444', icon: <Trophy size={18}/> },
+          ].map(s => (
+            <div key={s.label} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: s.color + '15', color: s.color }}>
+                {s.icon}
               </div>
-            ) : (
-              filtered.map(attempt => <AttemptCard key={attempt.id || attempt.date} attempt={attempt}/>)
-            )}
-          </div>
-        </>
+              <div>
+                <p className="text-xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>{s.val}</p>
+                <p className="text-xs text-slate-400">{s.label}</p>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
+
+      {/* Color legend */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-3">
+        <p className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Answer Color Key</p>
+        <div className="flex flex-wrap gap-4 text-xs text-slate-600">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-green-100 border border-green-300 inline-block"/> Correct Answer</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-100 border border-red-300 inline-block"/> Wrong Answer</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-slate-100 border border-slate-200 inline-block"/> Unattempted / Skipped</span>
+        </div>
+      </div>
+
+      {/* Level filter — only shows levels that have real attempts */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Filter size={14} className="text-slate-400"/>
+        <span className="text-xs font-semibold text-slate-500">Filter by level:</span>
+        {[{ k: 'all', l: 'All' }, ...levelFilterOptions].map(t => (
+          <button key={t.k} onClick={() => setLvlFilter(t.k)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              lvlFilter === t.k
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}>
+            {t.l}
+          </button>
+        ))}
+        <span className="text-xs text-slate-400 ml-auto">
+          {lvlFilter === 'all'
+            ? `${filtered.length} total attempt${filtered.length !== 1 ? 's' : ''}`
+            : `${filtered.length} attempt${filtered.length !== 1 ? 's' : ''} for this level`}
+        </span>
+      </div>
+
+      {/* Attempt list */}
+      <div className="space-y-3">
+        {filtered.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center">
+            <p className="text-slate-400 text-sm">No attempts for this level yet.</p>
+          </div>
+        ) : (
+          filtered.map(attempt => <AttemptCard key={attempt.id ?? attempt.date} attempt={attempt}/>)
+        )}
+      </div>
     </div>
   );
 }
