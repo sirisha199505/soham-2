@@ -148,9 +148,9 @@ function LevelCard({ level, status, levelData, levelSettings }) {
             </h3>
             <p className="text-white/80 text-sm font-medium mt-0.5">{level.subtitle}</p>
           </div>
-          {/* <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
             <StatusIcon size={18} className="text-white" />
-          </div> */}
+          </div>
         </div>
 
         <div className="relative z-10 flex items-center gap-1.5 mt-3">
