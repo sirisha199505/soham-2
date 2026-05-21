@@ -284,24 +284,16 @@ function LevelCard({ level, status, levelData, levelSettings }) {
         )}
 
         {isUnlocked && (
-          <div className="space-y-2">
-            <Link
-              to={`/level/${level.id}/content`}
-              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
-              style={{
-                background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`,
-                boxShadow: `0 4px 16px ${level.color.from}40`,
-              }}
-            >
-              <BookOpen size={15} /> Start Level
-            </Link>
-            <Link
-              to={`/level/${level.id}/quiz`}
-              className="flex items-center justify-center gap-1.5 w-full py-2 rounded-xl text-xs font-semibold border border-slate-200 text-slate-500 hover:bg-slate-50 transition-all"
-            >
-              Skip to Quiz <ArrowRight size={12} />
-            </Link>
-          </div>
+          <Link
+            to={`/level/${level.id}/content`}
+            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
+            style={{
+              background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`,
+              boxShadow: `0 4px 16px ${level.color.from}40`,
+            }}
+          >
+            <BookOpen size={15} /> Start Level
+          </Link>
         )}
       </div>
     </div>
