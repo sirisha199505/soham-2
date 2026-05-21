@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { getDashboardRoute } from '../utils/rolePermissions';
 import { api, clearSession } from '../utils/api';
+import { recoverPendingAttempt } from '../utils/quizGenerator';
 
 const AuthContext = createContext(null);
 const TOKEN_KEY = 'rqa_token';
@@ -43,6 +44,9 @@ export function AuthProvider({ children }) {
         const normalized = normalizeStoredUser(freshUser);
         localStorage.setItem(USER_KEY, JSON.stringify(normalized));
         setUser(normalized);
+        // After confirming the session is valid, silently retry any quiz attempt
+        // that failed to persist during the previous session (e.g. Render cold start).
+        recoverPendingAttempt().catch(() => {});
       })
       .catch((err) => {
         if (err?.status === 401) {

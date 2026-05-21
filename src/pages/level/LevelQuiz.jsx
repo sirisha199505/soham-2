@@ -343,6 +343,22 @@ export default function LevelQuiz() {
     return () => clearTimeout(t);
   }, [answers]);
 
+  // Retry a promise-returning function with exponential backoff.
+  // Render free-tier can cold-start in 30–50 s; the api.js timeout is 55 s.
+  // Three retries with 3 s / 8 s / 15 s gaps give the server time to warm up
+  // without holding the student on the submission screen for too long.
+  const withRetry = async (fn, retries = 3) => {
+    const delays = [3000, 8000, 15000];
+    let lastErr;
+    for (let i = 0; i <= retries; i++) {
+      try { return await fn(); } catch (err) {
+        lastErr = err;
+        if (i < retries) await new Promise(r => setTimeout(r, delays[i] ?? 15000));
+      }
+    }
+    throw lastErr;
+  };
+
   const doSubmit = async (auto = false) => {
     // Hard lock — prevents duplicate submissions even with concurrent clicks
     if (submittingRef.current) return;
@@ -373,15 +389,18 @@ export default function LevelQuiz() {
       score,
     };
 
-    // Run all three API calls in parallel and show an error if any fail.
+    // The two critical writes are retried independently so a cold-start timeout
+    // on one call does not block or contaminate the other.
+    // recordUsedQuestions is best-effort and never blocks the result screen.
     const [attemptSaved, progressSaved] = await Promise.allSettled([
-      saveQuizAttempt(user.uniqueId, attemptData),
-      markLevelComplete(user.uniqueId, id, score),
+      withRetry(() => saveQuizAttempt(user.uniqueId, attemptData)),
+      withRetry(() => markLevelComplete(user.uniqueId, id, score)),
       recordUsedQuestions(user.uniqueId, questions.map(q => q.id)),
     ]);
 
     if (attemptSaved.status === 'rejected' || progressSaved.status === 'rejected') {
-      console.error('Save failed:', (attemptSaved.reason || progressSaved.reason)?.message);
+      console.error('Save failed after retries:',
+        (attemptSaved.reason || progressSaved.reason)?.message);
       setSaveError(true);
     }
 
