@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate, useBlocker } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Clock, ChevronLeft, ChevronRight, CheckCircle, XCircle, Minus,
   Trophy, Shuffle, LayoutGrid, X, BookOpen, ChevronDown, ChevronUp,
@@ -265,7 +265,6 @@ export default function LevelQuiz() {
 
   // ── Navigation guard ────────────────────────────────────────────────────────
   const quizInProgress = quizStarted && !result && !isSubmitting;
-  const blocker = useBlocker(quizInProgress);
 
   // Redirect if locked or already completed (but not after submitting in this session)
   useEffect(() => {
@@ -1005,44 +1004,6 @@ export default function LevelQuiz() {
       )}
 
       {/* Submit modal */}
-      {/* ── Leave-quiz confirmation (React Router navigation guard) ── */}
-      {blocker.state === 'blocked' && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4"
-          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
-          <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full overflow-hidden">
-            {/* Warning header */}
-            <div className="px-6 pt-6 pb-4 text-center">
-              <div className="w-14 h-14 rounded-2xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
-                <AlertTriangle size={28} className="text-amber-500" />
-              </div>
-              <h3 className="text-lg font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>
-                Leave Quiz?
-              </h3>
-              <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-                Are you sure you want to leave this quiz?<br />
-                <span className="font-semibold text-red-600">Your current progress may be lost.</span>
-              </p>
-            </div>
-            {/* Buttons */}
-            <div className="px-6 pb-6 grid grid-cols-2 gap-3">
-              <button
-                onClick={() => blocker.reset()}
-                className="py-3 rounded-2xl text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
-              >
-                Stay on Quiz
-              </button>
-              <button
-                onClick={() => blocker.proceed()}
-                className="py-3 rounded-2xl text-sm font-bold text-white transition-colors"
-                style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)' }}
-              >
-                Leave Quiz
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <Modal isOpen={showSubmit} onClose={() => setShowSubmit(false)} title="Submit Quiz?"
         footer={<>
           <Button variant="secondary" disabled={isSubmitting} onClick={() => { setCurrent(0); setShowSubmit(false); }}>Review Answers</Button>

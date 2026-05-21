@@ -12,8 +12,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../utils/api';
 
-// levels: sorted array of {id, title} from /api/levels/settings
-function computeStats(students, levels = []) {
+function computeStats(students) {
   const levelCounts = {}; // String(levelId) → completion count
   const allScores = [];
   let passCount = 0, failCount = 0;
@@ -33,17 +32,9 @@ function computeStats(students, levels = []) {
     });
   });
 
-  // Map first three levels (by order) to l1/l2/l3 so existing stat cards stay meaningful
-  const sortedIds = levels.length
-    ? levels.map(l => String(l.id))
-    : Object.keys(levelCounts).sort((a, b) => Number(a) - Number(b));
-  const l1Done = levelCounts[sortedIds[0]] || 0;
-  const l2Done = levelCounts[sortedIds[1]] || 0;
-  const l3Done = levelCounts[sortedIds[2]] || 0;
-
   const avgScore = allScores.length ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length) : 0;
   const passRate = passCount + failCount > 0 ? Math.round((passCount / (passCount + failCount)) * 100) : 0;
-  return { totalStudents: students.length, l1Done, l2Done, l3Done, totalAttempts, avgScore, passRate, passCount, failCount, levelCounts };
+  return { totalStudents: students.length, totalAttempts, avgScore, passRate, passCount, failCount, levelCounts };
 }
 
 /* ── static chart data ── */
@@ -90,7 +81,7 @@ function QuickAction({ icon, label, to, color }) {
   );
 }
 
-const EMPTY_STATS = { totalStudents: 0, l1Done: 0, l2Done: 0, l3Done: 0, totalAttempts: 0, avgScore: 0, passRate: 0, passCount: 0, failCount: 0, levelCounts: {} };
+const EMPTY_STATS = { totalStudents: 0, totalAttempts: 0, avgScore: 0, passRate: 0, passCount: 0, failCount: 0, levelCounts: {} };
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -106,7 +97,7 @@ export default function AdminDashboard() {
           ? levelsData.sort((a, b) => (a.order || a.id) - (b.order || b.id))
           : [];
         setLevelsList(sorted);
-        setStats(computeStats(students, sorted));
+        setStats(computeStats(students));
         setRecent(students.slice(0, 5).map(s => ({
           id:     s.uniqueId,
           school: s.schoolName || '—',
@@ -135,17 +126,11 @@ export default function AdminDashboard() {
   ];
   const PIE_COLORS = ['#10B981', '#EF4444'];
 
-  const levelCompletionData = levelsList.length > 0
-    ? levelsList.slice(0, 3).map((lvl, i) => ({
-        level:     lvl.title || `Level ${i + 1}`,
-        completed: stats.levelCounts?.[String(lvl.id)] || 0,
-        color:     LEVEL_COLORS[i],
-      }))
-    : [
-        { level: 'Level 1', completed: stats.l1Done, color: LEVEL_COLORS[0] },
-        { level: 'Level 2', completed: stats.l2Done, color: LEVEL_COLORS[1] },
-        { level: 'Level 3', completed: stats.l3Done, color: LEVEL_COLORS[2] },
-      ];
+  const levelCompletionData = levelsList.slice(0, 3).map((lvl, i) => ({
+    level:     lvl.title || `Level ${i + 1}`,
+    completed: stats.levelCounts?.[String(lvl.id)] || 0,
+    color:     LEVEL_COLORS[i],
+  }));
 
   return (
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-6">
@@ -174,9 +159,16 @@ export default function AdminDashboard() {
       {/* ── Top stat cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total Students" value={stats.totalStudents} icon={<Users size={18} />} color="#4F46E5" sub="Registered" to="/admin/students" />
-        <StatCard label="L1 Completed"   value={stats.l1Done}        icon={<CheckCircle size={18} />} color="#3BC0EF" sub="Level 1 done" />
-        <StatCard label="L2 Completed"   value={stats.l2Done}        icon={<CheckCircle size={18} />} color="#8B5CF6" sub="Level 2 done" />
-        <StatCard label="L3 Completed"   value={stats.l3Done}        icon={<Trophy size={18} />}      color="#10B981" sub="Level 3 done" />
+        {levelsList.slice(0, 3).map((lvl, i) => (
+          <StatCard
+            key={lvl.id}
+            label={`${lvl.title || `Level ${i + 1}`} Done`}
+            value={stats.levelCounts?.[String(lvl.id)] || 0}
+            icon={i === levelsList.length - 1 ? <Trophy size={18} /> : <CheckCircle size={18} />}
+            color={LEVEL_COLORS[i]}
+            sub="Completions"
+          />
+        ))}
       </div>
 
       {/* ── Second stat row ── */}
@@ -198,7 +190,7 @@ export default function AdminDashboard() {
               <p className="text-xs text-slate-400 mt-0.5">Monthly completions per level</p>
             </div>
           </div>
-          <div className="h-52">
+          <div className="h-52 min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={COMPLETION_TREND} margin={{ left: -10, right: 10 }}>
                 <defs>
@@ -228,7 +220,7 @@ export default function AdminDashboard() {
             <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Pass vs Fail</h3>
             <p className="text-xs text-slate-400 mt-0.5">Overall pass/fail ratio</p>
           </div>
-          <div className="h-44 flex items-center justify-center">
+          <div className="h-44 min-w-0 flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={72} paddingAngle={4} dataKey="value">
@@ -259,19 +251,26 @@ export default function AdminDashboard() {
         {/* Level bar chart */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <h3 className="font-bold text-slate-800 mb-4" style={{ fontFamily: 'Space Grotesk' }}>Level Completions</h3>
-          <div className="h-44">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={levelCompletionData} margin={{ left: -10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="level" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ borderRadius: 12, border: 'none', fontSize: 12 }} formatter={v => [v, 'Students']} />
-                <Bar dataKey="completed" radius={[6, 6, 0, 0]}>
-                  {levelCompletionData.map((d, i) => <Cell key={i} fill={d.color} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {levelCompletionData.length === 0 ? (
+            <div className="h-44 flex flex-col items-center justify-center text-center gap-2">
+              <BookOpen size={28} className="text-slate-200" />
+              <p className="text-sm text-slate-400">No levels created yet</p>
+            </div>
+          ) : (
+            <div className="h-44 min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={levelCompletionData} margin={{ left: -10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="level" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ borderRadius: 12, border: 'none', fontSize: 12 }} formatter={v => [v, 'Students']} />
+                  <Bar dataKey="completed" radius={[6, 6, 0, 0]}>
+                    {levelCompletionData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
 
         {/* Recent registrations */}

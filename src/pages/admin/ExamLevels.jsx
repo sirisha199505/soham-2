@@ -319,6 +319,20 @@ export default function ExamLevels() {
         description: form.description,
         timeLimit:   Number(form.timeLimit) || 10,
       });
+
+      // Auto-sync: create a matching QB level so the Question Bank stays in step
+      try {
+        const banks = await api.getQuestionBanks().catch(() => []);
+        let bankId = Array.isArray(banks) && banks.length > 0 ? banks[0].id : null;
+        if (!bankId) {
+          const newBank = await api.createQuestionBank({ name: 'Main Question Bank' });
+          bankId = newBank?.id;
+        }
+        if (bankId) {
+          await api.createQbLevel({ bankId, name: form.title });
+        }
+      } catch { /* QB sync failure is non-fatal */ }
+
       await refreshLevelSettings();
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
