@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import {
   Lock, CheckCircle, ArrowRight, Hash, Trophy, Clock,
-  BookOpen, Star, ChevronRight, Zap, FileText,
+  BookOpen, Star, ChevronRight, Zap,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -263,82 +263,31 @@ function LevelCard({ level, status, levelData, levelSettings }) {
             <div className="flex items-center gap-2 w-full py-3 rounded-xl text-sm font-semibold bg-green-50 border border-green-200 text-green-700 justify-center">
               <CheckCircle size={14} /> Completed
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Link
-                to={`/level/${level.id}/content`}
-                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all"
-              >
-                <FileText size={13} /> Review Content
-              </Link>
-              <Link
-                to={`/level/${level.id}/quiz`}
-                className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:scale-[1.02] active:scale-[0.98]"
-                style={{
-                  background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`,
-                }}
-              >
-                Retake Quiz <ArrowRight size={13} />
-              </Link>
-            </div>
+            <Link
+              to={`/level/${level.id}/quiz`}
+              className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:scale-[1.02] active:scale-[0.98] w-full"
+              style={{
+                background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`,
+              }}
+            >
+              Retake Quiz <ArrowRight size={13} />
+            </Link>
           </div>
         )}
 
         {isUnlocked && (
           <Link
-            to={`/level/${level.id}/content`}
+            to={`/level/${level.id}/quiz`}
             className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
             style={{
               background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`,
               boxShadow: `0 4px 16px ${level.color.from}40`,
             }}
           >
-            <BookOpen size={15} /> Start Level
+            <BookOpen size={15} /> Start Quiz
           </Link>
         )}
       </div>
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────── */
-/*  Step path indicator                                            */
-/* ─────────────────────────────────────────────────────────────── */
-function LevelPath({ levels, statuses }) {
-  return (
-    <div className="flex items-center justify-center gap-0 mb-2">
-      {levels.map((level, i) => {
-        const st = statuses[i];
-        const isCompleted = st === 'completed';
-        const isUnlocked  = st === 'unlocked';
-
-        const nodeStyle =
-          isCompleted
-            ? { background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`, color: '#fff' }
-          : isUnlocked
-            ? { background: `${level.color.from}20`, color: level.color.from, border: `2px solid ${level.color.from}` }
-          : { background: '#f1f5f9', color: '#94a3b8', border: '2px solid #e2e8f0' };
-
-        const NodeIcon = isCompleted ? <CheckCircle size={18} /> : level.id;
-
-        return (
-          <div key={level.id} className="flex items-center">
-            <div className="flex flex-col items-center gap-1">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all" style={nodeStyle}>
-                {NodeIcon}
-              </div>
-              <p className="text-[10px] font-semibold text-slate-400 text-center whitespace-nowrap">
-                {level.title}
-              </p>
-            </div>
-            {i < levels.length - 1 && (
-              <div
-                className="w-16 md:w-24 h-0.5 mx-1 mb-4 rounded-full transition-all"
-                style={{ background: isCompleted ? `linear-gradient(90deg, ${level.color.from}, ${levels[i + 1].color.from})` : '#e2e8f0' }}
-              />
-            )}
-          </div>
-        );
-      })}
     </div>
   );
 }
@@ -435,17 +384,7 @@ export default function StudentDashboard() {
         </div>
       ) : (
         <>
-          {/* 2 — Level path (only when levels exist and progress is loaded) */}
-          {!isProgressLoading && (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-6 py-5">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 text-center">
-                Your Learning Path
-              </p>
-              <LevelPath levels={visibleLevels} statuses={statuses} />
-            </div>
-          )}
-
-          {/* 3 — Section label */}
+          {/* 2 — Section label */}
           <div className="flex items-center gap-3">
             <div className="w-1 h-6 rounded-full" style={{ background: colors.primary }} />
             <h2 className="text-lg font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>
