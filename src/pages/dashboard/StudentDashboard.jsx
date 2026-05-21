@@ -406,7 +406,7 @@ export default function StudentDashboard() {
                     key={level.id}
                     level={level}
                     status={statuses[i]}
-                    levelData={getLevel(userId, level.id)}
+                    // levelData={getLevel(userId, level.id)}
                     levelSettings={levelSettings}
                   />
                 ))
