@@ -58,6 +58,10 @@ export function LevelProvider({ children }) {
     if (user.uniqueId) {
       fetchedUsers.current.delete(user.uniqueId);
       setProgressFetched(prev => { const n = { ...prev }; delete n[user.uniqueId]; return n; });
+      // Eagerly fetch progress now — StudentDashboard shows skeleton cards while
+      // progressFetched[userId] is false and never calls getLevelStatus (which
+      // would otherwise be the only trigger). Without this, skeletons show forever.
+      fetchProgress(user.uniqueId);
     }
 
     // Level settings: backend returns [{id, title, open, ...}, ...]
