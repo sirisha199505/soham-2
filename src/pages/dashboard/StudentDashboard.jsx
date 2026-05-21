@@ -337,14 +337,10 @@ export default function StudentDashboard() {
   // the brief "Start Level 1" flash on every login/page-refresh.
   const isProgressLoading = userId ? !progressFetched[userId] : false;
 
-  // Once levelSettings has loaded from the DB, build the level list from it.
-  // While loading show hardcoded LEVELS as placeholders to avoid flicker.
-  const visibleLevels = levelSettingsLoaded
-    ? buildLevelList(levelSettings)
-    : LEVELS;
+  // Only show levels that the admin has explicitly created in the DB.
+  // Show nothing (skeletons) while settings are still loading.
+  const visibleLevels = levelSettingsLoaded ? buildLevelList(levelSettings) : [];
 
-  // Only compute real statuses once progress is available; otherwise everything
-  // would show 'unlocked' which flickers to the correct state after the fetch.
   const statuses = isProgressLoading
     ? visibleLevels.map(() => 'loading')
     : visibleLevels.map(l => getLevelStatus(userId, l.id));
@@ -353,6 +349,7 @@ export default function StudentDashboard() {
     ? 0
     : statuses.filter(s => s === 'completed').length;
 
+  const isSettingsLoading = !levelSettingsLoaded;
   const noLevels = levelSettingsLoaded && visibleLevels.length === 0;
 
   return (
@@ -364,10 +361,15 @@ export default function StudentDashboard() {
         displayId={displayId}
         colors={colors}
         completedCount={completedCount}
-        totalLevels={visibleLevels.length || LEVELS.length}
+        totalLevels={visibleLevels.length}
       />
 
-      {noLevels ? (
+      {isSettingsLoading ? (
+        /* ── Still fetching from DB — show 1 skeleton so layout doesn't jump ── */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <LevelCardSkeleton />
+        </div>
+      ) : noLevels ? (
         /* ── No levels configured by admin ── */
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-6 py-16 flex flex-col items-center gap-4 text-center">
           <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center">
@@ -397,7 +399,7 @@ export default function StudentDashboard() {
             )}
           </div>
 
-          {/* 4 — Level cards grid (skeletons while loading) */}
+          {/* 4 — Level cards grid (skeletons while progress loads) */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {isProgressLoading
               ? visibleLevels.map((_, i) => <LevelCardSkeleton key={i} />)
