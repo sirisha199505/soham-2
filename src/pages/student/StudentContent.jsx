@@ -329,7 +329,7 @@ export default function StudentContent() {
             <button
               onClick={handlePrev}
               disabled={pageIndex === 0}
-              className="flex items-center gap-2 px-5 py-3 rounded-xl border border-slate-200 bg-white text-slate-600 text-sm font-semibold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              className="flex items-center gap-2 px-5 py-3 rounded-xl border border-slate-200 bg-blue text-slate-600 text-sm font-semibold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             >
               <ChevronLeft size={16} /> Previous
             </button>
