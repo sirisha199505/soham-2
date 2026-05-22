@@ -1,15 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Users, ArrowRight, TrendingUp, Activity, Play } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Users, TrendingUp, Activity, Play } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
 import StatsCard from '../../components/dashboard/StatsCard';
 import { CardHeader } from '../../components/ui/Card';
 import { api } from '../../utils/api';
 
 export default function TeacherDashboard() {
   const { user } = useAuth();
-  const { colors } = useTheme();
   const [sessions,  setSessions]  = useState([]);
   const [students,  setStudents]  = useState([]);
   const [loading,   setLoading]   = useState(true);
@@ -46,25 +43,16 @@ export default function TeacherDashboard() {
         style={{ background: 'linear-gradient(135deg, #7c3200 0%, #c97a10 50%, #b97308 100%)' }}
       >
         <div className="absolute top-0 right-0 w-64 h-64 rounded-full opacity-20 blur-[60px] bg-white" />
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
-          <div>
-            <p className="text-white/70 text-sm font-medium mb-1">
-              Welcome back, {user?.name?.split(' ')[0] ?? 'Teacher'}
-            </p>
-            <h1 className="text-3xl font-bold text-white mb-2" style={{ fontFamily: 'Space Grotesk' }}>
-              Teacher Dashboard
-            </h1>
-            <p className="text-white/70 text-sm">
-              <span className="text-white font-bold">{sessions.length}</span> student{sessions.length !== 1 ? 's' : ''} active in the last hour.
-            </p>
-          </div>
-          <div className="flex gap-3 flex-wrap">
-            <Link to="/monitoring"
-              className="inline-flex items-center gap-2 text-white font-semibold px-4 py-2.5 rounded-xl text-sm hover:scale-[1.02] transition-all"
-              style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)' }}>
-              <Activity size={15} /> Live Monitor
-            </Link>
-          </div>
+        <div className="relative z-10">
+          <p className="text-white/70 text-sm font-medium mb-1">
+            Welcome back, {user?.name?.split(' ')[0] ?? 'Teacher'}
+          </p>
+          <h1 className="text-3xl font-bold text-white mb-2" style={{ fontFamily: 'Space Grotesk' }}>
+            Teacher Dashboard
+          </h1>
+          <p className="text-white/70 text-sm">
+            <span className="text-white font-bold">{sessions.length}</span> student{sessions.length !== 1 ? 's' : ''} active in the last hour.
+          </p>
         </div>
       </div>
 
@@ -106,11 +94,6 @@ export default function TeacherDashboard() {
             }
             subtitle="Quiz attempt activity in the last hour"
           />
-          <Link to="/monitoring"
-            className="flex items-center gap-1.5 text-sm font-semibold hover:underline"
-            style={{ color: colors.primary }}>
-            Full Monitor <ArrowRight size={13} />
-          </Link>
         </div>
 
         {loading ? (
@@ -170,11 +153,6 @@ export default function TeacherDashboard() {
                 ))}
               </tbody>
             </table>
-            {sessions.length > 10 && (
-              <p className="text-xs text-slate-400 text-center mt-3">
-                Showing 10 of {sessions.length} attempts — <Link to="/monitoring" className="text-indigo-500 font-semibold hover:underline">see all</Link>
-              </p>
-            )}
           </div>
         </div>
       )}

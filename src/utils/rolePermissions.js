@@ -43,7 +43,6 @@ export const getSidebarItems = (role) => {
   if (role === ROLES.TEACHER) {
     return [
       { label: 'Dashboard',    path: '/dashboard',       icon: 'LayoutDashboard' },
-      { label: 'Monitoring',   path: '/monitoring',      icon: 'Activity' },
       { label: 'Reports',      path: '/reports',         icon: 'BarChart2' },
     ];
   }
