@@ -219,27 +219,34 @@ export default function LevelContent() {
         {/* PDF content */}
         {current.type === 'pdf' && pdfBlobUrl ? (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+            {/* PDF toolbar */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-                  style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}>
-                  <FileText size={15} className="text-white" />
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center"
+                  style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}
+                >
+                  <FileText size={14} className="text-white" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-slate-800">{current.pdfName || 'Study Material'}</p>
-                  <p className="text-xs text-slate-400">PDF document</p>
+                  <p className="text-sm font-bold text-slate-700">{current.pdfName || 'Study Material'}</p>
+                  <p className="text-[11px] text-slate-400">PDF document</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={openPdf}
-                  className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
-                  <ExternalLink size={12} /> Open in new tab
-                </button>
+                <a
+                  href={pdfBlobUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 text-slate-600 bg-white hover:bg-slate-50 transition-colors"
+                >
+                  <ExternalLink size={12} /> Open
+                </a>
                 <a
                   href={pdfBlobUrl}
                   download={current.pdfName || 'study-material.pdf'}
-                  className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-indigo-200 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors"
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl text-white transition-colors"
+                  style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}
                 >
                   <Download size={12} /> Download
                 </a>
@@ -251,31 +258,30 @@ export default function LevelContent() {
               src={pdfBlobUrl}
               title={current.pdfName || 'Study Material'}
               className="w-full block border-0"
-              style={{ height: '70vh' }}
+              style={{ height: '78vh', minHeight: 480 }}
             />
           </div>
         ) : (
           /* Text sections */
           (current.sections || []).map((sec, i) => (
-            <div key={i} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 md:p-8 space-y-3">
-              <h2
-                className="text-lg font-bold text-slate-800 flex items-center gap-2"
-                style={{ fontFamily: 'Space Grotesk' }}
-              >
+            <div key={i} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-50">
                 <span
                   className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
                   style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}
                 >
                   {i + 1}
                 </span>
-                {sec.heading}
-              </h2>
-              <div className="border-t border-slate-100 pt-3">
+                <h2 className="text-base font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>
+                  {sec.heading}
+                </h2>
+              </div>
+              <div className="px-5 py-4 space-y-1.5">
                 {(sec.body || '').split('\n').map((line, li) => {
-                  if (!line.trim()) return <div key={li} className="h-2" />;
+                  if (!line.trim()) return <div key={li} className="h-1.5" />;
                   const parts = line.split(/(\*\*[^*]+\*\*)/g);
                   return (
-                    <p key={li} className="text-slate-600 leading-relaxed text-sm md:text-base mb-1">
+                    <p key={li} className="text-slate-600 leading-relaxed text-sm md:text-base">
                       {parts.map((part, pi) =>
                         part.startsWith('**') && part.endsWith('**')
                           ? <strong key={pi} className="text-slate-800 font-semibold">{part.slice(2, -2)}</strong>
@@ -313,7 +319,12 @@ export default function LevelContent() {
           <button
             onClick={() => { setPageIndex(p => p - 1); scrollToTop(); }}
             disabled={pageIndex === 0}
-            className="flex items-center gap-2 px-5 py-3 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            className="flex items-center gap-2 px-5 py-3 rounded-xl text-white text-sm font-semibold transition-all hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed"
+            style={{
+              background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`,
+              boxShadow: pageIndex > 0 ? `0 6px 20px ${level.color.from}50` : 'none',
+              opacity: pageIndex === 0 ? 0.4 : 1,
+            }}
           >
             <ChevronLeft size={16} /> Previous
           </button>
