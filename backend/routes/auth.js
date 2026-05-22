@@ -25,7 +25,7 @@ function makeToken(user) {
 router.post('/register', async (req, res) => {
   const { schoolName, className, password } = req.body;
   if (!password || password.length < 4) {
-    return res.status(400).json({ error: 'Password must be at least 4 characters.' });
+    return res.status(400).json({ error: 'Password must be at least 6 characters.' });
   }
 
   try {
@@ -134,7 +134,7 @@ router.post('/reset-password', async (req, res) => {
   const { uniqueId, schoolName, className, newPassword } = req.body;
 
   if (!uniqueId || !newPassword || newPassword.length < 4) {
-    return res.status(400).json({ error: 'Student ID and a password of at least 4 characters are required.' });
+    return res.status(400).json({ error: 'Student ID and a password of at least 6 characters are required.' });
   }
 
   try {

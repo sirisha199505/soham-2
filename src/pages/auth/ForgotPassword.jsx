@@ -21,7 +21,7 @@ export default function ForgotPassword() {
       return;
     }
     if (form.newPassword.length < 6) {
-      setError('Password must be at least 4 characters.');
+      setError('Password must be at least 6 characters.');
       return;
     }
 
