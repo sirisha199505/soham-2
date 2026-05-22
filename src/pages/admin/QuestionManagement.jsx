@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from 'react';
+import { scrollToTop } from '../../utils/scroll';
 import {
   HelpCircle, Plus, Edit2, Trash2, Search, X, Save,
   CheckCircle, Image as ImageIcon, AlertTriangle, RotateCcw,
@@ -427,7 +428,7 @@ export default function QuestionManagement() {
           const cnt = (banks[l.id] || []).length;
           const active = activeLevel === l.id;
           return (
-            <button key={l.id} onClick={() => { setActive(l.id); setSearch(''); setDiff('all'); setType('all'); }}
+            <button key={l.id} onClick={() => { setActive(l.id); setSearch(''); setDiff('all'); setType('all'); scrollToTop(); }}
               className={`flex items-center gap-2.5 px-5 py-2.5 rounded-xl text-sm font-bold border transition-all ${
                 active ? 'text-white border-transparent shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
               }`}

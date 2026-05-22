@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { scrollToTop } from '../../utils/scroll';
 import {
   ShieldCheck, Search, CheckCircle, XCircle, Clock,
   ChevronDown, Users, Filter, RefreshCw, CheckSquare,
@@ -295,8 +296,8 @@ export default function LevelPermissions() {
 
       {/* Tab switcher */}
       <div className="flex items-center gap-2">
-        <TabButton levelId={2} active={activeTab === 2} onClick={() => { setActiveTab(2); setSelected(new Set()); setFilter('all'); }} pendingCount={level2Pending} />
-        <TabButton levelId={3} active={activeTab === 3} onClick={() => { setActiveTab(3); setSelected(new Set()); setFilter('all'); }} pendingCount={level3Pending} />
+        <TabButton levelId={2} active={activeTab === 2} onClick={() => { setActiveTab(2); setSelected(new Set()); setFilter('all'); scrollToTop(); }} pendingCount={level2Pending} />
+        <TabButton levelId={3} active={activeTab === 3} onClick={() => { setActiveTab(3); setSelected(new Set()); setFilter('all'); scrollToTop(); }} pendingCount={level3Pending} />
       </div>
 
       {/* Stats */}

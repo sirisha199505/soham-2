@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { scrollToTop } from '../../utils/scroll';
 import * as XLSX from 'xlsx';
 import {
   Plus, ChevronDown, ChevronUp, Edit2, Trash2, BookOpen,
@@ -1211,7 +1212,7 @@ export default function QuestionBankAdmin() {
         <BankDetail
           bank={selectedBank}
           bankIndex={selectedIdx}
-          onBack={() => setSelectedBank(null)}
+          onBack={() => { setSelectedBank(null); scrollToTop(); }}
           onBankRenamed={handleRenameBank}
           showToast={showToast}/>
       ) : (
@@ -1220,7 +1221,7 @@ export default function QuestionBankAdmin() {
           onCreate={handleCreateBank}
           onDelete={handleDeleteBank}
           onRename={handleRenameBank}
-          onSelect={(bank, idx) => { setSelectedBank(bank); setSelectedIdx(idx); }}/>
+          onSelect={(bank, idx) => { setSelectedBank(bank); setSelectedIdx(idx); scrollToTop(); }}/>
       )}
     </div>
   );

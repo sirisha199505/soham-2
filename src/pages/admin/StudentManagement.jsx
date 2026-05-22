@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { scrollToTop } from '../../utils/scroll';
 import {
   Users, Search, RefreshCw, CheckCircle,
   ChevronDown, Eye, Unlock, RotateCcw, UserX, UserCheck,
@@ -242,7 +243,7 @@ export default function StudentManagement() {
   };
 
   const handleAction = (action, student, lvl) => {
-    if (action === 'view') { setViewStudent(student); return; }
+    if (action === 'view') { setViewStudent(student); scrollToTop(); return; }
 
     if (action === 'unlock') {
       setStudentOverride(student.uniqueId, lvl);

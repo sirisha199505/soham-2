@@ -1,4 +1,12 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
+import { scrollToTop } from './utils/scroll';
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => { scrollToTop(false); }, [pathname]);
+  return null;
+}
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -51,6 +59,7 @@ export default function App() {
         <LevelProvider>
         <ToastProvider>
           <BrowserRouter>
+            <ScrollToTop />
             <Routes>
               {/* Root redirect */}
               <Route path="/" element={<RootRedirect />} />

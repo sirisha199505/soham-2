@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { scrollToTop } from '../../utils/scroll';
 import {
   Activity, Users, CheckCircle, Clock, Search, RefreshCw,
   Play, Minus, ChevronDown, TrendingUp, AlertCircle,
@@ -127,7 +128,7 @@ export default function TeacherMonitoring() {
           </div>
           <div className="flex gap-2 flex-wrap">
             {activeQuizzes.map(q => (
-              <button key={q.id} onClick={() => { setSelectedId(q.id); setTab('all'); }}
+              <button key={q.id} onClick={() => { setSelectedId(q.id); setTab('all'); scrollToTop(); }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
                   selectedId === q.id
                     ? 'text-white shadow-sm'
@@ -196,7 +197,7 @@ export default function TeacherMonitoring() {
           {/* Tabs */}
           <div className="flex gap-1 border-b border-slate-100 overflow-x-auto">
             {tabs.map(t => (
-              <button key={t.key} onClick={() => setTab(t.key)}
+              <button key={t.key} onClick={() => { setTab(t.key); scrollToTop(); }}
                 className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-all -mb-px ${
                   tab === t.key
                     ? 'border-indigo-500 text-indigo-600'

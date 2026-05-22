@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { scrollToTop } from '../../utils/scroll';
 import { ChevronLeft, ChevronRight, BookOpen, CheckCircle, ArrowRight, Clock, FileText, ExternalLink, Download, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
@@ -87,7 +88,7 @@ export default function LevelContent() {
 
   const handleNext = () => {
     markRead();
-    if (!isLast) { setPageIndex(p => p + 1); window.scrollTo(0, 0); }
+    if (!isLast) { setPageIndex(p => p + 1); scrollToTop(); }
   };
 
   const handleStartQuiz = () => {
@@ -310,7 +311,7 @@ export default function LevelContent() {
         {/* Navigation */}
         <div className="flex items-center justify-between gap-3 pb-8">
           <button
-            onClick={() => { setPageIndex(p => p - 1); window.scrollTo(0, 0); }}
+            onClick={() => { setPageIndex(p => p - 1); scrollToTop(); }}
             disabled={pageIndex === 0}
             className="flex items-center gap-2 px-5 py-3 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >

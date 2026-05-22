@@ -3,6 +3,7 @@ import {
   BookOpen, ChevronLeft, ChevronRight, FileText,
   ExternalLink, Clock, Download, Loader2,
 } from 'lucide-react';
+import { scrollToTop } from '../../utils/scroll';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useLevel } from '../../context/LevelContext';
@@ -74,14 +75,15 @@ export default function StudentContent() {
   const handleLevelChange = (id) => {
     setActiveLevelId(id);
     setPageIndex(0);
+    scrollToTop();
   };
 
   const handleNext = () => {
-    if (pageIndex < total - 1) { setPageIndex(p => p + 1); window.scrollTo(0, 0); }
+    if (pageIndex < total - 1) { setPageIndex(p => p + 1); scrollToTop(); }
   };
 
   const handlePrev = () => {
-    if (pageIndex > 0) { setPageIndex(p => p - 1); window.scrollTo(0, 0); }
+    if (pageIndex > 0) { setPageIndex(p => p - 1); scrollToTop(); }
   };
 
   // Convert current page's PDF base64 to a Blob URL so browsers display it

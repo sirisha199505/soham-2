@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { scrollToTop } from '../../utils/scroll';
 import {
   Settings, Save, CheckCircle, RotateCcw, Clock,
   Eye, Shuffle, Users, Lock, Unlock,
@@ -361,7 +362,7 @@ export default function SystemSettings() {
           { key:'global', label:'Global Settings', icon:Settings },
           { key:'levels', label:'Level Settings',  icon:Layers   },
         ].map(({ key, label, icon: Icon }) => (
-          <button key={key} onClick={() => setActiveTab(key)}
+          <button key={key} onClick={() => { setActiveTab(key); scrollToTop(); }}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
               activeTab===key ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
             }`}>
