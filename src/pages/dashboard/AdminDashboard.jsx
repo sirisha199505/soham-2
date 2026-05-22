@@ -333,7 +333,7 @@ export default function AdminDashboard() {
           <div className="space-y-2">
             <QuickAction icon={<Users size={15} />}     label="Manage Students"   to="/admin/students"      color="#4F46E5" />
             <QuickAction icon={<BookOpen size={15} />}  label="Exam Levels"       to="/admin/levels"        color="#3BC0EF" />
-            <QuickAction icon={<Activity size={15} />}  label="Live Monitoring"   to="/admin/monitoring"    color="#10B981" />
+            {/* <QuickAction icon={<Activity size={15} />}  label="Live Monitoring"   to="/admin/monitoring"    color="#10B981" /> */}
             <QuickAction icon={<BarChart2 size={15} />} label="View Reports"      to="/admin/reports"       color="#F59E0B" />
             <QuickAction icon={<Settings size={15} />}  label="System Settings"   to="/admin/settings"      color="#8B5CF6" />
           </div>
