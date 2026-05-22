@@ -2,8 +2,9 @@
 // In prod: VITE_API_URL is set in .env.production or the Vercel dashboard
 const BASE = import.meta.env.VITE_API_URL || '';
 
-const TOKEN_KEY = 'rqa_token';
-const USER_KEY  = 'rqa_user';
+const TOKEN_KEY         = 'rqa_token';
+const USER_KEY          = 'rqa_user';
+export const SESSION_TOKEN_KEY = 'rqa_session_token';
 
 // Paths that don't need an Authorization header
 const NO_AUTH_PATHS = ['/api/auth/login', '/api/auth/register', '/api/auth/reset-password'];
@@ -16,6 +17,7 @@ function getToken() {
 export function clearSession() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(SESSION_TOKEN_KEY);
   window.dispatchEvent(new Event('auth:logout'));
 }
 
@@ -87,11 +89,15 @@ export const api = {
   // Auth
   register: (schoolName, className, password) =>
     request('POST', '/api/auth/register', { schoolName, className, password }),
-  login: (identifier, password) =>
-    request('POST', '/api/auth/login', { identifier, password }),
+  login: (identifier, password, force = false) =>
+    request('POST', '/api/auth/login', { identifier, password, ...(force ? { force: true } : {}) }),
   me: () => request('GET', '/api/auth/me'),
   resetPassword: (uniqueId, schoolName, className, newPassword) =>
     request('POST', '/api/auth/reset-password', { uniqueId, schoolName, className, newPassword }),
+  logout: () => request('POST', '/api/auth/logout'),
+  heartbeat: () => request('POST', '/api/auth/heartbeat', {
+    sessionToken: localStorage.getItem(SESSION_TOKEN_KEY) || '',
+  }),
 
   // Levels
   getLevelSettings: () => request('GET', '/api/levels/settings'),

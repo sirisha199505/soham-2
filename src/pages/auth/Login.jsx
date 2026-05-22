@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Hash, Lock, Eye, EyeOff, AlertCircle, ChevronRight,
-  Mail, GraduationCap, ShieldCheck, Loader2,
+  Mail, GraduationCap, ShieldCheck, Loader2, MonitorSmartphone,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -12,12 +12,18 @@ export default function Login() {
   const { colors } = useTheme();
   const navigate   = useNavigate();
 
-  const [tab,      setTab]      = useState('student'); // 'student' | 'admin'
-  const [form,     setForm]     = useState({ identifier: '', password: '' });
-  const [showPass, setShowPass] = useState(false);
-  const [loading,  setLoading]  = useState(false);
-  const [waitSec,  setWaitSec]  = useState(0);
-  const [error,    setError]    = useState('');
+  const [tab,            setTab]           = useState('student'); // 'student' | 'admin'
+  const [form,           setForm]          = useState({ identifier: '', password: '' });
+  const [showPass,       setShowPass]      = useState(false);
+  const [loading,        setLoading]       = useState(false);
+  const [waitSec,        setWaitSec]       = useState(0);
+  const [error,          setError]         = useState('');
+  const [activeOnOther,  setActiveOnOther] = useState(false);
+  const [wasKickedOut,   setWasKickedOut]  = useState(() => {
+    const flag = sessionStorage.getItem('rqa_kicked_out');
+    if (flag) sessionStorage.removeItem('rqa_kicked_out');
+    return !!flag;
+  });
 
   useEffect(() => {
     if (!loading) { setWaitSec(0); return; }
@@ -30,22 +36,25 @@ export default function Login() {
     setForm({ identifier: '', password: '' });
     setError('');
     setShowPass(false);
+    setActiveOnOther(false);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const doLogin = async (force = false) => {
     setError('');
+    setActiveOnOther(false);
     setLoading(true);
     try {
       const id = tab === 'student'
         ? form.identifier.replace(/\s/g, '')
         : form.identifier.trim().toLowerCase();
-      const route = await login(id, form.password);
+      const route = await login(id, form.password, force);
       navigate(route, { replace: true });
     } catch (err) {
-      // Ruby backend returns 400 for credential failures; Node backend returns 401.
-      // Network/server errors have status 500 or no status — show those as-is.
-      if (err.status === 500 || !err.status) {
+      if (err?.status === 409) {
+        // Account active on another device
+        setActiveOnOther(true);
+        setError('Your account is already active on another device.');
+      } else if (err.status === 500 || !err.status) {
         setError(err.message);
       } else {
         setError(tab === 'admin'
@@ -56,6 +65,13 @@ export default function Login() {
       setLoading(false);
     }
   };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    doLogin(false);
+  };
+
+  const handleForceLogin = () => doLogin(true);
 
   const inputCls = `
     w-full rounded-xl py-3 text-sm text-white
@@ -68,6 +84,25 @@ export default function Login() {
 
   return (
     <div className="fade-in-up">
+
+      {/* ── Kicked-out banner (shown when another device force-logged in) ── */}
+      {wasKickedOut && (
+        <div className="flex items-start gap-3 rounded-2xl px-4 py-3.5 mb-5"
+          style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.30)' }}>
+          <MonitorSmartphone size={16} className="shrink-0 mt-0.5" style={{ color: '#f87171' }} />
+          <div>
+            <p className="text-sm font-semibold" style={{ color: '#fca5a5' }}>
+              Signed out automatically
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: '#f87171' }}>
+              Your session was ended because you signed in from another device.
+            </p>
+          </div>
+          <button onClick={() => setWasKickedOut(false)} className="ml-auto text-red-400 hover:text-red-300">
+            <AlertCircle size={14} />
+          </button>
+        </div>
+      )}
 
       {/* ── Tab switcher ── */}
       <div className="flex p-1 rounded-2xl mb-8" style={{ background: 'rgba(255,255,255,0.06)' }}>
@@ -117,8 +152,38 @@ export default function Login() {
         )}
       </div>
 
-      {/* ── Error ── */}
-      {error && (
+      {/* ── Active-on-another-device error ── */}
+      {activeOnOther && (
+        <div className="rounded-2xl mb-5 overflow-hidden"
+          style={{ background: 'rgba(251,191,36,0.10)', border: '1px solid rgba(251,191,36,0.30)' }}>
+          <div className="flex items-start gap-3 px-4 pt-4 pb-3">
+            <MonitorSmartphone size={18} className="shrink-0 mt-0.5" style={{ color: '#fbbf24' }} />
+            <div className="flex-1">
+              <p className="text-sm font-semibold" style={{ color: '#fde68a' }}>
+                Account Active on Another Device
+              </p>
+              <p className="text-xs mt-1" style={{ color: '#fcd34d' }}>
+                Your account is already signed in on another device. You can end that session and sign in here instead.
+              </p>
+            </div>
+          </div>
+          <div className="px-4 pb-4 flex gap-2">
+            <button
+              type="button"
+              onClick={handleForceLogin}
+              disabled={loading}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold disabled:opacity-50 transition-all hover:scale-[1.01]"
+              style={{ background: '#fbbf24', color: '#1c1917' }}
+            >
+              {loading ? <Loader2 size={13} className="animate-spin" /> : <MonitorSmartphone size={13} />}
+              Sign in anyway (end other session)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Generic error ── */}
+      {error && !activeOnOther && (
         <div className="flex items-start gap-3 rounded-2xl px-4 py-3.5 mb-5"
           style={{ background: `${colors.error}18`, border: `1px solid ${colors.error}35` }}>
           <AlertCircle size={16} className="shrink-0 mt-0.5" style={{ color: colors.error }} />

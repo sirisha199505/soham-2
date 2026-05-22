@@ -1,11 +1,12 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { getDashboardRoute } from '../utils/rolePermissions';
-import { api, clearSession } from '../utils/api';
+import { api, clearSession, SESSION_TOKEN_KEY } from '../utils/api';
 import { recoverPendingAttempt } from '../utils/quizGenerator';
 
 const AuthContext = createContext(null);
 const TOKEN_KEY = 'rqa_token';
 const USER_KEY  = 'rqa_user';
+const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 function readStoredUser() {
   try {
@@ -27,9 +28,11 @@ function normalizeStoredUser(raw) {
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => normalizeStoredUser(readStoredUser()));
+  const [user, setUser]                   = useState(() => normalizeStoredUser(readStoredUser()));
+  const [kickedOut, setKickedOut]         = useState(false);
   // While we're verifying a stored token on page load, don't render protected routes yet.
-  const [initializing, setInitializing] = useState(() => !!hasStoredToken());
+  const [initializing, setInitializing]   = useState(() => !!hasStoredToken());
+  const heartbeatRef                      = useRef(null);
 
   // On mount: if a stored token exists, try to refresh user data from the server.
   // Only clear the session if we get a definitive 401 (token explicitly rejected).
@@ -67,26 +70,62 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('auth:logout', handle);
   }, []);
 
+  // Heartbeat: keep student session alive and detect forced logout from another device
+  useEffect(() => {
+    if (!user || user.role !== 'student') {
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      return;
+    }
+
+    const beat = async () => {
+      try {
+        await api.heartbeat();
+      } catch (err) {
+        if (err?.status === 409) {
+          // Another device force-logged in — invalidate this session
+          sessionStorage.setItem('rqa_kicked_out', '1');
+          clearSession();
+          setUser(null);
+          setKickedOut(true);
+        }
+      }
+    };
+
+    // Run once immediately on login, then every 5 minutes
+    beat();
+    heartbeatRef.current = setInterval(beat, HEARTBEAT_INTERVAL_MS);
+    return () => clearInterval(heartbeatRef.current);
+  }, [user?.role]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /* ── Register a new student ── */
   const register = useCallback(async (schoolName, className, password) => {
     const data = await api.register(schoolName, className, password);
     localStorage.setItem(TOKEN_KEY, data.token);
+    if (data.sessionToken) {
+      localStorage.setItem(SESSION_TOKEN_KEY, data.sessionToken);
+    }
     return data.uniqueId;
   }, []);
 
   /* ── Login ── */
-  const login = useCallback(async (identifier, password) => {
-    const data = await api.login(identifier, password);
+  const login = useCallback(async (identifier, password, force = false) => {
+    const data = await api.login(identifier, password, force);
     const normalized = normalizeStoredUser(data.user);
     localStorage.setItem(TOKEN_KEY, data.token);
     localStorage.setItem(USER_KEY, JSON.stringify(normalized));
+    if (data.sessionToken) {
+      localStorage.setItem(SESSION_TOKEN_KEY, data.sessionToken);
+    }
+    setKickedOut(false);
     setUser(normalized);
     return getDashboardRoute(normalized.role);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try { await api.logout(); } catch { /* ignore — session cleared locally regardless */ }
     clearSession();
     setUser(null);
+    setKickedOut(false);
   }, []);
 
   /* ── Student list (admin) ── */
@@ -109,6 +148,7 @@ export function AuthProvider({ children }) {
     register,
     isAuthenticated: !!user,
     initializing,
+    kickedOut,
     getStudentList,
     hasAttemptedQuiz,
     markQuizStarted,
