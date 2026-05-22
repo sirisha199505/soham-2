@@ -246,7 +246,19 @@ export default function LevelQuiz() {
   // ── All state declarations must come before any useEffect ───────────────────
   const [questions,       setQuestions]       = useState([]);
   const [loading,         setLoading]         = useState(true);
-  const [quizStarted,     setQuizStarted]     = useState(false);
+  // Initialize quizStarted=true immediately if a valid session exists (prevents redirect on refresh)
+  const [quizStarted,     setQuizStarted]     = useState(() => {
+    if (!user?.uniqueId) return false;
+    try {
+      const key   = `rqa_quiz_${id}_${user.uniqueId}`;
+      const saved = sessionStorage.getItem(key);
+      if (saved) {
+        const { expiresAt } = JSON.parse(saved);
+        return (expiresAt - Date.now()) / 1000 > 0;
+      }
+    } catch {}
+    return false;
+  });
   const [current,         setCurrent]         = useState(0);
   const [answers,         setAnswers]         = useState({});
   const [panelFilter,     setPanelFilter]     = useState('all');
@@ -274,9 +286,20 @@ export default function LevelQuiz() {
 
   // Redirect if locked or already completed (but not after submitting in this session)
   useEffect(() => {
+    // If an active quiz session exists in sessionStorage, the student refreshed mid-quiz.
+    // Skip redirect — the async session restore will set quizStarted=true.
+    if (sessionKey) {
+      try {
+        const saved = sessionStorage.getItem(sessionKey);
+        if (saved) {
+          const { expiresAt } = JSON.parse(saved);
+          if ((expiresAt - Date.now()) / 1000 > 0) return;
+        }
+      } catch { /* ignore */ }
+    }
     if (status === 'locked') navigate('/dashboard', { replace: true });
     if (status === 'completed' && !quizStarted && !result) navigate('/dashboard', { replace: true });
-  }, [status, navigate, quizStarted, result]);
+  }, [status, navigate, quizStarted, result, sessionKey]);
 
   // Refresh level settings on mount so recently-deleted levels redirect immediately
   useEffect(() => { refreshLevelSettings(); }, []);

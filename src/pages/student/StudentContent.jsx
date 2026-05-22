@@ -149,7 +149,7 @@ export default function StudentContent() {
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]"
             style={{ borderColor: `${colors.primary}40`, color: colors.primary, background: `${colors.primary}08` }}
           >
-            <Download size={15} /> Download PDF
+            {/* <Download size={15} /> Download PDF */}
           </button>
         )}
       </div>
