@@ -49,7 +49,7 @@ export default function AuthLayout() {
         </div>
 
         {/* Logo */}
-        <div className="relative flex items-center gap-3 z-10">
+        <div className="relative flex items-center gap-2 z-10 pb-2">
           <div className="p-1.5 rounded-2xl" style={{ background: `${colors.primary}20`, border: `1px solid ${colors.primary}35` }}>
             <img src="/logo2.png" alt="Soham Quiz" className="w-10 h-10 object-contain" style={{ borderRadius: 8 }} />
           </div>
@@ -63,7 +63,7 @@ export default function AuthLayout() {
         <div className="relative z-10 space-y-10">
           <div>
             <div
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold mb-6"
+              className="inline-flex items-center gap-4 px-3 py-1.5 rounded-full text-xs font-semibold mb-6"
               style={{ background: `${colors.primary}20`, color: colors.primary, border: `1px solid ${colors.primary}30` }}
             >
               <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: colors.primary }} />
