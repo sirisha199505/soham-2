@@ -302,9 +302,8 @@ export default function LevelQuiz() {
         try {
           const saved = sessionStorage.getItem(sessionKey);
           if (saved) {
-            const { startedAt, duration, answers: sa, current: sc } = JSON.parse(saved);
-            const elapsed   = (Date.now() - startedAt) / 1000;
-            const remaining = Math.max(0, Math.floor(duration - elapsed));
+            const { expiresAt, duration, answers: sa, current: sc } = JSON.parse(saved);
+            const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
             if (remaining > 0) {
               quizDuration.current = duration;
               setAnswers(sa || {});
@@ -323,7 +322,7 @@ export default function LevelQuiz() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Keep sessionStorage in sync with latest answers and current question
+  // Keep sessionStorage in sync — runs on every timer tick AND answer/navigation change
   useEffect(() => {
     if (!quizStarted || !sessionKey || result) return;
     try {
@@ -334,7 +333,7 @@ export default function LevelQuiz() {
       }
     } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [answers, current]);
+  }, [answers, current, timeLeft]);
 
   // Intercept browser back button — show warning instead of navigating away
   useEffect(() => {
@@ -357,14 +356,16 @@ export default function LevelQuiz() {
   }, [quizInProgress]);
 
   // Initialize timer from API-backed levelSettings once questions finish loading
+  // Skip if a session is being restored (session restore sets timeLeft directly)
   useEffect(() => {
     if (!loading && timeLeft === null) {
+      if (sessionKey && sessionStorage.getItem(sessionKey)) return; // session restore pending
       const mins = Number(levelSettings[id]?.timeLimit);
       const dur = mins > 0 ? mins * 60 : 600;
       quizDuration.current = dur;
       setTimeLeft(dur);
     }
-  }, [loading, levelSettings, id, timeLeft]);
+  }, [loading, levelSettings, id, timeLeft, sessionKey]);
 
   const computeScore = useCallback(() => {
     let correct = 0, wrong = 0;
@@ -633,7 +634,7 @@ export default function LevelQuiz() {
                   if (sessionKey) {
                     try {
                       sessionStorage.setItem(sessionKey, JSON.stringify({
-                        startedAt: Date.now(),
+                        expiresAt: Date.now() + quizDuration.current * 1000,
                         duration:  quizDuration.current,
                         answers:   {},
                         current:   0,
