@@ -100,10 +100,8 @@ export function AuthProvider({ children }) {
   /* ── Register a new student ── */
   const register = useCallback(async (schoolName, className, password) => {
     const data = await api.register(schoolName, className, password);
-    localStorage.setItem(TOKEN_KEY, data.token);
-    if (data.sessionToken) {
-      localStorage.setItem(SESSION_TOKEN_KEY, data.sessionToken);
-    }
+    // Do not store session token here — registration does not create an active session.
+    // Session token is only set after a proper login.
     return data.uniqueId;
   }, []);
 
