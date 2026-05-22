@@ -20,7 +20,7 @@ export default function ForgotPassword() {
       setError('Passwords do not match.');
       return;
     }
-    if (form.newPassword.length < 4) {
+    if (form.newPassword.length < 6) {
       setError('Password must be at least 4 characters.');
       return;
     }
