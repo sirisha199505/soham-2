@@ -167,7 +167,7 @@ export default function Login() {
               </p>
             </div>
           </div>
-          <div className="px-4 pb-4 flex gap-2">
+          {/* <div className="px-4 pb-4 flex gap-2">
             <button
               type="button"
               onClick={handleForceLogin}
@@ -178,7 +178,7 @@ export default function Login() {
               {loading ? <Loader2 size={13} className="animate-spin" /> : <MonitorSmartphone size={13} />}
               Sign in anyway (end other session)
             </button>
-          </div>
+          </div> */}
         </div>
       )}
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, BookOpen, CheckCircle, ArrowRight, Clock, FileText, ExternalLink, Download, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -55,19 +55,29 @@ export default function LevelContent() {
 
   const [pageIndex, setPageIndex] = useState(0);
   const [read,      setRead]      = useState(new Set());
-  const [pdfOpened, setPdfOpened] = useState(false);
 
-  const openPdf = (dataUrl) => {
+  // Convert the current page's PDF base64 data to a Blob URL so browsers
+  // render it inline instead of triggering a download dialog.
+  const pdfBlobUrl = useMemo(() => {
+    const pdfData = pages[pageIndex]?.pdfData;
+    if (!pdfData || pages[pageIndex]?.type !== 'pdf') return null;
     try {
-      const arr  = dataUrl.split(',');
+      const arr  = pdfData.split(',');
       const mime = arr[0].match(/:(.*?);/)[1];
       const bstr = atob(arr[1]);
       const u8   = new Uint8Array(bstr.length);
       for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
-      const url = URL.createObjectURL(new Blob([u8], { type: mime }));
-      window.open(url, '_blank');
-      setPdfOpened(true);
-    } catch { window.open(dataUrl, '_blank'); }
+      return URL.createObjectURL(new Blob([u8], { type: mime }));
+    } catch { return pdfData; }
+  }, [pageIndex, pages]);
+
+  // Revoke the old blob URL when navigating away to avoid memory leaks
+  useEffect(() => {
+    return () => { if (pdfBlobUrl?.startsWith('blob:')) URL.revokeObjectURL(pdfBlobUrl); };
+  }, [pdfBlobUrl]);
+
+  const openPdf = () => {
+    if (pdfBlobUrl) window.open(pdfBlobUrl, '_blank');
   };
 
   const current = pages[pageIndex];
@@ -206,7 +216,7 @@ export default function LevelContent() {
         </div>
 
         {/* PDF content */}
-        {current.type === 'pdf' && current.pdfData ? (
+        {current.type === 'pdf' && pdfBlobUrl ? (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
@@ -221,12 +231,12 @@ export default function LevelContent() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => openPdf(current.pdfData)}
+                  onClick={openPdf}
                   className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
-                  <ExternalLink size={12} /> Open
+                  <ExternalLink size={12} /> Open in new tab
                 </button>
                 <a
-                  href={current.pdfData}
+                  href={pdfBlobUrl}
                   download={current.pdfName || 'study-material.pdf'}
                   className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-indigo-200 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors"
                 >
@@ -234,18 +244,14 @@ export default function LevelContent() {
                 </a>
               </div>
             </div>
-            <embed
-              src={current.pdfData}
-              type="application/pdf"
-              className="w-full block"
-              style={{ height: '65vh' }}
-              onLoad={() => setPdfOpened(true)}
+            {/* key=pageIndex forces the iframe to remount on page change, preventing stale PDF */}
+            <iframe
+              key={pageIndex}
+              src={pdfBlobUrl}
+              title={current.pdfName || 'Study Material'}
+              className="w-full block border-0"
+              style={{ height: '70vh' }}
             />
-            {!pdfOpened && (
-              <div className="px-5 py-3 bg-amber-50 border-t border-amber-100 text-xs text-amber-700 font-medium">
-                Scroll through the PDF to read the material, then click Next Page or Start Quiz.
-              </div>
-            )}
           </div>
         ) : (
           /* Text sections */

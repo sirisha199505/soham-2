@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   BookOpen, ChevronLeft, ChevronRight, FileText,
   ExternalLink, Clock, Download, Loader2,
@@ -42,7 +42,6 @@ export default function StudentContent() {
   const [loading,       setLoading]       = useState(true);
   const [activeLevelId, setActiveLevelId] = useState(null);
   const [pageIndex,     setPageIndex]     = useState(0);
-  const [pdfOpened,     setPdfOpened]     = useState(false);
 
   // Set the first level as active once settings are loaded
   useEffect(() => {
@@ -75,7 +74,6 @@ export default function StudentContent() {
   const handleLevelChange = (id) => {
     setActiveLevelId(id);
     setPageIndex(0);
-    setPdfOpened(false);
   };
 
   const handleNext = () => {
@@ -86,18 +84,26 @@ export default function StudentContent() {
     if (pageIndex > 0) { setPageIndex(p => p - 1); window.scrollTo(0, 0); }
   };
 
-  const openPdf = (dataUrl) => {
+  // Convert current page's PDF base64 to a Blob URL so browsers display it
+  // inline rather than triggering a download dialog.
+  const pdfBlobUrl = useMemo(() => {
+    if (!current?.pdfData || current.type !== 'pdf') return null;
     try {
-      const arr  = dataUrl.split(',');
+      const arr  = current.pdfData.split(',');
       const mime = arr[0].match(/:(.*?);/)[1];
       const bstr = atob(arr[1]);
       const u8   = new Uint8Array(bstr.length);
       for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
-      const url  = URL.createObjectURL(new Blob([u8], { type: mime }));
-      window.open(url, '_blank');
-      setPdfOpened(true);
-    } catch { window.open(dataUrl, '_blank'); }
-  };
+      return URL.createObjectURL(new Blob([u8], { type: mime }));
+    } catch { return current.pdfData; }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.pdfData, pageIndex, effectiveId]);
+
+  useEffect(() => {
+    return () => { if (pdfBlobUrl?.startsWith('blob:')) URL.revokeObjectURL(pdfBlobUrl); };
+  }, [pdfBlobUrl]);
+
+  const openPdf = () => { if (pdfBlobUrl) window.open(pdfBlobUrl, '_blank'); };
 
   // Show loading until both levelSettings and content are ready
   if (loading || !levelSettingsLoaded) {
@@ -241,7 +247,7 @@ export default function StudentContent() {
           </div>
 
           {/* PDF content */}
-          {current.type === 'pdf' && current.pdfData ? (
+          {current.type === 'pdf' && pdfBlobUrl ? (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
               <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
                 <div className="flex items-center gap-2.5">
@@ -256,13 +262,13 @@ export default function StudentContent() {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => openPdf(current.pdfData)}
+                    onClick={openPdf}
                     className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
                   >
-                    <ExternalLink size={12} /> Open
+                    <ExternalLink size={12} /> Open in new tab
                   </button>
                   <a
-                    href={current.pdfData}
+                    href={pdfBlobUrl}
                     download={current.pdfName || 'study-material.pdf'}
                     className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border border-indigo-200 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors"
                   >
@@ -270,12 +276,13 @@ export default function StudentContent() {
                   </a>
                 </div>
               </div>
-              <embed
-                src={current.pdfData}
-                type="application/pdf"
-                className="w-full block"
-                style={{ height: '65vh' }}
-                onLoad={() => setPdfOpened(true)}
+              {/* key forces iframe remount when page changes to prevent stale PDF */}
+              <iframe
+                key={`${effectiveId}-${pageIndex}`}
+                src={pdfBlobUrl}
+                title={current.pdfName || 'Study Material'}
+                className="w-full block border-0"
+                style={{ height: '70vh' }}
               />
             </div>
           ) : (
