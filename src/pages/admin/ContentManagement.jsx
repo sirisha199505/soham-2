@@ -67,15 +67,26 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
       }
     : { title: '', type: 'text', sections: [{ heading: '', body: '' }], pdfData: '', pdfName: '' });
   const [pdfDrag, setPdfDrag] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
-  const processPdf = (file) => {
+  const processPdf = async (file) => {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = e => setForm(p => ({ ...p, pdfData: e.target.result, pdfName: file.name }));
-    reader.readAsDataURL(file);
+    setUploading(true);
+    setUploadError('');
+    try {
+      const { id, presignedUrl, url } = await api.getPresignedUrl(file.name, file.type);
+      await api.uploadToS3(presignedUrl, file);
+      await api.confirmUpload(id);
+      setForm(p => ({ ...p, pdfData: url, pdfName: file.name }));
+    } catch (err) {
+      setUploadError(err.message || 'Upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+    }
   };
 
-  const canSave = form.title.trim() && (form.type === 'text' || form.pdfData);
+  const canSave = form.title.trim() && (form.type === 'text' || form.pdfData) && !uploading;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -120,24 +131,33 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
           {/* PDF upload */}
           {form.type === 'pdf' && (
             <div>
-              <label className="text-xs font-semibold text-slate-500 uppercase block mb-2">PDF File <span className="text-red-400">*</span></label>
-              {form.pdfData ? (
+              <label className="text-xs font-semibold text-slate-500 uppercase block mb-2">PDF / Image File <span className="text-red-400">*</span></label>
+              {uploading ? (
+                <div className="flex items-center justify-center gap-3 border-2 border-dashed border-indigo-200 bg-indigo-50 rounded-2xl py-10">
+                  <Loader2 size={22} className="animate-spin text-indigo-500" />
+                  <span className="text-sm font-semibold text-indigo-600">Uploading to cloud…</span>
+                </div>
+              ) : form.pdfData ? (
                 <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
                   <FileText size={22} className="text-blue-500 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-slate-800 truncate">{form.pdfName}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">PDF ready · click Preview to verify</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Uploaded · click Preview to verify</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <button onClick={() => {
+                      if (form.pdfData.startsWith('http')) {
+                        window.open(form.pdfData, '_blank');
+                        return;
+                      }
                       try {
                         const arr  = form.pdfData.split(',');
                         const mime = arr[0].match(/:(.*?);/)[1];
                         const bstr = atob(arr[1]);
                         const u8   = new Uint8Array(bstr.length);
                         for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
-                        const url  = URL.createObjectURL(new Blob([u8], { type: mime }));
-                        window.open(url, '_blank');
+                        const blobUrl = URL.createObjectURL(new Blob([u8], { type: mime }));
+                        window.open(blobUrl, '_blank');
                       } catch { window.open(form.pdfData, '_blank'); }
                     }}
                       className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 px-2 py-1 rounded-lg hover:bg-blue-100 transition-colors">
@@ -156,11 +176,16 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
                   onDrop={e => { e.preventDefault(); setPdfDrag(false); processPdf(e.dataTransfer.files[0]); }}
                   className={`block border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all ${pdfDrag ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'}`}>
                   <Upload size={30} className={`mx-auto mb-2 ${pdfDrag ? 'text-indigo-500' : 'text-slate-300'}`} />
-                  <p className="text-sm font-semibold text-slate-600">Drop your PDF here</p>
-                  <p className="text-xs text-slate-400 mt-1">or click to browse · all file types accepted</p>
+                  <p className="text-sm font-semibold text-slate-600">Drop your file here</p>
+                  <p className="text-xs text-slate-400 mt-1">or click to browse · images, PDFs accepted</p>
                   <input type="file" accept="*/*" className="hidden"
                     onChange={e => processPdf(e.target.files[0])} />
                 </label>
+              )}
+              {uploadError && (
+                <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1">
+                  <AlertTriangle size={11} /> {uploadError}
+                </p>
               )}
             </div>
           )}

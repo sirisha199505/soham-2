@@ -170,4 +170,23 @@ export const api = {
   // Exam Level CRUD (add / delete levels)
   createLevel: (data) => request('POST', '/api/levels', data),
   deleteLevel: (id) => request('DELETE', `/api/levels/${id}`),
+
+  // S3 presigned upload flow:
+  // 1. getPresignedUrl  → server creates upload record, returns { id, presignedUrl, url }
+  // 2. uploadToS3       → PUT file bytes directly to S3 (no auth header)
+  // 3. confirmUpload    → server marks record as uploaded, returns { id, url }
+  getPresignedUrl: (filename, contentType) =>
+    request('POST', '/api/uploads/presign', { filename, contentType }),
+
+  uploadToS3: async (presignedUrl, file) => {
+    const res = await fetch(presignedUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    });
+    if (!res.ok) throw new Error(`S3 upload failed (${res.status})`);
+  },
+
+  confirmUpload: (id) =>
+    request('PUT', `/api/uploads/${id}/confirm`, {}),
 };
