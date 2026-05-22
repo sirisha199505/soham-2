@@ -438,7 +438,7 @@ export default function QuizHistory() {
         <div className="flex flex-wrap gap-4 text-xs text-slate-600">
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-green-100 border border-green-300 inline-block"/> Correct Answer</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-100 border border-red-300 inline-block"/> Wrong Answer</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-slate-100 border border-slate-200 inline-block"/> Unattempted / Skipped</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-gray-100 border border-slate-200 inline-block"/> Unattempted / Skipped</span>
         </div>
       </div>
 

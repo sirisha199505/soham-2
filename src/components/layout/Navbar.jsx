@@ -23,7 +23,8 @@ export default function Navbar({ onMenuClick }) {
   const [showProfile, setShowProfile] = useState(false);
   const [searchQuery, setSearchQuery]   = useState('');
   const [searchOpen,  setSearchOpen]    = useState(false);
-  const searchRef = useRef(null);
+  const searchRef  = useRef(null);
+  const profileRef = useRef(null);
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
@@ -56,6 +57,18 @@ export default function Navbar({ onMenuClick }) {
     document.addEventListener('mousedown', handle);
     return () => document.removeEventListener('mousedown', handle);
   }, [searchOpen]);
+
+  // Close profile dropdown on outside click
+  useEffect(() => {
+    if (!showProfile) return;
+    const handle = (e) => {
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setShowProfile(false);
+      }
+    };
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [showProfile]);
 
   return (
     <header className="sticky top-0 z-30 h-[62px] flex items-center px-4 md:px-6 gap-4"
@@ -127,7 +140,7 @@ export default function Navbar({ onMenuClick }) {
       <div className="flex items-center gap-2 ml-auto">
 
         {/* Profile */}
-        <div className="relative">
+        <div className="relative" ref={profileRef}>
           <button
             onClick={() => setShowProfile(p => !p)}
             className="flex items-center gap-2.5 pl-1.5 pr-3 py-1.5 rounded-xl hover:bg-white transition-all hover:shadow-sm"
@@ -236,10 +249,6 @@ export default function Navbar({ onMenuClick }) {
         </div>
       </div>
 
-      {/* Click outside */}
-      {showProfile && (
-        <div className="fixed inset-0 z-40" onClick={() => setShowProfile(false)} />
-      )}
     </header>
   );
 }

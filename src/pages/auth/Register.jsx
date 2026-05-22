@@ -176,7 +176,8 @@ export default function Register() {
         {/* Class */}
         <div className="space-y-1.5">
           <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-            Class / Grade
+            Class 
+            
           </label>
           <div className="relative">
             <BookOpen

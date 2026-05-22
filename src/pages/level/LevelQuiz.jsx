@@ -260,10 +260,14 @@ export default function LevelQuiz() {
   const [showMobilePanel,      setShowMobilePanel]      = useState(false);
   const [showReview,           setShowReview]           = useState(false);
   const [insufficientWarning,  setInsufficientWarning]  = useState('');
+  const [showBackWarning,      setShowBackWarning]      = useState(false);
 
   const quizDuration  = useRef(600);
   const startRef      = useRef(new Date());
   const submittingRef = useRef(false);
+
+  // Session key for timer/answer persistence across refresh and back navigation
+  const sessionKey = user?.uniqueId ? `rqa_quiz_${id}_${user.uniqueId}` : null;
 
   // ── Navigation guard ────────────────────────────────────────────────────────
   const quizInProgress = quizStarted && !result && !isSubmitting;
@@ -292,10 +296,57 @@ export default function LevelQuiz() {
         );
       }
       setQuestions(limited.map(q => q.type === 'truefalse' ? { ...q, type: 'tf' } : q));
+
+      // Restore in-progress session (survives refresh and back navigation)
+      if (sessionKey) {
+        try {
+          const saved = sessionStorage.getItem(sessionKey);
+          if (saved) {
+            const { startedAt, duration, answers: sa, current: sc } = JSON.parse(saved);
+            const elapsed   = (Date.now() - startedAt) / 1000;
+            const remaining = Math.max(0, Math.floor(duration - elapsed));
+            if (remaining > 0) {
+              quizDuration.current = duration;
+              setAnswers(sa || {});
+              setCurrent(sc || 0);
+              setTimeLeft(remaining);
+              setQuizStarted(true);
+            } else {
+              sessionStorage.removeItem(sessionKey);
+            }
+          }
+        } catch { /* ignore corrupt session */ }
+      }
+
       setLoading(false);
     }).catch(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Keep sessionStorage in sync with latest answers and current question
+  useEffect(() => {
+    if (!quizStarted || !sessionKey || result) return;
+    try {
+      const existing = sessionStorage.getItem(sessionKey);
+      if (existing) {
+        const data = JSON.parse(existing);
+        sessionStorage.setItem(sessionKey, JSON.stringify({ ...data, answers, current }));
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answers, current]);
+
+  // Intercept browser back button — show warning instead of navigating away
+  useEffect(() => {
+    if (!quizInProgress) return;
+    window.history.pushState(null, '', window.location.href);
+    const handlePop = () => {
+      window.history.pushState(null, '', window.location.href);
+      setShowBackWarning(true);
+    };
+    window.addEventListener('popstate', handlePop);
+    return () => window.removeEventListener('popstate', handlePop);
+  }, [quizInProgress]);
 
   // Block browser refresh / tab close / OS back gesture
   useEffect(() => {
@@ -379,6 +430,7 @@ export default function LevelQuiz() {
     if (submittingRef.current) return;
     submittingRef.current = true;
     setIsSubmitting(true);
+    if (sessionKey) sessionStorage.removeItem(sessionKey);
 
     const score = computeScore();
 
@@ -577,7 +629,19 @@ export default function LevelQuiz() {
                 Cancel
               </button>
               <button
-                onClick={() => setQuizStarted(true)}
+                onClick={() => {
+                  if (sessionKey) {
+                    try {
+                      sessionStorage.setItem(sessionKey, JSON.stringify({
+                        startedAt: Date.now(),
+                        duration:  quizDuration.current,
+                        answers:   {},
+                        current:   0,
+                      }));
+                    } catch { /* ignore */ }
+                  }
+                  setQuizStarted(true);
+                }}
                 className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-white font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
                 style={{
                   background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`,
@@ -733,6 +797,32 @@ export default function LevelQuiz() {
             </div>
             <h2 className="text-2xl font-bold text-slate-800 mb-2">Time's Up!</h2>
             <p className="text-slate-500 text-sm">Submitting your quiz automatically…</p>
+          </div>
+        </div>
+      )}
+
+      {showBackWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl p-8 shadow-2xl max-w-sm mx-4">
+            <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle size={28} className="text-amber-500" />
+            </div>
+            <h2 className="text-xl font-bold text-slate-800 text-center mb-2">Leave the Exam?</h2>
+            <p className="text-slate-500 text-sm text-center mb-6">
+              You have already started this exam. Your timer will keep running even if you leave — and you cannot restart this exam. Your answers so far will be submitted when the time runs out.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowBackWarning(false)}
+                className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-all">
+                Stay in Exam
+              </button>
+              <button
+                onClick={() => { setShowBackWarning(false); navigate('/dashboard', { replace: true }); }}
+                className="flex-1 py-3 rounded-xl bg-red-50 border border-red-200 text-red-600 font-semibold text-sm hover:bg-red-100 transition-all">
+                Leave Anyway
+              </button>
+            </div>
           </div>
         </div>
       )}

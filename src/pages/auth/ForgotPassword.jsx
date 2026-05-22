@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Hash, School, Users, Lock, Eye, EyeOff, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
+import { Hash, School, BookOpen, Lock, Eye, EyeOff, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
 import { api } from '../../utils/api';
 
+const CLASS_OPTIONS = ['VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'Other'];
+
 export default function ForgotPassword() {
-  const [step,      setStep]     = useState(1); // 1 = enter details, 2 = success
-  const [form,      setForm]     = useState({ uniqueId: '', schoolName: '', className: '', newPassword: '', confirmPassword: '' });
-  const [showPass,  setShowPass] = useState(false);
-  const [loading,   setLoading]  = useState(false);
-  const [error,     setError]    = useState('');
+  const [step,        setStep]       = useState(1);
+  const [form,        setForm]       = useState({ uniqueId: '', schoolName: '', className: '', newPassword: '', confirmPassword: '' });
+  const [customClass, setCustomClass] = useState('');
+  const [showPass,    setShowPass]   = useState(false);
+  const [loading,     setLoading]    = useState(false);
+  const [error,       setError]      = useState('');
 
   const f = (key) => (e) => setForm(p => ({ ...p, [key]: e.target.value }));
 
@@ -16,11 +19,14 @@ export default function ForgotPassword() {
     e.preventDefault();
     setError('');
 
+    const effectiveClass = form.className === 'Other' ? customClass.trim() : form.className;
+    if (!effectiveClass) { setError('Please select or enter your class.'); return; }
+
     if (form.newPassword !== form.confirmPassword) {
       setError('Passwords do not match.');
       return;
     }
-    if (form.newPassword.length < 6) {
+    if (form.newPassword.length < 4) {
       setError('Password must be at least 6 characters.');
       return;
     }
@@ -30,7 +36,7 @@ export default function ForgotPassword() {
       await api.resetPassword(
         form.uniqueId.trim(),
         form.schoolName.trim(),
-        form.className.trim(),
+        effectiveClass,
         form.newPassword,
       );
       setStep(2);
@@ -136,20 +142,42 @@ export default function ForgotPassword() {
             {/* Class Name */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-                Class / Section
+                Class 
               </label>
               <div className="relative">
-                <Users size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-                <input
-                  type="text"
-                  placeholder="Class name used during registration"
+                <BookOpen size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                <select
                   value={form.className}
                   onChange={f('className')}
                   required
-                  className={`${inputCls} pl-11 pr-4`}
-                  style={inputStyle}
-                />
+                  className={`${inputCls} pl-11 pr-4 appearance-none cursor-pointer`}
+                  style={{
+                    ...inputStyle,
+                    color: form.className ? 'white' : 'rgba(255,255,255,0.30)',
+                    background: 'rgba(255,255,255,0.06)',
+                  }}
+                >
+                  <option value="" style={{ color: '#94a3b8', background: '#1e293b' }}>Select your Class</option>
+                  {CLASS_OPTIONS.map(c => (
+                    <option key={c} value={c} style={{ color: 'white', background: '#1e293b' }}>{c}</option>
+                  ))}
+                </select>
               </div>
+
+              {form.className === 'Other' && (
+                <div className="relative mt-2">
+                  <BookOpen size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input
+                    type="text"
+                    placeholder="e.g. B.Tech 1st Year, Diploma…"
+                    value={customClass}
+                    onChange={e => setCustomClass(e.target.value)}
+                    required
+                    className={`${inputCls} pl-11 pr-4`}
+                    style={inputStyle}
+                  />
+                </div>
+              )}
             </div>
 
             {/* New Password */}
@@ -161,7 +189,7 @@ export default function ForgotPassword() {
                 <Lock size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
                 <input
                   type={showPass ? 'text' : 'password'}
-                  placeholder="At least 4 characters"
+                  placeholder="At least 6 characters"
                   value={form.newPassword}
                   onChange={f('newPassword')}
                   required
