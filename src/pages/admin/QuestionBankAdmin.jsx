@@ -150,29 +150,56 @@ function InlineInput({ placeholder, onSave, onCancel, initial='' }) {
 
 // ─── Image Upload ──────────────────────────────────────────────────────────
 function ImageUpload({ value, onChange, compact = false, label = 'Image' }) {
-  const [drag, setDrag] = useState(false);
-  const process = (file) => {
+  const [drag, setDrag]           = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError]         = useState('');
+
+  const process = async (file) => {
     if (!file || !file.type.startsWith('image/')) return;
-    const reader = new FileReader();
-    reader.onload = e => onChange(e.target.result);
-    reader.readAsDataURL(file);
+    setUploading(true);
+    setError('');
+    try {
+      const { id, presignedUrl, url } = await api.getPresignedUrl(file.name, file.type);
+      await api.uploadToS3(presignedUrl, file);
+      await api.confirmUpload(id);
+      onChange(url);
+    } catch (err) {
+      setError('Upload failed');
+      console.error('Image upload failed:', err.message);
+    } finally {
+      setUploading(false);
+    }
   };
-  if (value) return (
-    <div className="relative rounded-xl overflow-hidden border border-slate-200 group">
-      <img src={value} alt={label} className={`w-full object-cover ${compact ? 'h-16' : 'h-28'}`}/>
-      <button onClick={() => onChange('')} className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors shadow-sm opacity-0 group-hover:opacity-100"><X size={9}/></button>
+
+  if (uploading) return (
+    <div className={`flex items-center justify-center gap-2 border-2 border-dashed border-indigo-200 bg-indigo-50 rounded-xl ${compact ? 'h-14' : 'h-24'}`}>
+      <Loader2 size={compact ? 12 : 16} className="animate-spin text-indigo-500"/>
+      <span className={`font-semibold text-indigo-500 ${compact ? 'text-[9px]' : 'text-xs'}`}>Uploading…</span>
     </div>
   );
+
+  if (value) return (
+    <div className="space-y-1">
+      <div className="relative rounded-xl overflow-hidden border border-slate-200 group">
+        <img src={value} alt={label} className={`w-full object-cover ${compact ? 'h-16' : 'h-28'}`}/>
+        <button onClick={() => onChange('')} className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors shadow-sm opacity-0 group-hover:opacity-100"><X size={9}/></button>
+      </div>
+    </div>
+  );
+
   return (
-    <label
-      onDragOver={e => { e.preventDefault(); setDrag(true); }}
-      onDragLeave={() => setDrag(false)}
-      onDrop={e => { e.preventDefault(); setDrag(false); process(e.dataTransfer.files[0]); }}
-      className={`flex flex-col items-center justify-center gap-1 border-2 border-dashed rounded-xl cursor-pointer transition-all ${drag ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'} ${compact ? 'h-14' : 'h-24'}`}>
-      <Upload size={compact ? 13 : 18} className={drag ? 'text-indigo-500' : 'text-slate-300'}/>
-      <p className={`font-semibold text-slate-400 ${compact ? 'text-[9px]' : 'text-[10px]'}`}>{compact ? 'Add Image' : 'Upload Image'}</p>
-      <input type="file" accept="image/*" className="hidden" onChange={e => process(e.target.files[0])}/>
-    </label>
+    <div className="space-y-1">
+      <label
+        onDragOver={e => { e.preventDefault(); setDrag(true); }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={e => { e.preventDefault(); setDrag(false); process(e.dataTransfer.files[0]); }}
+        className={`flex flex-col items-center justify-center gap-1 border-2 border-dashed rounded-xl cursor-pointer transition-all ${drag ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'} ${compact ? 'h-14' : 'h-24'}`}>
+        <Upload size={compact ? 13 : 18} className={drag ? 'text-indigo-500' : 'text-slate-300'}/>
+        <p className={`font-semibold text-slate-400 ${compact ? 'text-[9px]' : 'text-[10px]'}`}>{compact ? 'Add Image' : 'Upload Image'}</p>
+        <input type="file" accept="image/*" className="hidden" onChange={e => process(e.target.files[0])}/>
+      </label>
+      {error && <p className="text-[10px] text-red-500 font-semibold">{error}</p>}
+    </div>
   );
 }
 
