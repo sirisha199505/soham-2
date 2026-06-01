@@ -79,9 +79,9 @@ const DIFF_CFG = {
 
 // ─── Applicable-For config ────────────────────────────────────────────────
 const AF_CFG = {
-  student: { label:'Students Only', badge:'bg-indigo-100 text-indigo-700', border:'border-indigo-400', icon: Users    },
-  trainer: { label:'Trainers Only',  badge:'bg-violet-100 text-violet-700', border:'border-violet-400', icon: UserCheck },
-  both:    { label:'Both',           badge:'bg-teal-100   text-teal-700',   border:'border-teal-400',   icon: Globe    },
+  student: { label:'Students Only',           badge:'bg-indigo-100 text-indigo-700', border:'border-indigo-400', icon: Users     },
+  trainer: { label:'Innovation Coaches Only', badge:'bg-violet-100 text-violet-700', border:'border-violet-400', icon: UserCheck },
+  both:    { label:'Both',                    badge:'bg-teal-100   text-teal-700',   border:'border-teal-400',   icon: Globe     },
 };
 
 // ─── Blank factories ──────────────────────────────────────────────────────
@@ -673,8 +673,8 @@ function CategorySection({ cat, levelId, levelName, bankId, pal, onRenamed, onDe
     setQuestions(prev => prev.map(q => q.id === updated.id ? updated : q));
     setQModal(null);
     try {
-      await api.updateQuestion({
-        id: updated.id, text: updated.text, type: updated.type,
+      await api.updateQuestion(updated.id, {
+        text: updated.text, type: updated.type,
         options: flattenOptions(updated.options), pairs: flattenPairs(updated.pairs),
         correctAnswer: updated.correct, difficulty: updated.difficulty,
         imageUrl: updated.imageUrl || '', explanation: updated.explanation || '',
@@ -874,6 +874,7 @@ function LevelSection({ level, bankId, index, onRenamed, onDeleted, showToast })
           options: flattenOptions(q.options), pairs: flattenPairs(q.pairs),
           correctAnswer: q.correct, difficulty: q.difficulty,
           imageUrl: q.imageUrl || '', explanation: q.explanation || '',
+          applicableFor: q.applicableFor || 'student',
           qbCategoryId: targetCatId, qbLevelId: level.id,
           levelId: undefined,
           category: getCatFromName(targetCatName),
