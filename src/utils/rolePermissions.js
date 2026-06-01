@@ -36,16 +36,14 @@ export const getSidebarItems = (role) => {
       { label: 'Exam Levels',   path: '/admin/levels',        icon: 'Layers' },
       { label: 'Content',       path: '/admin/content',       icon: 'FileText' },
       { label: 'Settings',      path: '/admin/settings',      icon: 'Settings'    },
-      { label: 'Help & Support', path: '/admin/help',          icon: 'HelpCircle'  },
     ];
   }
 
   // Student and Coach share the same sidebar
   return [
-    { label: 'Dashboard',      path: '/dashboard',    icon: 'LayoutDashboard' },
-    { label: 'Content',        path: '/content',      icon: 'BookOpen'        },
-    { label: 'Quiz History',   path: '/quiz-history', icon: 'History'         },
-    { label: 'My Profile',     path: '/profile',      icon: 'User'            },
-    { label: 'Help & Support', path: '/help',         icon: 'HelpCircle'      },
+    { label: 'Dashboard',    path: '/dashboard',    icon: 'LayoutDashboard' },
+    { label: 'Content',      path: '/content',      icon: 'BookOpen'        },
+    { label: 'Quiz History', path: '/quiz-history', icon: 'History'         },
+    { label: 'My Profile',   path: '/profile',      icon: 'User'            },
   ];
 };
