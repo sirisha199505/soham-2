@@ -1,15 +1,16 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-  BookOpen, FileText, Clock, ChevronLeft, ChevronRight,
-  Download, ExternalLink, Play, Layers, X, CheckCircle,
-  Loader2, BookMarked, ZoomIn, ZoomOut, Maximize2,
-  AlertCircle,
+  BookOpen, ChevronLeft, ChevronRight, CheckCircle,
+  Loader2, BookMarked, AlertCircle, Bookmark, BookmarkCheck,
+  Clock, BarChart2, ArrowLeft, FileText, Download, ExternalLink,
+  ZoomIn, ZoomOut,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { LEVELS } from '../../utils/levelData';
 import { api } from '../../utils/api';
 
+// ── Color palette ─────────────────────────────────────────────────────────
 const FALLBACK_COLORS = [
   { from: '#3BC0EF', to: '#1E3A8A' },
   { from: '#8B5CF6', to: '#6d28d9' },
@@ -20,176 +21,247 @@ const FALLBACK_COLORS = [
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-
 function estimateReadTime(page) {
   if (page.type === 'pdf') return `${Math.max(2, (page.pageCount || 1) * 2)} min`;
-  const words = (page.sections || []).reduce((s, sec) => s + (sec.body || '').split(/\s+/).length, 0);
+  const words = (page.sections || []).reduce(
+    (s, sec) => s + (sec.body || '').split(/\s+/).length, 0
+  );
   return `${Math.max(1, Math.round(words / 200))} min`;
-}
-
-function getSectionCount(page) {
-  if (page.type === 'pdf') return `${page.pageCount || '?'} pages`;
-  return `${(page.sections || []).length} section${(page.sections || []).length !== 1 ? 's' : ''}`;
 }
 
 function buildBlobUrl(pdfData) {
   if (!pdfData) return null;
-  if (pdfData.startsWith('blob:') || pdfData.startsWith('http')) return pdfData;
+  if (!pdfData.startsWith('data:')) return pdfData;
   try {
-    const arr  = pdfData.split(',');
-    const mime = arr[0].match(/:(.*?);/)[1];
-    const bstr = atob(arr[1]);
+    const [header, b64] = pdfData.split(',');
+    const mime = header.match(/:(.*?);/)[1];
+    const bstr = atob(b64);
     const u8   = new Uint8Array(bstr.length);
     for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
     return URL.createObjectURL(new Blob([u8], { type: mime }));
   } catch { return pdfData; }
 }
 
-// ── localStorage read tracking ────────────────────────────────────────────
-
-function markRead(levelId, pageIdx) {
-  try {
-    const key  = `content_read_${levelId}`;
-    const read = JSON.parse(localStorage.getItem(key) || '[]');
-    if (!read.includes(pageIdx)) localStorage.setItem(key, JSON.stringify([...read, pageIdx]));
-    localStorage.setItem(`content_last_${levelId}`, String(pageIdx));
-    localStorage.setItem(`content_last_time_${levelId}`, Date.now().toString());
-  } catch {}
-}
-function getReadPages(levelId) {
-  try { return JSON.parse(localStorage.getItem(`content_read_${levelId}`) || '[]'); } catch { return []; }
-}
-function getLastRead(levelId) {
-  try {
-    const idx  = localStorage.getItem(`content_last_${levelId}`);
-    const time = localStorage.getItem(`content_last_time_${levelId}`);
-    if (!idx || !time) return null;
-    return { idx: Number(idx), time: Number(time) };
-  } catch { return null; }
-}
 function timeAgo(ts) {
-  const diff = Date.now() - ts;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+  const d = Date.now() - ts;
+  const m = Math.floor(d / 60000);
+  if (m < 1)  return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
 }
 
-// ── PDF.js loader (CDN, once per session) ────────────────────────────────
+// ── localStorage helpers ──────────────────────────────────────────────────
+const ls = {
+  get: (k, def) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; } },
+  set: (k, v)   => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
 
-const PDFJS_VERSION = '3.11.174';
-const PDFJS_CDN     = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}`;
+function markRead(lid, idx) {
+  const key   = `cr_read_${lid}`;
+  const reads = ls.get(key, []);
+  if (!reads.includes(idx)) ls.set(key, [...reads, idx]);
+  ls.set(`cr_last_${lid}`,      idx);
+  ls.set(`cr_last_ts_${lid}`,   Date.now());
+}
+function getReadList(lid)   { return ls.get(`cr_read_${lid}`,    []); }
+function getLastRead(lid)   { const i = ls.get(`cr_last_${lid}`, null); const t = ls.get(`cr_last_ts_${lid}`, null); return (i !== null && t) ? { idx: i, ts: t } : null; }
+function getBookmarks(lid)  { return ls.get(`cr_bm_${lid}`,      []); }
+function setBookmarks(lid, b) { ls.set(`cr_bm_${lid}`, b); }
+function getSavedPage(lid)  { return ls.get(`cr_pos_${lid}`,     0); }
+function savePage(lid, idx) { ls.set(`cr_pos_${lid}`, idx); }
 
-let pdfJsLoadPromise = null;
+// ── PDF.js CDN loader ─────────────────────────────────────────────────────
+const PDFJS_CDN = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174`;
+let _pdfPromise = null;
 function loadPdfJs() {
-  if (pdfJsLoadPromise) return pdfJsLoadPromise;
-  pdfJsLoadPromise = new Promise((resolve, reject) => {
-    if (window.pdfjsLib) { resolve(window.pdfjsLib); return; }
-    const s = document.createElement('script');
-    s.src = `${PDFJS_CDN}/pdf.min.js`;
-    s.onload = () => {
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc = `${PDFJS_CDN}/pdf.worker.min.js`;
-      resolve(window.pdfjsLib);
-    };
-    s.onerror = () => { pdfJsLoadPromise = null; reject(new Error('PDF.js CDN load failed')); };
+  if (_pdfPromise) return _pdfPromise;
+  _pdfPromise = new Promise((res, rej) => {
+    if (window.pdfjsLib) { res(window.pdfjsLib); return; }
+    const s  = document.createElement('script');
+    s.src    = `${PDFJS_CDN}/pdf.min.js`;
+    s.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = `${PDFJS_CDN}/pdf.worker.min.js`; res(window.pdfjsLib); };
+    s.onerror = () => { _pdfPromise = null; rej(new Error('PDF.js load failed')); };
     document.head.appendChild(s);
   });
-  return pdfJsLoadPromise;
+  return _pdfPromise;
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// PDF Canvas Reader — fully custom, no browser PDF chrome
+// PDF page renderer (clean canvas, no toolbar chrome)
 // ══════════════════════════════════════════════════════════════════════════
-function PDFCanvasReader({ pdfData, filename, level, onClose }) {
-  const [pdfDoc,   setPdfDoc]   = useState(null);
-  const [pageNum,  setPageNum]  = useState(1);
-  const [numPages, setNumPages] = useState(0);
-  const [zoom,     setZoom]     = useState(1.0);   // 1.0 = fit width
-  const [status,   setStatus]   = useState('loading'); // loading | ready | error
+function PDFPageRenderer({ pdfData, pageNum, zoom, onDocLoaded }) {
+  const [pdfDoc, setPdfDoc] = useState(null);
+  const [status, setStatus] = useState('loading');
   const canvasRef    = useRef(null);
   const containerRef = useRef(null);
-  const renderRef    = useRef(null); // current render task
+  const renderRef    = useRef(null);
 
-  const gradStyle = level
-    ? { background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }
-    : { background: 'linear-gradient(135deg,#4f46e5,#7c3aed)' };
-
-  // Build blob URL once
   const blobUrl = useMemo(() => buildBlobUrl(pdfData), [pdfData]);
 
-  // Load PDF document
   useEffect(() => {
     if (!blobUrl) { setStatus('error'); return; }
     let cancelled = false;
     loadPdfJs()
-      .then(pdfjs => pdfjs.getDocument({ url: blobUrl }).promise)
-      .then(doc => {
+      .then(lib => lib.getDocument({ url: blobUrl }).promise)
+      .then(doc  => {
         if (cancelled) return;
         setPdfDoc(doc);
-        setNumPages(doc.numPages);
         setStatus('ready');
+        onDocLoaded?.(doc.numPages);
       })
       .catch(() => { if (!cancelled) setStatus('error'); });
     return () => { cancelled = true; };
-  }, [blobUrl]);
+  }, [blobUrl]); // eslint-disable-line
 
-  // Render current page whenever doc / page / zoom changes
   useEffect(() => {
     if (!pdfDoc || status !== 'ready' || !canvasRef.current) return;
     let cancelled = false;
 
     const render = async () => {
       try {
-        // Cancel previous render
         if (renderRef.current) { renderRef.current.cancel(); renderRef.current = null; }
-
-        const page         = await pdfDoc.getPage(pageNum);
-        if (cancelled) return;
-
-        // Fill the full container width, then apply zoom multiplier
-        const containerW   = containerRef.current?.clientWidth ?? 800;
-        const baseViewport = page.getViewport({ scale: 1 });
-        const fitScale     = containerW / baseViewport.width;
-        const finalScale   = fitScale * zoom;
-
-        const viewport = page.getViewport({ scale: finalScale });
-        const canvas   = canvasRef.current;
+        const page       = await pdfDoc.getPage(pageNum);
+        if (cancelled)   return;
+        const cw         = containerRef.current?.clientWidth || 680;
+        const base       = page.getViewport({ scale: 1 });
+        const scale      = (cw / base.width) * zoom;
+        const viewport   = page.getViewport({ scale });
+        const canvas     = canvasRef.current;
         if (!canvas || cancelled) return;
-
-        // Handle HiDPI screens
-        const dpr      = window.devicePixelRatio || 1;
-        canvas.width   = viewport.width  * dpr;
-        canvas.height  = viewport.height * dpr;
+        const dpr        = window.devicePixelRatio || 1;
+        canvas.width     = viewport.width  * dpr;
+        canvas.height    = viewport.height * dpr;
         canvas.style.width  = `${viewport.width}px`;
         canvas.style.height = `${viewport.height}px`;
-
-        const ctx = canvas.getContext('2d');
+        const ctx        = canvas.getContext('2d');
         ctx.scale(dpr, dpr);
-
         const task = page.render({ canvasContext: ctx, viewport });
         renderRef.current = task;
         await task.promise;
-      } catch (e) {
-        if (e?.name !== 'RenderingCancelledException') setStatus('error');
-      }
+      } catch (e) { if (e?.name !== 'RenderingCancelledException') console.warn(e); }
     };
-
     render();
     return () => { cancelled = true; };
   }, [pdfDoc, pageNum, zoom, status]);
 
-  // Keyboard navigation
-  useEffect(() => {
-    const handler = (e) => {
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown')  setPageNum(p => Math.min(p + 1, numPages));
-      if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')    setPageNum(p => Math.max(p - 1, 1));
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [numPages, onClose]);
+  useEffect(() => () => { if (blobUrl?.startsWith('blob:')) URL.revokeObjectURL(blobUrl); }, [blobUrl]);
+
+  if (status === 'loading') {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-3">
+        <Loader2 size={28} className="animate-spin text-indigo-400" />
+        <p className="text-sm text-slate-400">Loading document…</p>
+      </div>
+    );
+  }
+  if (status === 'error') {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4 text-center px-6">
+        <AlertCircle size={32} className="text-rose-400" />
+        <p className="font-semibold text-slate-700">Could not load this document</p>
+        {blobUrl && (
+          <a href={blobUrl} target="_blank" rel="noreferrer"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold">
+            <ExternalLink size={13} /> Open in New Tab
+          </a>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div ref={containerRef} className="w-full">
+      <canvas ref={canvasRef} style={{ display: 'block', width: '100%' }} />
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Article renderer — Notion-style reading column
+// ══════════════════════════════════════════════════════════════════════════
+function ArticleBody({ page }) {
+  return (
+    <div className="space-y-8">
+      {(page.sections || []).map((sec, i) => (
+        <section key={i}>
+          {/* Section heading */}
+          <div className="flex items-start gap-3 mb-4">
+            <span className="mt-0.5 flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-[11px] font-bold text-white bg-slate-800">
+              {i + 1}
+            </span>
+            <h2 className="text-xl font-bold text-slate-900 leading-snug"
+              style={{ fontFamily: 'Space Grotesk' }}>
+              {sec.heading}
+            </h2>
+          </div>
+
+          {/* Body text */}
+          <div className="pl-9 space-y-3">
+            {(sec.body || '').split('\n').map((line, li) => {
+              if (!line.trim()) return <div key={li} className="h-2" />;
+
+              // Handle bullet points (•)
+              if (line.trim().startsWith('•') || line.trim().startsWith('*') || line.trim().match(/^[0-9]+\./)) {
+                const text = line.trim().replace(/^[•*]\s*/, '').replace(/^[0-9]+\.\s*/, '');
+                return (
+                  <div key={li} className="flex items-start gap-2.5">
+                    <span className="mt-2 w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+                    <p className="text-[15px] text-slate-700 leading-[1.85]">
+                      {renderBold(text)}
+                    </p>
+                  </div>
+                );
+              }
+
+              return (
+                <p key={li} className="text-[15px] text-slate-700 leading-[1.85]">
+                  {renderBold(line)}
+                </p>
+              );
+            })}
+          </div>
+
+          {/* Section divider (not on last) */}
+          {i < (page.sections || []).length - 1 && (
+            <div className="mt-8 border-b border-slate-100" />
+          )}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function renderBold(text) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) =>
+    p.startsWith('**') && p.endsWith('**')
+      ? <strong key={i} className="text-slate-900 font-semibold">{p.slice(2, -2)}</strong>
+      : p
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Content Reader — distraction-free full-page experience
+// ══════════════════════════════════════════════════════════════════════════
+function ContentReader({ pages, startIndex, levelId, level, onBack, onReadStateChange }) {
+  const [currentIdx, setCurrentIdx] = useState(startIndex);
+  const [bookmarks,  setBookmarksState] = useState(() => getBookmarks(levelId));
+  const [pdfPages,   setPdfPages]   = useState(0);  // total pages in PDF doc
+  const [pdfPage,    setPdfPage]    = useState(1);   // current PDF page
+  const [zoom,       setZoom]       = useState(1.0);
+  const scrollRef = useRef(null);
+
+  const page       = pages[currentIdx];
+  const total      = pages.length;
+  const readList   = getReadList(levelId);
+  const readCount  = readList.length;
+  const overallPct = total > 0 ? Math.round((readCount / total) * 100) : 0;
+  const isBookmarked = bookmarks.includes(currentIdx);
+
+  const gradStyle = level
+    ? { background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }
+    : { background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' };
 
   // Lock body scroll
   useEffect(() => {
@@ -197,396 +269,369 @@ function PDFCanvasReader({ pdfData, filename, level, onClose }) {
     return () => { document.body.style.overflow = ''; };
   }, []);
 
-  // Cleanup blob URL
-  useEffect(() => () => { if (blobUrl?.startsWith('blob:')) URL.revokeObjectURL(blobUrl); }, [blobUrl]);
+  // Auto-save position + mark read
+  useEffect(() => {
+    markRead(levelId, currentIdx);
+    savePage(levelId, currentIdx);
+    onReadStateChange?.();
+  }, [currentIdx, levelId]); // eslint-disable-line
 
-  const progress = numPages > 1 ? ((pageNum - 1) / (numPages - 1)) * 100 : 100;
-  const atStart  = pageNum === 1;
-  const atEnd    = pageNum === numPages;
+  // Scroll to top when page changes
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    setPdfPage(1); // reset PDF page on material change
+  }, [currentIdx]);
+
+  const goTo = useCallback((idx) => {
+    setCurrentIdx(Math.max(0, Math.min(total - 1, idx)));
+  }, [total]);
+
+  const toggleBookmark = () => {
+    const next = isBookmarked
+      ? bookmarks.filter(b => b !== currentIdx)
+      : [...bookmarks, currentIdx];
+    setBookmarksState(next);
+    setBookmarks(levelId, next);
+  };
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'ArrowRight') {
+        if (page.type === 'pdf' && pdfPage < pdfPages) setPdfPage(p => p + 1);
+        else goTo(currentIdx + 1);
+      }
+      if (e.key === 'ArrowLeft') {
+        if (page.type === 'pdf' && pdfPage > 1) setPdfPage(p => p - 1);
+        else goTo(currentIdx - 1);
+      }
+      if (e.key === 'Escape') onBack();
+      if (e.key === 'b' || e.key === 'B') toggleBookmark();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [currentIdx, pdfPage, pdfPages, page?.type, goTo, onBack, toggleBookmark]); // eslint-disable-line
+
+  if (!page) return null;
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="fixed inset-0 z-40 flex flex-col bg-white">
 
-      {/* ── Top bar ── */}
-      <div className="flex items-center gap-3 px-4 md:px-6 py-3.5 border-b border-slate-100 shrink-0">
-        {/* File icon + title */}
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-white" style={gradStyle}>
-          <FileText size={14} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-slate-800 truncate">{filename || 'Document'}</p>
-          <p className="text-[10px] text-slate-400 font-medium">
-            {status === 'loading' ? 'Loading document…'
-              : status === 'error' ? 'Could not load'
-              : `Page ${pageNum} of ${numPages}`}
-          </p>
-        </div>
-
-        {/* Controls */}
-        <div className="flex items-center gap-1 shrink-0">
-          {/* Zoom out */}
-          <button
-            onClick={() => setZoom(z => Math.max(0.5, parseFloat((z - 0.25).toFixed(2))))}
-            title="Zoom out"
-            className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors">
-            <ZoomOut size={14} />
-          </button>
-          {/* Zoom level */}
-          <button
-            onClick={() => setZoom(1.0)}
-            title="Reset to fit width"
-            className="px-2 h-7 rounded-md text-[11px] font-bold text-slate-500 hover:bg-slate-100 transition-colors min-w-[46px]">
-            {Math.round(zoom * 100)}%
-          </button>
-          {/* Zoom in */}
-          <button
-            onClick={() => setZoom(z => Math.min(3, parseFloat((z + 0.25).toFixed(2))))}
-            title="Zoom in"
-            className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors">
-            <ZoomIn size={14} />
+      {/* ── Sticky header ─────────────────────────────────────────── */}
+      <header className="sticky top-0 z-10 bg-white border-b border-slate-100 shrink-0">
+        {/* Top row */}
+        <div className="flex items-center gap-3 px-4 md:px-6 py-3">
+          {/* Back */}
+          <button onClick={onBack}
+            className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors shrink-0">
+            <ArrowLeft size={16} /> Back
           </button>
 
-          <div className="w-px h-5 bg-slate-200 mx-1" />
+          <div className="w-px h-4 bg-slate-200 shrink-0" />
 
-          {/* Download */}
-          {blobUrl && (
-            <a href={blobUrl} download={filename || 'document.pdf'}
-              title="Download"
-              className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors">
-              <Download size={14} />
-            </a>
-          )}
-          {/* Open in browser tab */}
-          {blobUrl && (
-            <a href={blobUrl} target="_blank" rel="noreferrer"
-              title="Open in new tab"
-              className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors">
-              <ExternalLink size={14} />
-            </a>
-          )}
-
-          <div className="w-px h-5 bg-slate-200 mx-1" />
-
-          {/* Close */}
-          <button onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-red-50 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors">
-            <X size={15} />
-          </button>
-        </div>
-      </div>
-
-      {/* ── Reading progress bar ── */}
-      <div className="h-0.5 bg-slate-100 shrink-0">
-        <div className="h-0.5 transition-all duration-500"
-          style={{ width: `${progress}%`, ...gradStyle }} />
-      </div>
-
-      {/* ── Canvas viewport ── */}
-      <div
-        ref={containerRef}
-        className="flex-1 overflow-auto bg-white"
-      >
-        {status === 'loading' && (
-          <div className="flex flex-col items-center justify-center h-full gap-4 min-h-64">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={gradStyle}>
-              <Loader2 size={24} className="animate-spin text-white" />
-            </div>
-            <p className="text-sm font-semibold text-slate-500">Loading document…</p>
-            <p className="text-xs text-slate-400">Fetching pages from server</p>
+          {/* Level + title */}
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 leading-none mb-0.5">
+              {level?.title}
+            </p>
+            <p className="text-sm font-bold text-slate-800 truncate leading-snug">
+              {page.title || `Study Material ${currentIdx + 1}`}
+            </p>
           </div>
-        )}
 
-        {status === 'error' && (
-          <div className="flex flex-col items-center justify-center h-full gap-4 min-h-64 p-8 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center">
-              <AlertCircle size={24} className="text-red-400" />
-            </div>
-            <div>
-              <p className="font-semibold text-slate-700">Could not render this document</p>
-              <p className="text-sm text-slate-400 mt-1">The PDF may be corrupted or unavailable.</p>
-            </div>
-            {blobUrl && (
-              <a href={blobUrl} target="_blank" rel="noreferrer"
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-all hover:opacity-90"
-                style={gradStyle}>
-                <ExternalLink size={14} /> Open in Browser
-              </a>
-            )}
-          </div>
-        )}
+          {/* Right controls */}
+          <div className="flex items-center gap-1 shrink-0">
+            {/* Bookmark */}
+            <button onClick={toggleBookmark} title={isBookmarked ? 'Remove bookmark (B)' : 'Bookmark (B)'}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors
+                ${isBookmarked ? 'text-amber-500 bg-amber-50' : 'text-slate-400 hover:bg-slate-100'}`}>
+              {isBookmarked ? <BookmarkCheck size={15} /> : <Bookmark size={15} />}
+            </button>
 
-        {status === 'ready' && (
-          <div className="w-full bg-white">
-            <canvas
-              ref={canvasRef}
-              style={{ display: 'block', width: '100%' }}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* ── Page navigation footer ── */}
-      {status === 'ready' && numPages > 0 && (
-        <div className="flex items-center justify-between px-4 md:px-6 py-3 border-t border-slate-100 shrink-0 bg-white">
-
-          <button
-            onClick={() => setPageNum(p => Math.max(1, p - 1))}
-            disabled={atStart}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border border-slate-200 disabled:opacity-30 hover:bg-slate-50 transition-all disabled:cursor-not-allowed">
-            <ChevronLeft size={15} /> Previous
-          </button>
-
-          {/* Page indicator + dots */}
-          <div className="flex flex-col items-center gap-1.5">
-            <span className="text-xs font-bold text-slate-600 tabular-nums">
-              {pageNum} <span className="text-slate-300">/</span> {numPages}
+            {/* Material counter */}
+            <span className="hidden sm:flex items-center text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
+              {currentIdx + 1} / {total}
             </span>
-            {numPages > 1 && numPages <= 12 && (
-              <div className="flex items-center gap-1">
-                {Array.from({ length: numPages }).map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setPageNum(i + 1)}
-                    className="rounded-full transition-all duration-200"
-                    style={{
-                      width:      pageNum === i + 1 ? 16 : 5,
-                      height:     5,
-                      background: pageNum === i + 1 ? (level?.color?.from || '#4F46E5') : '#e2e8f0',
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-            {numPages > 12 && (
-              <input
-                type="range" min={1} max={numPages} value={pageNum}
-                onChange={e => setPageNum(Number(e.target.value))}
-                className="w-32 h-1 accent-indigo-500"
-              />
-            )}
           </div>
-
-          <button
-            onClick={() => setPageNum(p => Math.min(numPages, p + 1))}
-            disabled={atEnd}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border border-slate-200 disabled:opacity-30 hover:bg-slate-50 transition-all disabled:cursor-not-allowed">
-            Next <ChevronRight size={15} />
-          </button>
         </div>
-      )}
+
+        {/* Progress bar row */}
+        <div className="px-4 md:px-6 pb-2.5">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-1.5 rounded-full transition-all duration-500"
+                style={{ width: `${((currentIdx + 1) / total) * 100}%`, ...gradStyle }} />
+            </div>
+            <span className="text-[10px] font-bold text-slate-400 shrink-0 tabular-nums">
+              {overallPct}% complete
+            </span>
+          </div>
+          {/* Dot indicators */}
+          {total <= 16 && (
+            <div className="flex items-center gap-1 mt-1.5">
+              {pages.map((_, i) => (
+                <button key={i} onClick={() => goTo(i)}
+                  className="rounded-full transition-all duration-200 hover:scale-125"
+                  style={{
+                    width: i === currentIdx ? 18 : 5,
+                    height: 5,
+                    background: readList.includes(i)
+                      ? (i === currentIdx ? level?.color?.from || '#4F46E5' : '#86efac')
+                      : (i === currentIdx ? level?.color?.from || '#4F46E5' : '#e2e8f0'),
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* ── Reading area ──────────────────────────────────────────── */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto bg-white">
+
+        {/* ── Article reader ── */}
+        {page.type !== 'pdf' && (
+          <div className="max-w-[720px] mx-auto px-4 md:px-8 py-10 pb-24">
+
+            {/* Article hero */}
+            <div className="mb-10">
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full text-white"
+                  style={gradStyle}>
+                  {level?.title}
+                </span>
+                {isBookmarked && (
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">
+                    <BookmarkCheck size={9} /> Bookmarked
+                  </span>
+                )}
+                {readList.includes(currentIdx) && (
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-green-600 bg-green-50 px-2.5 py-1 rounded-full">
+                    <CheckCircle size={9} /> Read
+                  </span>
+                )}
+              </div>
+
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-900 leading-snug mb-4"
+                style={{ fontFamily: 'Space Grotesk' }}>
+                {page.title || `Study Material ${currentIdx + 1}`}
+              </h1>
+
+              <div className="flex items-center gap-4 text-sm text-slate-500 pb-6 border-b border-slate-100">
+                <span className="flex items-center gap-1.5">
+                  <Clock size={13} /> {estimateReadTime(page)} read
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <BarChart2 size={13} /> {(page.sections || []).length} sections
+                </span>
+              </div>
+            </div>
+
+            {/* Article body */}
+            <ArticleBody page={page} />
+
+            {/* ── Bottom navigation ── */}
+            <div className="mt-16 pt-8 border-t border-slate-100 flex items-center justify-between gap-4">
+              <button
+                onClick={() => goTo(currentIdx - 1)}
+                disabled={currentIdx === 0}
+                className="flex items-center gap-2 px-5 py-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 disabled:opacity-30 hover:bg-slate-50 transition-all disabled:cursor-not-allowed group">
+                <ChevronLeft size={16} className="group-hover:-translate-x-0.5 transition-transform" />
+                Previous
+              </button>
+
+              <div className="flex-1 text-center">
+                <p className="text-xs text-slate-400">{currentIdx + 1} of {total}</p>
+              </div>
+
+              {currentIdx < total - 1 ? (
+                <button
+                  onClick={() => goTo(currentIdx + 1)}
+                  className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 group"
+                  style={gradStyle}>
+                  Next
+                  <ChevronRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
+                </button>
+              ) : (
+                <button onClick={onBack}
+                  className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
+                  style={gradStyle}>
+                  <CheckCircle size={15} /> Done
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── PDF reader ── */}
+        {page.type === 'pdf' && (
+          <div className="max-w-[800px] mx-auto px-2 md:px-4 pb-24">
+
+            {/* PDF controls bar */}
+            <div className="flex items-center justify-between py-3 px-2 border-b border-slate-100 mb-4 sticky top-0 bg-white z-10">
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => setPdfPage(p => Math.max(1, p - 1))} disabled={pdfPage <= 1}
+                  className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 disabled:opacity-30 transition-colors">
+                  <ChevronLeft size={14} />
+                </button>
+                <span className="text-xs font-semibold text-slate-600 tabular-nums px-2">
+                  {pdfPage} / {pdfPages || '…'}
+                </span>
+                <button onClick={() => setPdfPage(p => Math.min(pdfPages, p + 1))} disabled={pdfPage >= pdfPages}
+                  className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 disabled:opacity-30 transition-colors">
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button onClick={() => setZoom(z => Math.max(0.5, parseFloat((z - 0.25).toFixed(2))))}
+                  className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors">
+                  <ZoomOut size={13} />
+                </button>
+                <button onClick={() => setZoom(1.0)}
+                  className="text-[11px] font-bold text-slate-500 hover:bg-slate-100 px-2 py-1 rounded-md transition-colors min-w-[42px] text-center">
+                  {Math.round(zoom * 100)}%
+                </button>
+                <button onClick={() => setZoom(z => Math.min(2.5, parseFloat((z + 0.25).toFixed(2))))}
+                  className="w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500 transition-colors">
+                  <ZoomIn size={13} />
+                </button>
+              </div>
+
+              {page.pdfData && (() => {
+                const url = buildBlobUrl(page.pdfData);
+                return url ? (
+                  <a href={url} download={page.title || 'document.pdf'}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
+                    <Download size={11} /> Download
+                  </a>
+                ) : null;
+              })()}
+            </div>
+
+            <PDFPageRenderer
+              pdfData={page.pdfData}
+              pageNum={pdfPage}
+              zoom={zoom}
+              onDocLoaded={setPdfPages}
+            />
+
+            {/* PDF material navigation */}
+            <div className="mt-8 pt-6 border-t border-slate-100 flex items-center justify-between gap-4 px-2">
+              <button
+                onClick={() => goTo(currentIdx - 1)}
+                disabled={currentIdx === 0}
+                className="flex items-center gap-2 px-5 py-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 disabled:opacity-30 hover:bg-slate-50 transition-all disabled:cursor-not-allowed">
+                <ChevronLeft size={16} /> Previous Material
+              </button>
+
+              <div className="text-center">
+                <p className="text-xs text-slate-400">{currentIdx + 1} of {total} materials</p>
+              </div>
+
+              {currentIdx < total - 1 ? (
+                <button onClick={() => goTo(currentIdx + 1)}
+                  className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
+                  style={gradStyle}>
+                  Next Material <ChevronRight size={16} />
+                </button>
+              ) : (
+                <button onClick={onBack}
+                  className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
+                  style={gradStyle}>
+                  <CheckCircle size={15} /> Done
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// Text Article Reader
+// Material Card — clean LMS style
 // ══════════════════════════════════════════════════════════════════════════
-function TextReader({ page, level, onClose }) {
+function MaterialCard({ page, index, levelId, level, totalCards, onRead }) {
+  const readList   = getReadList(levelId);
+  const lastRead   = getLastRead(levelId);
+  const bookmarks  = getBookmarks(levelId);
+
+  const isRead       = readList.includes(index);
+  const isBookmarked = bookmarks.includes(index);
+  const isLastVisited = lastRead?.idx === index;
+
   const gradStyle = level
     ? { background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }
     : {};
 
-  // Keyboard close
-  useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
-
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
-  }, []);
-
-  const wordCount = (page.sections || []).reduce(
-    (s, sec) => s + (sec.body || '').split(/\s+/).length, 0
-  );
-  const readTime = Math.max(1, Math.round(wordCount / 200));
-
   return (
-    <div className="flex flex-col h-full bg-white">
-
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 md:px-6 py-3.5 border-b border-slate-100 shrink-0">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-white" style={gradStyle}>
-          <BookOpen size={14} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-slate-800 truncate">
-            {page.title || 'Study Material'}
-          </p>
-          <p className="text-[10px] text-slate-400 font-medium">
-            {(page.sections || []).length} sections · ~{readTime} min read
-          </p>
-        </div>
-        <button onClick={onClose}
-          className="w-8 h-8 rounded-lg hover:bg-red-50 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors ml-2">
-          <X size={15} />
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto bg-slate-50">
-        <div className="max-w-2xl mx-auto px-4 md:px-0 py-8 space-y-5">
-
-          {/* Article hero */}
-          <div className="rounded-2xl p-6 text-white relative overflow-hidden" style={gradStyle}>
-            <div className="absolute top-0 right-0 w-40 h-40 rounded-full opacity-10 blur-3xl bg-white" />
-            <div className="relative z-10">
-              <p className="text-white/60 text-xs font-semibold uppercase tracking-widest mb-1.5">
-                {level?.title}
-              </p>
-              <h1 className="text-xl font-bold leading-snug" style={{ fontFamily: 'Space Grotesk' }}>
-                {page.title || 'Study Material'}
-              </h1>
-              <div className="flex items-center gap-3 mt-3 text-white/60 text-xs">
-                <span className="flex items-center gap-1"><Clock size={10} /> ~{readTime} min read</span>
-                <span>·</span>
-                <span>{wordCount.toLocaleString()} words</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Sections */}
-          {(page.sections || []).map((sec, i) => (
-            <div key={i} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-              <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-50"
-                style={{ background: '#fafafa' }}>
-                <span className="w-7 h-7 rounded-xl flex items-center justify-center text-white text-xs font-bold shrink-0"
-                  style={gradStyle}>{i + 1}</span>
-                <h2 className="text-base font-bold text-slate-800 leading-snug"
-                  style={{ fontFamily: 'Space Grotesk' }}>
-                  {sec.heading}
-                </h2>
-              </div>
-              <div className="px-5 py-5 space-y-2.5">
-                {(sec.body || '').split('\n').map((line, li) => {
-                  if (!line.trim()) return <div key={li} className="h-1" />;
-                  const parts = line.split(/(\*\*[^*]+\*\*)/g);
-                  return (
-                    <p key={li} className="text-sm text-slate-600 leading-[1.85]">
-                      {parts.map((p, pi) =>
-                        p.startsWith('**') && p.endsWith('**')
-                          ? <strong key={pi} className="text-slate-800 font-semibold">{p.slice(2, -2)}</strong>
-                          : p
-                      )}
-                    </p>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// Reader Modal wrapper
-// ══════════════════════════════════════════════════════════════════════════
-function ReaderModal({ page, level, onClose }) {
-  return (
-    <div className="fixed inset-0 z-50">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-slate-900/75 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Modal — full height on mobile, constrained on desktop */}
-      <div className="absolute inset-0 md:inset-6 lg:inset-10 xl:inset-16 rounded-none md:rounded-2xl overflow-hidden shadow-2xl flex flex-col">
-        {page.type === 'pdf' ? (
-          <PDFCanvasReader
-            pdfData={page.pdfData}
-            filename={page.title || 'Study Material'}
-            level={level}
-            onClose={onClose}
-          />
-        ) : (
-          <TextReader
-            page={page}
-            level={level}
-            onClose={onClose}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// Material Card
-// ══════════════════════════════════════════════════════════════════════════
-function MaterialCard({ page, index, levelId, level, onRead }) {
-  const readPages = getReadPages(levelId);
-  const lastRead  = getLastRead(levelId);
-  const isRead     = readPages.includes(index);
-  const isLastRead = lastRead?.idx === index;
-  const gradStyle  = level
-    ? { background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }
-    : {};
-
-  return (
-    <div className={`group bg-white rounded-2xl border shadow-sm overflow-hidden
-      hover:shadow-lg hover:-translate-y-1 transition-all duration-200 cursor-pointer
-      ${isRead ? 'border-green-100' : 'border-slate-100'}`}
-      onClick={() => onRead(page, index)}>
-
-      {/* Gradient top accent */}
-      <div className="h-1 w-full" style={gradStyle} />
+    <div
+      onClick={() => onRead(index)}
+      className={`group relative bg-white rounded-2xl border shadow-sm overflow-hidden cursor-pointer
+        hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200
+        ${isRead ? 'border-green-100' : 'border-slate-100'}`}
+    >
+      {/* Gradient accent line */}
+      <div className="h-[3px]" style={gradStyle} />
 
       <div className="p-5">
-        {/* Top row: type badge + read badge */}
+        {/* Index + status row */}
         <div className="flex items-center justify-between mb-3">
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold
-            ${page.type === 'pdf' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'}`}>
-            {page.type === 'pdf' ? <FileText size={9} /> : <BookOpen size={9} />}
-            {page.type === 'pdf' ? 'PDF Document' : 'Article'}
+          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            {String(index + 1).padStart(2, '0')}
           </span>
-          {isRead ? (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-600">
-              <CheckCircle size={10} /> Read
-            </span>
-          ) : isLastRead ? (
-            <span className="text-[10px] font-semibold text-amber-500">In progress</span>
-          ) : null}
+          <div className="flex items-center gap-1.5">
+            {isBookmarked && (
+              <span className="w-5 h-5 flex items-center justify-center text-amber-400">
+                <BookmarkCheck size={12} />
+              </span>
+            )}
+            {isRead
+              ? <span className="w-5 h-5 flex items-center justify-center"><CheckCircle size={13} className="text-green-500" /></span>
+              : isLastVisited
+                ? <span className="w-2 h-2 rounded-full bg-amber-400" />
+                : <span className="w-2 h-2 rounded-full bg-slate-200" />
+            }
+          </div>
         </div>
 
         {/* Title */}
-        <h3 className="font-bold text-slate-800 text-sm leading-snug mb-2 line-clamp-2"
+        <h3 className="font-bold text-slate-800 text-[15px] leading-snug mb-3 line-clamp-2 min-h-[40px]"
           style={{ fontFamily: 'Space Grotesk' }}>
           {page.title || `Study Material ${index + 1}`}
         </h3>
 
         {/* Meta */}
-        <div className="flex items-center gap-2 flex-wrap mb-4">
-          <span className="flex items-center gap-1 text-[10px] text-slate-400">
-            <Clock size={9} /> {estimateReadTime(page)} read
-          </span>
-          {isLastRead && lastRead && (
-            <>
-              <span className="text-slate-200 text-[10px]">·</span>
-              <span className="text-[10px] text-amber-500">
-                Last read {timeAgo(lastRead.time)}
-              </span>
-            </>
+        <div className="flex items-center gap-3 text-[11px] text-slate-400 mb-4">
+          <span className="flex items-center gap-1"><Clock size={10} /> {estimateReadTime(page)}</span>
+          {isLastVisited && lastRead && (
+            <span className="text-amber-500 font-medium">· Last read {timeAgo(lastRead.ts)}</span>
           )}
         </div>
 
         {/* Progress bar */}
-        <div className="h-1 bg-slate-100 rounded-full mb-4 overflow-hidden">
-          <div className="h-1 rounded-full transition-all duration-700"
-            style={{ width: isRead ? '100%' : '0%', ...gradStyle }} />
+        <div className="mb-4">
+          <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+            <span>Progress</span>
+            <span className="font-bold">{isRead ? '100%' : '0%'}</span>
+          </div>
+          <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-1 rounded-full transition-all duration-700"
+              style={{ width: isRead ? '100%' : '0%', ...gradStyle }} />
+          </div>
         </div>
 
-        {/* CTA */}
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-white px-3.5 py-2 rounded-xl transition-all"
-            style={gradStyle}>
-            <Play size={11} /> Open
-          </span>
-          <span className="text-[10px] text-slate-400 font-medium group-hover:text-slate-600 transition-colors">
-            Click to read →
-          </span>
-        </div>
+        {/* Read Now button */}
+        <button
+          onClick={e => { e.stopPropagation(); onRead(index); }}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[0.98]"
+          style={gradStyle}>
+          {isRead ? <CheckCircle size={14} /> : <BookOpen size={14} />}
+          Read Now
+        </button>
       </div>
     </div>
   );
@@ -599,34 +644,40 @@ export default function StudentContent() {
   const { user }   = useAuth();
   const { levelSettings, levelSettingsLoaded } = useLevel();
 
-  const sortedLevels = Object.values(levelSettings)
-    .sort((a, b) => (a.order || a.id) - (b.order || b.id))
-    .map((dbLevel, idx) => {
-      const staticLevel = LEVELS.find(l => l.id === dbLevel.id);
-      if (staticLevel) return staticLevel;
-      return {
-        id:       dbLevel.id,
-        title:    dbLevel.title    || `Level ${dbLevel.id}`,
-        subtitle: dbLevel.subtitle || '',
-        color:    FALLBACK_COLORS[idx % FALLBACK_COLORS.length],
-      };
-    });
+  const sortedLevels = useMemo(() =>
+    Object.values(levelSettings)
+      .sort((a, b) => (a.order || a.id) - (b.order || b.id))
+      .map((dbLevel, idx) => {
+        const staticLevel = LEVELS.find(l => l.id === dbLevel.id);
+        if (staticLevel) return staticLevel;
+        return {
+          id:       dbLevel.id,
+          title:    dbLevel.title    || `Level ${dbLevel.id}`,
+          subtitle: dbLevel.subtitle || '',
+          color:    FALLBACK_COLORS[idx % FALLBACK_COLORS.length],
+        };
+      }),
+  [levelSettings]);
 
   const [allContent,    setAllContent]    = useState({});
   const [loading,       setLoading]       = useState(true);
   const [activeLevelId, setActiveLevelId] = useState(null);
-  const [modalItem,     setModalItem]     = useState(null); // { page, index }
+  const [readingIdx,    setReadingIdx]    = useState(null); // null = card list
   const [, forceUpdate] = useState(0);
 
   useEffect(() => {
     if (sortedLevels.length > 0 && activeLevelId === null) {
-      setActiveLevelId(sortedLevels[0].id);
+      // Resume from last saved position if available
+      const firstLevel = sortedLevels[0];
+      setActiveLevelId(firstLevel.id);
     }
   }, [sortedLevels.length]); // eslint-disable-line
 
   useEffect(() => {
-    if (!user?.id || !levelSettingsLoaded) return;
-    if (sortedLevels.length === 0) { setLoading(false); return; }
+    if (!user?.id || !levelSettingsLoaded || sortedLevels.length === 0) {
+      if (levelSettingsLoaded) setLoading(false);
+      return;
+    }
     setLoading(true);
     Promise.all(sortedLevels.map(l => api.getContent(l.id)))
       .then(results => {
@@ -642,29 +693,26 @@ export default function StudentContent() {
   const pages  = allContent[effectiveId] || [];
   const level  = sortedLevels.find(l => l.id === effectiveId);
 
-  // Summary stats
-  const totalMaterials = sortedLevels.reduce((s, l) => s + (allContent[l.id]?.length || 0), 0);
-  const totalSections  = sortedLevels.reduce((s, l) =>
-    s + (allContent[l.id] || []).reduce((ss, p) =>
-      ss + (p.type === 'pdf' ? (p.pageCount || 1) : (p.sections || []).length), 0), 0);
+  const gradStyle = level
+    ? { background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }
+    : {};
 
-  const handleRead = useCallback((page, index) => {
-    markRead(effectiveId, index);
-    setModalItem({ page, index });
-    forceUpdate(n => n + 1);
-  }, [effectiveId]);
+  const handleOpenReader = useCallback((idx) => {
+    setReadingIdx(idx);
+  }, []);
 
-  const handleCloseModal = useCallback(() => {
-    setModalItem(null);
+  const handleCloseReader = useCallback(() => {
+    setReadingIdx(null);
     forceUpdate(n => n + 1);
   }, []);
 
+  // ── Loading ──
   if (loading || !levelSettingsLoaded) {
     return (
-      <div className="min-h-full flex items-center justify-center bg-slate-50">
+      <div className="min-h-full flex items-center justify-center bg-white">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 size={32} className="animate-spin text-indigo-400" />
-          <p className="text-slate-400 text-sm">Loading materials…</p>
+          <Loader2 size={28} className="animate-spin text-indigo-400" />
+          <p className="text-slate-400 text-sm">Loading content…</p>
         </div>
       </div>
     );
@@ -672,124 +720,119 @@ export default function StudentContent() {
 
   if (sortedLevels.length === 0) {
     return (
-      <div className="min-h-full bg-slate-50 flex items-center justify-center p-6">
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm py-20 px-10 text-center max-w-md">
-          <BookOpen size={40} className="mx-auto text-slate-200 mb-3" />
-          <p className="font-semibold text-slate-600">No levels available yet</p>
+      <div className="min-h-full bg-white flex items-center justify-center p-6">
+        <div className="text-center max-w-sm">
+          <BookOpen size={40} className="mx-auto text-slate-200 mb-4" />
+          <p className="font-semibold text-slate-600">No levels available</p>
           <p className="text-slate-400 text-sm mt-1">Check back after your administrator configures exam levels.</p>
         </div>
       </div>
     );
   }
 
-  const gradStyle = level
-    ? { background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }
-    : {};
+  // Level stats
+  const readList   = getReadList(effectiveId);
+  const readCount  = readList.length;
+  const totalCount = pages.length;
+  const overallPct = totalCount > 0 ? Math.round((readCount / totalCount) * 100) : 0;
 
   return (
-    <div className="min-h-full bg-slate-50">
+    <>
+      {/* ── Reader (full-screen takeover) ─────────────────────────── */}
+      {readingIdx !== null && (
+        <ContentReader
+          pages={pages}
+          startIndex={readingIdx}
+          levelId={effectiveId}
+          level={level}
+          onBack={handleCloseReader}
+          onReadStateChange={() => forceUpdate(n => n + 1)}
+        />
+      )}
 
-      {/* ── Header ─────────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-slate-100">
-        <div className="px-4 md:px-8 py-6 max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2.5 mb-1">
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={gradStyle}>
-                  <BookMarked size={15} className="text-white" />
-                </div>
-                <h1 className="text-xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>
-                  Study Materials
+      {/* ── Card list ─────────────────────────────────────────────── */}
+      <div className="min-h-full bg-slate-50">
+
+        {/* ── Page header ── */}
+        <div className="bg-white border-b border-slate-100">
+          <div className="max-w-5xl mx-auto px-4 md:px-8 py-6">
+
+            {/* Title + summary */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5">
+              <div>
+                <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>
+                  Study Content
                 </h1>
+                <p className="text-sm text-slate-400 mt-0.5">
+                  Select a lesson to start reading
+                </p>
               </div>
-              <p className="text-sm text-slate-400 ml-10.5">
-                Click any card to open the full reading experience
-              </p>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {[
-                { icon: BookOpen, label: 'Materials', value: totalMaterials, color: '#4F46E5' },
-                { icon: Layers,   label: 'Sections',  value: totalSections,  color: '#8B5CF6' },
-                { icon: Maximize2, label: 'Levels',   value: sortedLevels.length, color: '#10B981' },
-              ].map(s => (
-                <div key={s.label} className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-100 bg-slate-50">
-                  <s.icon size={13} style={{ color: s.color }} />
-                  <span className="text-sm font-bold text-slate-700">{s.value}</span>
-                  <span className="text-[10px] text-slate-400">{s.label}</span>
+
+              {/* Level stats pills */}
+              {level && (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-100 bg-slate-50 text-xs font-semibold text-slate-600">
+                    <BookMarked size={13} style={{ color: level.color.from }} />
+                    {readCount}/{totalCount} read
+                  </div>
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-100 bg-slate-50 text-xs font-semibold text-slate-600">
+                    <BarChart2 size={13} style={{ color: level.color.from }} />
+                    {overallPct}% complete
+                  </div>
                 </div>
-              ))}
+              )}
             </div>
-          </div>
 
-          {/* Level tabs */}
-          <div className="flex gap-2 flex-wrap mt-5">
-            {sortedLevels.map(l => {
-              const isActive  = l.id === effectiveId;
-              const pageCount = (allContent[l.id] || []).length;
-              const readCount = getReadPages(l.id).length;
-              const pct       = pageCount > 0 ? Math.round((readCount / pageCount) * 100) : 0;
-              return (
-                <button key={l.id}
-                  onClick={() => setActiveLevelId(l.id)}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all hover:scale-[1.02]"
-                  style={isActive ? {
-                    background: `linear-gradient(135deg, ${l.color.from}, ${l.color.to})`,
-                    color: '#fff', border: 'none',
-                    boxShadow: `0 4px 14px ${l.color.from}40`,
-                  } : { background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0' }}>
-                  <BookOpen size={12} />
-                  {l.title}
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-                    style={isActive
-                      ? { background: 'rgba(255,255,255,0.25)', color: '#fff' }
-                      : { background: '#e2e8f0', color: '#94a3b8' }}>
-                    {pageCount}
-                  </span>
-                  {pct > 0 && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-                      style={isActive
-                        ? { background: 'rgba(255,255,255,0.25)', color: '#fff' }
-                        : { background: '#dcfce7', color: '#16a34a' }}>
-                      {pct}%
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Material cards ─────────────────────────────────────────── */}
-      <div className="px-4 md:px-8 py-6 max-w-6xl mx-auto">
-        {pages.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm py-24 text-center">
-            <BookOpen size={40} className="mx-auto text-slate-200 mb-3" />
-            <p className="font-semibold text-slate-600">No content for this level yet</p>
-            <p className="text-slate-400 text-sm mt-1">Your teacher hasn't added study material here.</p>
-          </div>
-        ) : (
-          <>
-            {/* Level banner */}
-            {level && (
-              <div className="rounded-2xl p-4 mb-5 text-white relative overflow-hidden" style={gradStyle}>
-                <div className="absolute inset-0 opacity-20 bg-gradient-to-r from-white/10 to-transparent pointer-events-none" />
-                <div className="relative z-10 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-                    <BookOpen size={16} />
-                  </div>
-                  <div>
-                    <p className="font-bold text-white text-sm">{level.title}</p>
-                    {level.subtitle && <p className="text-white/60 text-xs mt-0.5">{level.subtitle}</p>}
-                  </div>
-                  <div className="ml-auto text-right">
-                    <p className="text-white font-bold">{pages.length}</p>
-                    <p className="text-white/60 text-[10px]">materials</p>
-                  </div>
+            {/* Level progress bar */}
+            {totalCount > 0 && (
+              <div className="mb-5">
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-2 rounded-full transition-all duration-700"
+                    style={{ width: `${overallPct}%`, ...gradStyle }} />
                 </div>
               </div>
             )}
 
+            {/* Level tabs */}
+            <div className="flex gap-2 flex-wrap">
+              {sortedLevels.map(l => {
+                const isActive  = l.id === effectiveId;
+                const lRead     = getReadList(l.id).length;
+                const lTotal    = (allContent[l.id] || []).length;
+                return (
+                  <button key={l.id}
+                    onClick={() => { setActiveLevelId(l.id); setReadingIdx(null); }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all"
+                    style={isActive ? {
+                      background: `linear-gradient(135deg, ${l.color.from}, ${l.color.to})`,
+                      color: '#fff', border: 'none',
+                      boxShadow: `0 4px 12px ${l.color.from}35`,
+                    } : { background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0' }}>
+                    {l.title}
+                    {lTotal > 0 && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                        style={isActive
+                          ? { background: 'rgba(255,255,255,0.25)', color: '#fff' }
+                          : { background: '#e2e8f0', color: '#94a3b8' }}>
+                        {lRead}/{lTotal}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Cards grid ── */}
+        <div className="max-w-5xl mx-auto px-4 md:px-8 py-6">
+          {pages.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-100 py-24 text-center">
+              <BookOpen size={36} className="mx-auto text-slate-200 mb-3" />
+              <p className="font-semibold text-slate-600">No materials yet</p>
+              <p className="text-slate-400 text-sm mt-1">Your instructor hasn't added content for this level.</p>
+            </div>
+          ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {pages.map((page, i) => (
                 <MaterialCard
@@ -798,22 +841,14 @@ export default function StudentContent() {
                   index={i}
                   levelId={effectiveId}
                   level={level}
-                  onRead={handleRead}
+                  totalCards={pages.length}
+                  onRead={handleOpenReader}
                 />
               ))}
             </div>
-          </>
-        )}
+          )}
+        </div>
       </div>
-
-      {/* ── Reader modal ───────────────────────────────────────────── */}
-      {modalItem && (
-        <ReaderModal
-          page={modalItem.page}
-          level={level}
-          onClose={handleCloseModal}
-        />
-      )}
-    </div>
+    </>
   );
 }
