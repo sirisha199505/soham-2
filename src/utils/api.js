@@ -114,6 +114,8 @@ export const api = {
     request('POST', '/api/auth/login', { identifier, password, ...(force ? { force: true } : {}) }),
   me: () => request('GET', '/api/auth/me'),
   logout: () => request('POST', '/api/auth/logout'),
+  updatePassword: (currentPassword, newPassword) =>
+    request('PUT', '/api/me/update-password', { data: { current_password: currentPassword, new_password: newPassword } }),
   heartbeat: () => request('POST', '/api/auth/heartbeat', {
     sessionToken: localStorage.getItem(SESSION_TOKEN_KEY) || '',
   }),

@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import {
   User, Mail, Phone, School, Briefcase, BookOpen, LogOut,
   ShieldCheck, GraduationCap, ChevronRight, KeyRound,
-  CheckCircle, Hash, Settings,
+  CheckCircle, Hash, Settings, Eye, EyeOff, ChevronDown, ChevronUp,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { api } from '../../utils/api';
 
 function InfoRow({ icon: Icon, label, value, color }) {
   if (!value) return null;
@@ -18,6 +21,28 @@ function InfoRow({ icon: Icon, label, value, color }) {
       <div className="flex-1 min-w-0">
         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{label}</p>
         <p className="text-sm font-semibold text-slate-800 truncate">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function PasswordField({ label, value, onChange, show, onToggle, placeholder }) {
+  return (
+    <div>
+      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">{label}</label>
+      <div className="relative">
+        <input
+          type={show ? 'text' : 'password'}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="w-full px-4 py-2.5 pr-10 rounded-xl border border-slate-200 text-sm font-medium text-slate-800 bg-white focus:outline-none focus:ring-2 focus:border-transparent placeholder:text-slate-300"
+          style={{ '--tw-ring-color': '#6366f120' }}
+        />
+        <button type="button" onClick={onToggle}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+          {show ? <EyeOff size={14} /> : <Eye size={14} />}
+        </button>
       </div>
     </div>
   );
@@ -36,9 +61,53 @@ export default function StudentProfile() {
   const initials = (user?.name || '?')
     .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
 
+  // ── Change password state ─────────────────────────────────────────────────
+  const [pwOpen,    setPwOpen]    = useState(false);
+  const [current,   setCurrent]   = useState('');
+  const [newPw,     setNewPw]     = useState('');
+  const [confirm,   setConfirm]   = useState('');
+  const [showCur,   setShowCur]   = useState(false);
+  const [showNew,   setShowNew]   = useState(false);
+  const [showConf,  setShowConf]  = useState(false);
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwMsg,     setPwMsg]     = useState(null); // { type: 'ok'|'err', text }
+
   const handleLogout = async () => {
     await logout();
     navigate('/login', { replace: true });
+  };
+
+  const resetPwForm = () => {
+    setCurrent(''); setNewPw(''); setConfirm('');
+    setShowCur(false); setShowNew(false); setShowConf(false);
+    setPwMsg(null);
+  };
+
+  const handleSavePassword = async () => {
+    if (!current || !newPw || !confirm) {
+      setPwMsg({ type: 'err', text: 'All fields are required.' });
+      return;
+    }
+    if (newPw !== confirm) {
+      setPwMsg({ type: 'err', text: 'New passwords do not match.' });
+      return;
+    }
+    if (newPw.length < 6) {
+      setPwMsg({ type: 'err', text: 'New password must be at least 6 characters.' });
+      return;
+    }
+    setPwLoading(true);
+    setPwMsg(null);
+    try {
+      await api.updatePassword(current, newPw);
+      setPwMsg({ type: 'ok', text: 'Password updated successfully.' });
+      setCurrent(''); setNewPw(''); setConfirm('');
+      setTimeout(() => { setPwOpen(false); setPwMsg(null); }, 1800);
+    } catch (err) {
+      setPwMsg({ type: 'err', text: err.message || 'Failed to update password.' });
+    } finally {
+      setPwLoading(false);
+    }
   };
 
   const displayEmail = user?.email?.includes('@student.rq') ? null : user?.email;
@@ -136,19 +205,73 @@ export default function StudentProfile() {
               <span className="text-[10px] font-bold text-green-600 bg-green-100 px-2.5 py-1 rounded-full">Active</span>
             </div>
 
-            {/* Change password */}
-            <Link to="/forgot-password"
-              className="flex items-center gap-3.5 px-4 py-3.5 rounded-xl border border-slate-100 hover:bg-slate-50 hover:border-slate-200 transition-all group">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: `${roleColor}12` }}>
-                <KeyRound size={15} style={{ color: roleColor }} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-700">Change Password</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Update your account password</p>
-              </div>
-              <ChevronRight size={15} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
-            </Link>
+            {/* Change password — inline expandable */}
+            <div className="rounded-xl border border-slate-100 overflow-hidden">
+              <button
+                onClick={() => { setPwOpen(o => !o); if (!pwOpen) resetPwForm(); }}
+                className="w-full flex items-center gap-3.5 px-4 py-3.5 hover:bg-slate-50 transition-all group">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ background: `${roleColor}12` }}>
+                  <KeyRound size={15} style={{ color: roleColor }} />
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="text-sm font-semibold text-slate-700">Change Password</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Update your account password</p>
+                </div>
+                {pwOpen
+                  ? <ChevronUp size={15} className="text-slate-400 shrink-0" />
+                  : <ChevronDown size={15} className="text-slate-300 group-hover:text-slate-500 transition-colors shrink-0" />}
+              </button>
+
+              {pwOpen && (
+                <div className="px-4 pb-4 pt-1 border-t border-slate-50 space-y-3">
+                  <PasswordField
+                    label="Current Password"
+                    value={current} onChange={setCurrent}
+                    show={showCur} onToggle={() => setShowCur(s => !s)}
+                    placeholder="Enter current password"
+                  />
+                  <PasswordField
+                    label="New Password"
+                    value={newPw} onChange={setNewPw}
+                    show={showNew} onToggle={() => setShowNew(s => !s)}
+                    placeholder="Enter new password"
+                  />
+                  <PasswordField
+                    label="Confirm New Password"
+                    value={confirm} onChange={setConfirm}
+                    show={showConf} onToggle={() => setShowConf(s => !s)}
+                    placeholder="Confirm new password"
+                  />
+
+                  {pwMsg && (
+                    <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold ${
+                      pwMsg.type === 'ok'
+                        ? 'bg-green-50 border border-green-100 text-green-700'
+                        : 'bg-red-50 border border-red-100 text-red-600'
+                    }`}>
+                      {pwMsg.type === 'ok' ? <CheckCircle size={13} /> : null}
+                      {pwMsg.text}
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => { setPwOpen(false); resetPwForm(); }}
+                      className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 transition-all">
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSavePassword}
+                      disabled={pwLoading}
+                      className="flex-[2] flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-white text-xs font-bold transition-all hover:scale-[1.01] disabled:opacity-60 disabled:cursor-not-allowed"
+                      style={{ background: `linear-gradient(135deg, ${roleColor}, ${roleColor}cc)` }}>
+                      {pwLoading ? <><Loader2 size={12} className="animate-spin" /> Saving…</> : 'Save Password'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Sign out */}
             <button onClick={handleLogout}
