@@ -1,13 +1,11 @@
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../utils/constants';
 import StudentDashboard from './StudentDashboard';
-import TeacherDashboard from './TeacherDashboard';
 import AdminDashboard from './AdminDashboard';
+
+const STUDENT_ROLES = [ROLES.STUDENT, ROLES.COACH, ROLES.TEACHER];
 
 export default function Dashboard() {
   const { user } = useAuth();
-
-  if (user?.role === ROLES.STUDENT) return <StudentDashboard />;
-  if (user?.role === ROLES.TEACHER) return <TeacherDashboard />;
-  return <AdminDashboard />;
+  return STUDENT_ROLES.includes(user?.role) ? <StudentDashboard /> : <AdminDashboard />;
 }

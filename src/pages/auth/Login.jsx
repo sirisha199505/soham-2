@@ -1,29 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
-  Hash, Lock, Eye, EyeOff, AlertCircle, ChevronRight,
-  Mail, GraduationCap, ShieldCheck, Loader2, MonitorSmartphone,
+  Mail, Lock, Eye, EyeOff, AlertCircle, ChevronRight,
+  GraduationCap, ShieldCheck, Briefcase, Loader2, Phone,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 
-export default function Login() {
-  const { login }  = useAuth();
-  const { colors } = useTheme();
-  const navigate   = useNavigate();
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
-  const [tab,            setTab]           = useState('student'); // 'student' | 'admin'
-  const [form,           setForm]          = useState({ identifier: '', password: '' });
-  const [showPass,       setShowPass]      = useState(false);
-  const [loading,        setLoading]       = useState(false);
-  const [waitSec,        setWaitSec]       = useState(0);
-  const [error,          setError]         = useState('');
-  const [activeOnOther,  setActiveOnOther] = useState(false);
-  const [wasKickedOut,   setWasKickedOut]  = useState(() => {
-    const flag = sessionStorage.getItem('rqa_kicked_out');
-    if (flag) sessionStorage.removeItem('rqa_kicked_out');
-    return !!flag;
-  });
+export default function Login() {
+  const { login, googleLogin } = useAuth();
+  const { colors } = useTheme();
+  const navigate = useNavigate();
+
+  const [tab,      setTab]     = useState('student'); // 'student' | 'coach' | 'admin'
+  const [form,     setForm]    = useState({ identifier: '', password: '' });
+  const [showPass, setShowPass] = useState(false);
+  const [loading,  setLoading] = useState(false);
+  const [waitSec,  setWaitSec] = useState(0);
+  const [error,    setError]   = useState('');
 
   useEffect(() => {
     if (!loading) { setWaitSec(0); return; }
@@ -31,159 +27,147 @@ export default function Login() {
     return () => clearInterval(id);
   }, [loading]);
 
+  // Load Google Identity Services once
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID || window.google) return;
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      if (window.google?.accounts?.id) {
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleGoogleCredential,
+        });
+      }
+    };
+    document.body.appendChild(script);
+    return () => { document.body.removeChild(script); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleGoogleCredential = useCallback(async (response) => {
+    setError('');
+    setLoading(true);
+    try {
+      const role = tab === 'coach' ? 'coach' : 'student';
+      const route = await googleLogin(response.credential, role);
+      navigate(route, { replace: true });
+    } catch (err) {
+      setError(err.message || 'Google Sign-In failed.');
+    } finally {
+      setLoading(false);
+    }
+  }, [tab, googleLogin, navigate]);
+
+  const handleGoogleClick = () => {
+    if (!window.google?.accounts?.id) {
+      setError('Google Sign-In is not available. Please try email login.');
+      return;
+    }
+    window.google.accounts.id.prompt();
+  };
+
   const switchTab = (t) => {
     setTab(t);
     setForm({ identifier: '', password: '' });
     setError('');
     setShowPass(false);
-    setActiveOnOther(false);
   };
 
-  const doLogin = async (force = false) => {
+  const doLogin = async () => {
     setError('');
-    setActiveOnOther(false);
     setLoading(true);
     try {
-      const id = tab === 'student'
-        ? form.identifier.replace(/\s/g, '')
-        : form.identifier.trim().toLowerCase();
-      const route = await login(id, form.password, force);
+      const identifier = form.identifier.replace(/\s/g, '');
+      const route = await login(identifier, form.password);
       navigate(route, { replace: true });
     } catch (err) {
-      if (err?.status === 409) {
-        // Account active on another device
-        setActiveOnOther(true);
-        setError('Your account is already active on another device.');
-      } else if (err.status === 500 || !err.status) {
-        setError(err.message);
-      } else {
-        setError(tab === 'admin'
-          ? 'Invalid admin email or password.'
-          : 'Invalid Student ID or password.');
-      }
+      setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    doLogin(false);
-  };
+  const handleSubmit = (e) => { e.preventDefault(); doLogin(); };
 
-  const handleForceLogin = () => doLogin(true);
-
-  const inputCls = `
-    w-full rounded-xl py-3 text-sm text-white
-    placeholder:text-white/30 transition-all duration-200 focus:outline-none
-  `;
+  const inputCls = `w-full rounded-xl py-3 text-sm text-white placeholder:text-white/30 transition-all duration-200 focus:outline-none`;
   const inputStyle = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)' };
-  const inputFocusStyle = { borderColor: `${colors.primary}60` };
+  const inputFocus = { borderColor: `${colors.primary}60` };
+
+  const tabs = [
+    { key: 'student', label: 'Student', Icon: GraduationCap },
+    { key: 'coach',   label: 'Coach',   Icon: Briefcase     },
+    { key: 'admin',   label: 'Admin',   Icon: ShieldCheck   },
+  ];
 
   const isAdmin = tab === 'admin';
+  const isCoach = tab === 'coach';
+  const isStudent = tab === 'student';
+  const showGoogle = GOOGLE_CLIENT_ID && !isAdmin;
+
+  const tabConfig = {
+    student: {
+      title: 'Student Sign In',
+      subtitle: 'Sign in with your registered email and password',
+      idLabel: 'Email Address',
+      idPlaceholder: 'email@example.com',
+      idType: 'text',
+      idIcon: Phone,
+      passHint: null,
+    },
+    coach: {
+      title: 'Innovation Coach Sign In',
+      subtitle: 'Sign in with your registered email and password',
+      idLabel: 'Email Address',
+      idPlaceholder: 'coach@organization.com',
+      idType: 'email',
+      idIcon: Mail,
+      passHint: null,
+    },
+    admin: {
+      title: 'Admin Sign In',
+      subtitle: 'Sign in with your admin credentials',
+      idLabel: 'Email Address',
+      idPlaceholder: 'admin@sohamquiz.in',
+      idType: 'email',
+      idIcon: Mail,
+      passHint: null,
+    },
+  };
+
+  const cfg = tabConfig[tab];
 
   return (
     <div className="fade-in-up">
 
-      {/* ── Kicked-out banner (shown when another device force-logged in) ── */}
-      {wasKickedOut && (
-        <div className="flex items-start gap-3 rounded-2xl px-4 py-3.5 mb-5"
-          style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.30)' }}>
-          <MonitorSmartphone size={16} className="shrink-0 mt-0.5" style={{ color: '#f87171' }} />
-          <div>
-            <p className="text-sm font-semibold" style={{ color: '#fca5a5' }}>
-              Signed out automatically
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: '#f87171' }}>
-              Your session was ended because you signed in from another device.
-            </p>
-          </div>
-          <button onClick={() => setWasKickedOut(false)} className="ml-auto text-red-400 hover:text-red-300">
-            <AlertCircle size={14} />
-          </button>
-        </div>
-      )}
-
-      {/* ── Tab switcher ── */}
-      <div className="flex p-1 rounded-2xl mb-8" style={{ background: 'rgba(255,255,255,0.06)' }}>
-        {[
-          { key: 'student', label: 'Student Login', Icon: GraduationCap },
-          { key: 'admin',   label: 'Admin Login',   Icon: ShieldCheck   },
-        ].map(t => (
-          <button
-            key={t.key}
-            onClick={() => switchTab(t.key)}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all
+      {/* Tab switcher */}
+      <div className="flex p-1 rounded-2xl mb-7" style={{ background: 'rgba(255,255,255,0.06)' }}>
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => switchTab(t.key)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold transition-all
               ${tab === t.key ? 'text-white shadow-lg' : 'text-slate-500 hover:text-slate-400'}`}
-            style={tab === t.key
-              ? { background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})` }
-              : {}}
+            style={tab === t.key ? { background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})` } : {}}
           >
-            <t.Icon size={15} /> {t.label}
+            <t.Icon size={13} /> {t.label}
           </button>
         ))}
       </div>
 
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="mb-6">
-        {isAdmin ? (
-          <>
-            {/* Admin icon badge */}
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4"
-              style={{ background: `linear-gradient(135deg, ${colors.primary}30, ${colors.accent}30)`, border: `1px solid ${colors.primary}30` }}>
-              <ShieldCheck size={22} style={{ color: colors.primary }} />
-            </div>
-            <h2 className="text-2xl font-bold text-white" style={{ fontFamily: 'Space Grotesk' }}>
-              Admin Sign In
-            </h2>
-            <p className="text-slate-400 text-sm mt-1">
-              Sign in with your admin email and password.
-            </p>
-          </>
-        ) : (
-          <>
-            <h2 className="text-2xl font-bold text-white" style={{ fontFamily: 'Space Grotesk' }}>
-              Student Sign In
-            </h2>
-            <p className="text-slate-400 text-sm mt-1">
-              Use your unique Student ID to access Soham Quiz
-            </p>
-          </>
-        )}
+        <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4"
+          style={{ background: `${colors.primary}25`, border: `1px solid ${colors.primary}35` }}>
+          {isAdmin ? <ShieldCheck size={22} style={{ color: colors.primary }} /> :
+           isCoach  ? <Briefcase  size={22} style={{ color: colors.primary }} /> :
+                      <GraduationCap size={22} style={{ color: colors.primary }} />}
+        </div>
+        <h2 className="text-2xl font-bold text-white" style={{ fontFamily: 'Space Grotesk' }}>{cfg.title}</h2>
+        <p className="text-slate-400 text-sm mt-1">{cfg.subtitle}</p>
       </div>
 
-      {/* ── Active-on-another-device error ── */}
-      {activeOnOther && (
-        <div className="rounded-2xl mb-5 overflow-hidden"
-          style={{ background: 'rgba(251,191,36,0.10)', border: '1px solid rgba(251,191,36,0.30)' }}>
-          <div className="flex items-start gap-3 px-4 pt-4 pb-3">
-            <MonitorSmartphone size={18} className="shrink-0 mt-0.5" style={{ color: '#fbbf24' }} />
-            <div className="flex-1">
-              <p className="text-sm font-semibold" style={{ color: '#fde68a' }}>
-                Account Active on Another Device
-              </p>
-              <p className="text-xs mt-1" style={{ color: '#fcd34d' }}>
-                Your account is already signed in on another device. You can end that session and sign in here instead.
-              </p>
-            </div>
-          </div>
-          {/* <div className="px-4 pb-4 flex gap-2">
-            <button
-              type="button"
-              onClick={handleForceLogin}
-              disabled={loading}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold disabled:opacity-50 transition-all hover:scale-[1.01]"
-              style={{ background: '#fbbf24', color: '#1c1917' }}
-            >
-              {loading ? <Loader2 size={13} className="animate-spin" /> : <MonitorSmartphone size={13} />}
-              Sign in anyway (end other session)
-            </button>
-          </div> */}
-        </div>
-      )}
-
-      {/* ── Generic error ── */}
-      {error && !activeOnOther && (
+      {/* Error */}
+      {error && (
         <div className="flex items-start gap-3 rounded-2xl px-4 py-3.5 mb-5"
           style={{ background: `${colors.error}18`, border: `1px solid ${colors.error}35` }}>
           <AlertCircle size={16} className="shrink-0 mt-0.5" style={{ color: colors.error }} />
@@ -191,113 +175,100 @@ export default function Login() {
         </div>
       )}
 
-      {/* ── Form ── */}
-      <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Google Sign-In */}
+      {showGoogle && (
+        <>
+          <button
+            type="button"
+            onClick={handleGoogleClick}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-3 py-3 rounded-xl text-sm font-semibold transition-all hover:scale-[1.01] disabled:opacity-50 mb-5"
+            style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: 'white' }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            Sign in with Google
+          </button>
+          <div className="flex items-center gap-3 mb-5">
+            <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+            <span className="text-slate-600 text-xs font-medium px-2">or sign in with email</span>
+            <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+          </div>
+        </>
+      )}
 
-        {/* Identifier field */}
+      {/* Email / password form */}
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-            {isAdmin ? 'Email Address' : 'Student ID'}
-          </label>
+          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">{cfg.idLabel}</label>
           <div className="relative">
-            {isAdmin
-              ? <Mail size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-              : <Hash size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
-            }
+            <cfg.idIcon size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
-              type={isAdmin ? 'email' : 'text'}
-              placeholder={isAdmin ? 'admin@domain.com' : 'Enter your 8-digit Student ID'}
+              type={cfg.idType} placeholder={cfg.idPlaceholder}
               value={form.identifier}
               onChange={e => setForm(p => ({ ...p, identifier: e.target.value }))}
-              required
-              autoComplete={isAdmin ? 'email' : 'off'}
-              inputMode={isAdmin ? 'email' : 'numeric'}
-              maxLength={isAdmin ? undefined : 9}
-              className={`${inputCls} pl-11 pr-4 ${!isAdmin ? 'font-mono tracking-widest' : ''}`}
-              style={{ ...inputStyle, ...(form.identifier ? inputFocusStyle : {}) }}
+              required autoComplete={isAdmin || isCoach ? 'email' : 'off'}
+              className={`${inputCls} pl-11 pr-4`}
+              style={{ ...inputStyle, ...(form.identifier ? inputFocus : {}) }}
             />
           </div>
-          {!isAdmin && (
+          {isStudent && (
             <p className="text-[11px] text-slate-600 pl-1">
-              You received this 8-digit ID when you registered.
+              Use your email address
             </p>
           )}
         </div>
 
-        {/* Password */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Password
-            </label>
-            {!isAdmin && (
-              <Link to="/forgot-password" className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
-                Forgot password?
-              </Link>
-            )}
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Password</label>
+            <Link to="/forgot-password" className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+              Forgot password?
+            </Link>
           </div>
           <div className="relative">
             <Lock size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
-              type={showPass ? 'text' : 'password'}
-              placeholder="••••••••"
+              type={showPass ? 'text' : 'password'} placeholder="••••••••"
               value={form.password}
               onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
-              required
-              autoComplete={isAdmin ? 'current-password' : 'off'}
-              className={`${inputCls} pl-11 pr-12`}
-              style={inputStyle}
+              required autoComplete={isAdmin || isCoach ? 'current-password' : 'off'}
+              className={`${inputCls} pl-11 pr-12`} style={inputStyle}
             />
-            <button
-              type="button"
-              onClick={() => setShowPass(p => !p)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
-            >
+            <button type="button" onClick={() => setShowPass(p => !p)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors">
               {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
             </button>
           </div>
         </div>
 
-        {/* Submit */}
-        <button
-          type="submit"
-          disabled={loading}
+        <button type="submit" disabled={loading}
           className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3.5 rounded-2xl transition-all mt-2 disabled:opacity-60 hover:scale-[1.02] active:scale-[0.98]"
-          style={{
-            background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.accent} 100%)`,
-            boxShadow: `0 10px 32px ${colors.primary}50`,
-          }}
-        >
+          style={{ background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.accent} 100%)`, boxShadow: `0 10px 32px ${colors.primary}50` }}>
           {loading && <Loader2 size={16} className="animate-spin" />}
           {loading
-            ? waitSec < 6
-              ? 'Signing in…'
-              : `Server waking up… ${waitSec}s`
-            : isAdmin
-              ? 'Login as Admin'
-              : 'Sign In'}
+            ? (waitSec < 6 ? 'Signing in…' : `Server waking up… ${waitSec}s`)
+            : isAdmin ? 'Login as Admin' : isCoach ? 'Login as Coach' : 'Sign In'}
           {!loading && <ChevronRight size={16} />}
         </button>
       </form>
 
-      {/* ── Register link (student tab only) ── */}
+      {/* Register link for student/coach */}
       {!isAdmin && (
         <>
           <div className="flex items-center gap-3 my-6">
             <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
-            <span className="text-slate-600 text-xs font-medium px-2">New student?</span>
+            <span className="text-slate-600 text-xs font-medium px-2">New here?</span>
             <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
           </div>
-          <Link
-            to="/register"
+          <Link to="/register"
             className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-semibold transition-all hover:scale-[1.01]"
-            style={{
-              background: 'rgba(255,255,255,0.05)',
-              border: `1px solid ${colors.primary}35`,
-              color: colors.primary,
-            }}
-          >
-            Create your Student Account
+            style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${colors.primary}35`, color: colors.primary }}>
+            {isCoach ? 'Register as Innovation Coach' : 'Create your Student Account'}
             <ChevronRight size={15} />
           </Link>
         </>
@@ -305,5 +276,3 @@ export default function Login() {
     </div>
   );
 }
-
-

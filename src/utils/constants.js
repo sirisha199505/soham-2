@@ -1,8 +1,9 @@
 export const ROLES = {
   STUDENT: 'student',
-  TEACHER: 'teacher',
+  COACH: 'coach',
   ADMIN: 'admin',
-  // Legacy (kept for data compatibility)
+  // Legacy aliases
+  TEACHER: 'coach',
   SCHOOL_ADMIN: 'school_admin',
   DISTRICT_ADMIN: 'district_admin',
   SUPER_ADMIN: 'super_admin',
@@ -10,7 +11,8 @@ export const ROLES = {
 
 export const ROLE_LABELS = {
   student: 'Student',
-  teacher: 'Teacher',
+  coach: 'Innovation Coach',
+  teacher: 'Innovation Coach',
   admin: 'Administrator',
   school_admin: 'School Admin',
   district_admin: 'District Admin',

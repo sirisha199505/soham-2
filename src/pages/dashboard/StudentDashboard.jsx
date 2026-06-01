@@ -1,17 +1,16 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import {
-  Lock, CheckCircle, ArrowRight, Hash, Trophy, Clock,
-  BookOpen, Star, ChevronRight, Zap,
+  Lock, CheckCircle, ArrowRight, Trophy, Clock,
+  BookOpen, Star, ChevronRight, Zap, RotateCcw, Hash, Target,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { useTheme } from '../../context/ThemeContext';
-import { formatUniqueId } from '../../utils/uniqueId';
+import { api } from '../../utils/api';
 import { LEVELS } from '../../utils/levelData';
 import { getPerformanceLabel } from '../../utils/helpers';
 
-// Colors for admin-created levels that don't have a matching entry in the hardcoded LEVELS array
 const FALLBACK_COLORS = [
   { from: '#3BC0EF', to: '#1E3A8A' },
   { from: '#8B5CF6', to: '#6d28d9' },
@@ -21,8 +20,6 @@ const FALLBACK_COLORS = [
   { from: '#EC4899', to: '#BE185D' },
 ];
 
-// Build the visible level list from the DB-driven levelSettings map so that
-// admin-created levels with any DB ID are shown, not just hardcoded IDs 1–3.
 function buildLevelList(levelSettingsMap) {
   return Object.values(levelSettingsMap)
     .sort((a, b) => (a.order || a.id) - (b.order || b.id))
@@ -39,10 +36,34 @@ function buildLevelList(levelSettingsMap) {
     });
 }
 
-/* ─────────────────────────────────────────────────────────────── */
-/*  Welcome banner                                                 */
-/* ─────────────────────────────────────────────────────────────── */
-function WelcomeBanner({ greeting, displayId, colors, completedCount, totalLevels }) {
+/* ── Attempt meter bar ──────────────────────────────────────────── */
+function AttemptMeter({ used, limit, color }) {
+  const remaining = Math.max(0, limit - used);
+  const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+  const barColor = remaining === 0 ? '#ef4444' : remaining === 1 ? '#f59e0b' : color;
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-[10px] font-semibold">
+        <span className="text-slate-400">Attempts</span>
+        <span style={{ color: barColor }}>{remaining} remaining</span>
+      </div>
+      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+        <div
+          className="h-1.5 rounded-full transition-all duration-500"
+          style={{ width: `${pct}%`, background: barColor }}
+        />
+      </div>
+      <div className="flex justify-between text-[10px] text-slate-400">
+        <span>{used} used</span>
+        <span>{limit} total</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Welcome banner ─────────────────────────────────────────────── */
+function WelcomeBanner({ greeting, userName, colors, completedCount, totalLevels }) {
   return (
     <div
       className="relative rounded-2xl lg:rounded-3xl overflow-hidden"
@@ -57,13 +78,8 @@ function WelcomeBanner({ greeting, displayId, colors, completedCount, totalLevel
         <div className="space-y-2">
           <p className="text-white/60 text-sm font-medium">{greeting}!</p>
           <h1 className="text-3xl lg:text-4xl font-bold text-white" style={{ fontFamily: 'Space Grotesk' }}>
-            Welcome, Student
+            Welcome{userName ? `, ${userName.split(' ')[0]}` : ' back'}
           </h1>
-          <p className="text-white/50 text-sm flex items-center gap-1.5">
-            <Hash size={13} />
-            Your quiz ID:&nbsp;
-            <span className="font-mono font-bold text-white/90 tracking-widest">{displayId}</span>
-          </p>
         </div>
 
         <div className="flex flex-col items-start md:items-end gap-2 shrink-0">
@@ -80,7 +96,7 @@ function WelcomeBanner({ greeting, displayId, colors, completedCount, totalLevel
           <div className="w-48 h-1.5 bg-white/10 rounded-full overflow-hidden">
             <div
               className="h-1.5 rounded-full transition-all duration-700"
-              style={{ width: `${(completedCount / totalLevels) * 100}%`, background: '#facc15' }}
+              style={{ width: totalLevels > 0 ? `${(completedCount / totalLevels) * 100}%` : '0%', background: '#facc15' }}
             />
           </div>
         </div>
@@ -89,17 +105,98 @@ function WelcomeBanner({ greeting, displayId, colors, completedCount, totalLevel
   );
 }
 
-/* ─────────────────────────────────────────────────────────────── */
-/*  Level Card                                                     */
-/* ─────────────────────────────────────────────────────────────── */
-function LevelCard({ level, status, levelData, levelSettings }) {
+/* ── Attempt Tracker summary bar ────────────────────────────────── */
+function AttemptTrackerBar({ levels, levelSettings, attemptsByLevel }) {
+  if (!levels.length) return null;
+
+  const rows = levels.map(level => {
+    const limit = levelSettings[level.id]?.attemptLimit ?? 3;
+    const used  = attemptsByLevel[String(level.id)] || 0;
+    const remaining = Math.max(0, limit - used);
+    return { level, limit, used, remaining };
+  });
+
+  const totalUsed      = rows.reduce((s, r) => s + r.used, 0);
+  const totalAllowed   = rows.reduce((s, r) => s + r.limit, 0);
+  const totalRemaining = rows.reduce((s, r) => s + r.remaining, 0);
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      {/* Summary header */}
+      <div className="flex items-center gap-4 px-5 py-4 border-b border-slate-50">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: '#4F46E515' }}>
+          <Hash size={16} style={{ color: '#4F46E5' }} />
+        </div>
+        <div className="flex-1">
+          <p className="font-bold text-slate-800 text-sm">Quiz Attempt Tracker</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">Track how many attempts you have left for each level</p>
+        </div>
+        <div className="flex items-center gap-5 shrink-0">
+          {[
+            { label: 'Total Allowed', val: totalAllowed, color: '#4F46E5' },
+            { label: 'Completed',     val: totalUsed,    color: '#10B981' },
+            { label: 'Remaining',     val: totalRemaining, color: totalRemaining === 0 ? '#ef4444' : '#F59E0B' },
+          ].map(s => (
+            <div key={s.label} className="text-center hidden sm:block">
+              <p className="text-xl font-bold leading-none" style={{ color: s.color, fontFamily: 'Space Grotesk' }}>{s.val}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Per-level rows */}
+      <div className="divide-y divide-slate-50">
+        {rows.map(({ level, limit, used, remaining }) => {
+          const color = level.color?.from || '#4F46E5';
+          const pct   = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+          const barColor = remaining === 0 ? '#ef4444' : remaining === 1 ? '#f59e0b' : color;
+          return (
+            <div key={level.id} className="flex items-center gap-4 px-5 py-3">
+              <div className="w-7 h-7 rounded-lg text-white text-xs font-bold flex items-center justify-center shrink-0"
+                style={{ background: `linear-gradient(135deg, ${color}, ${level.color?.to || color})` }}>
+                L{level.id}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-slate-700 truncate">{level.title}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-1.5 rounded-full transition-all duration-500"
+                      style={{ width: `${pct}%`, background: barColor }} />
+                  </div>
+                  <span className="text-[10px] text-slate-400 shrink-0">{used}/{limit}</span>
+                </div>
+              </div>
+              <div className="shrink-0 text-right">
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+                  style={{
+                    background: remaining === 0 ? '#fef2f2' : remaining === 1 ? '#fffbeb' : '#f0fdf4',
+                    color:      remaining === 0 ? '#dc2626' : remaining === 1 ? '#d97706' : '#16a34a',
+                  }}>
+                  {remaining === 0 ? 'No attempts left' : `${remaining} left`}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── Level Card ─────────────────────────────────────────────────── */
+function LevelCard({ level, status, levelData, levelSettings, attemptCount }) {
   const isLocked    = status === 'locked';
   const isCompleted = status === 'completed';
   const isUnlocked  = status === 'unlocked';
 
-  const timeLimit   = Number(levelSettings?.[level.id]?.timeLimit) || 10;
-  const score       = levelData?.score;
-  const lastScore   = levelData?.lastScore;
+  const attemptLimit = levelSettings?.[level.id]?.attemptLimit ?? 3;
+  const remaining    = Math.max(0, attemptLimit - attemptCount);
+
+  const timeLimit  = Number(levelSettings?.[level.id]?.timeLimit) || 10;
+  const score      = levelData?.score;
+  const lastScore  = levelData?.lastScore;
 
   const lastAttemptAt = levelData?.lastCompletedAt
     ? new Date(levelData.lastCompletedAt).toLocaleString('en-IN', {
@@ -108,40 +205,29 @@ function LevelCard({ level, status, levelData, levelSettings }) {
       })
     : null;
 
-  const scorePct   = score?.pct ?? 0;
-  const perf       = getPerformanceLabel(scorePct);
-  const scoreColor = { text: perf.color, bg: perf.bg, border: perf.border };
-
+  const scorePct    = score?.pct ?? 0;
+  const perf        = getPerformanceLabel(scorePct);
+  const scoreColor  = { text: perf.color, bg: perf.bg, border: perf.border };
   const showLastAttempt = lastScore && lastScore.pct !== scorePct;
 
   const headerGradient =
-    isLocked   ? 'linear-gradient(135deg, #94a3b8, #64748b)' :
+    isLocked ? 'linear-gradient(135deg, #94a3b8, #64748b)' :
     `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`;
 
-  const statusLabel =
-    isLocked    ? 'Locked' :
-    isCompleted ? 'Completed' :
-                  'Ready';
-
   const StatusIcon = isLocked ? Lock : isCompleted ? CheckCircle : Zap;
-
-  const borderColor =
-    isCompleted ? `${level.color.from}40` :
-    '#f1f5f9';
 
   return (
     <div
       className="bg-white rounded-2xl border shadow-sm overflow-hidden transition-all duration-300"
-      style={{ borderColor, opacity: isLocked ? 0.75 : 1 }}
+      style={{ borderColor: isCompleted ? `${level.color.from}40` : '#f1f5f9', opacity: isLocked ? 0.75 : 1 }}
     >
       {/* Header */}
       <div className="relative p-5 pb-4 overflow-hidden" style={{ background: headerGradient }}>
         <div className="absolute top-0 right-0 w-28 h-28 rounded-full opacity-10 blur-[40px] bg-white" />
-
         <div className="relative z-10 flex items-start justify-between">
           <div>
             <p className="text-white/70 text-xs font-semibold uppercase tracking-wider mb-0.5">
-              {statusLabel}
+              {isLocked ? 'Locked' : isCompleted ? 'Completed' : 'Ready'}
             </p>
             <h3 className="text-xl font-bold text-white" style={{ fontFamily: 'Space Grotesk' }}>
               {level.title}
@@ -153,15 +239,16 @@ function LevelCard({ level, status, levelData, levelSettings }) {
           </div>
         </div>
 
-        <div className="relative z-10 flex items-center gap-1.5 mt-3">
-          {isLocked    && <><Lock size={11} className="text-white/60" /><span className="text-white/50 text-xs">Awaiting Admin unlock</span></>}
-          {isCompleted && Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-1.5 rounded-full" style={{ width: i === 0 ? 20 : 8, background: 'rgba(255,255,255,0.9)' }} />
-          ))}
-          {isUnlocked  && Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-1.5 rounded-full" style={{ width: i === 0 ? 20 : 8, background: i === 0 ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.3)' }} />
-          ))}
-        </div>
+        {/* Attempt badge on header */}
+        {!isLocked && (
+          <div className="relative z-10 mt-3">
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full"
+              style={{ background: 'rgba(255,255,255,0.18)', color: 'white' }}>
+              <Target size={10} />
+              {remaining === 0 ? 'No attempts left' : `${remaining} of ${attemptLimit} attempts left`}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Card body */}
@@ -183,6 +270,11 @@ function LevelCard({ level, status, levelData, levelSettings }) {
             </div>
           ))}
         </div>
+
+        {/* Attempt meter */}
+        {!isLocked && (
+          <AttemptMeter used={attemptCount} limit={attemptLimit} color={level.color.from} />
+        )}
 
         {/* Score (if completed) */}
         {isCompleted && score && (
@@ -218,7 +310,6 @@ function LevelCard({ level, status, levelData, levelSettings }) {
                 </div>
               </div>
             )}
-
             {!showLastAttempt && lastAttemptAt && (
               <p className="text-[10px] text-slate-400 text-right">{lastAttemptAt}</p>
             )}
@@ -258,24 +349,29 @@ function LevelCard({ level, status, levelData, levelSettings }) {
           </div>
         )}
 
-        {isCompleted && (
+        {isCompleted && remaining > 0 && (
           <div className="space-y-2">
-            <div className="flex items-center gap-2 w-full py-3 rounded-xl text-sm font-semibold bg-green-50 border border-green-200 text-green-700 justify-center">
-              <CheckCircle size={14} /> Completed
-            </div>
-            {/* <Link
+            <Link
               to={`/level/${level.id}/quiz`}
-              className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold text-white transition-all hover:scale-[1.02] active:scale-[0.98] w-full"
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
               style={{
                 background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})`,
+                boxShadow: `0 4px 16px ${level.color.from}40`,
               }}
             >
-              Retake Quiz <ArrowRight size={13} />
-            </Link> */}
+              <RotateCcw size={14} /> Retake Quiz
+              <span className="text-[10px] opacity-80 ml-1">({remaining} left)</span>
+            </Link>
           </div>
         )}
 
-        {isUnlocked && (
+        {isCompleted && remaining === 0 && (
+          <div className="flex items-center gap-2 w-full py-3 rounded-xl text-sm font-semibold bg-slate-50 border border-slate-200 text-slate-400 justify-center cursor-not-allowed select-none">
+            <CheckCircle size={14} /> All Attempts Used
+          </div>
+        )}
+
+        {isUnlocked && remaining > 0 && (
           <Link
             to={`/level/${level.id}/quiz`}
             className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
@@ -287,14 +383,18 @@ function LevelCard({ level, status, levelData, levelSettings }) {
             <BookOpen size={15} /> Start Quiz
           </Link>
         )}
+
+        {isUnlocked && remaining === 0 && (
+          <div className="flex items-center gap-2 w-full py-3 rounded-xl text-sm font-semibold bg-slate-50 border border-slate-200 text-slate-400 justify-center cursor-not-allowed select-none">
+            <Lock size={14} /> No Attempts Remaining
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-/* ─────────────────────────────────────────────────────────────── */
-/*  Skeleton card (shown while progress is loading)               */
-/* ─────────────────────────────────────────────────────────────── */
+/* ── Skeleton card ──────────────────────────────────────────────── */
 function LevelCardSkeleton() {
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden animate-pulse">
@@ -312,9 +412,7 @@ function LevelCardSkeleton() {
   );
 }
 
-/* ─────────────────────────────────────────────────────────────── */
-/*  Main Page                                                      */
-/* ─────────────────────────────────────────────────────────────── */
+/* ── Main page ──────────────────────────────────────────────────── */
 export default function StudentDashboard() {
   const { user }  = useAuth();
   const {
@@ -323,31 +421,42 @@ export default function StudentDashboard() {
   } = useLevel();
   const { colors } = useTheme();
 
-  // Re-fetch level settings each time the student opens their dashboard
-  // so admin active/inactive/delete changes are reflected without a full re-login
+  // Fetch all attempts so we can compute per-level counts
+  const [attempts,       setAttempts]      = useState([]);
+  const [attemptsLoaded, setAttemptsLoaded] = useState(false);
+
   useEffect(() => { refreshLevelSettings(); }, []);
 
-  const displayId = user?.uniqueId ? `#${formatUniqueId(user.uniqueId)}` : '#Student';
-  const hours     = new Date().getHours();
-  const greeting  = hours < 12 ? 'Good morning' : hours < 17 ? 'Good afternoon' : 'Good evening';
-  const userId    = user?.uniqueId;
+  useEffect(() => {
+    if (!user?.id) return;
+    api.getAttempts(user.id)
+      .then(data => setAttempts(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setAttemptsLoaded(true));
+  }, [user?.id]);
 
-  // Progress is considered loaded once the fetch completed for this user.
-  // While loading we show skeletons instead of level cards — this prevents
-  // the brief "Start Level 1" flash on every login/page-refresh.
+  // Map: levelId → attempt count
+  const attemptsByLevel = useMemo(() => {
+    const map = {};
+    attempts.forEach(a => {
+      const k = String(a.levelId);
+      map[k] = (map[k] || 0) + 1;
+    });
+    return map;
+  }, [attempts]);
+
+  const hours    = new Date().getHours();
+  const greeting = hours < 12 ? 'Good morning' : hours < 17 ? 'Good afternoon' : 'Good evening';
+  const userId   = user?.id;
+
   const isProgressLoading = userId ? !progressFetched[userId] : false;
-
-  // Only show levels that the admin has explicitly created in the DB.
-  // Show nothing (skeletons) while settings are still loading.
   const visibleLevels = levelSettingsLoaded ? buildLevelList(levelSettings) : [];
 
   const statuses = isProgressLoading
     ? visibleLevels.map(() => 'loading')
     : visibleLevels.map(l => getLevelStatus(userId, l.id));
 
-  const completedCount = isProgressLoading
-    ? 0
-    : statuses.filter(s => s === 'completed').length;
+  const completedCount = isProgressLoading ? 0 : statuses.filter(s => s === 'completed').length;
 
   const isSettingsLoading = !levelSettingsLoaded;
   const noLevels = levelSettingsLoaded && visibleLevels.length === 0;
@@ -355,22 +464,20 @@ export default function StudentDashboard() {
   return (
     <div className="min-h-full px-4 md:px-6 lg:px-8 py-6 space-y-6">
 
-      {/* 1 — Welcome banner */}
+      {/* Welcome banner */}
       <WelcomeBanner
         greeting={greeting}
-        displayId={displayId}
+        userName={user?.name}
         colors={colors}
         completedCount={completedCount}
         totalLevels={visibleLevels.length}
       />
 
       {isSettingsLoading ? (
-        /* ── Still fetching from DB — show 1 skeleton so layout doesn't jump ── */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           <LevelCardSkeleton />
         </div>
       ) : noLevels ? (
-        /* ── No levels configured by admin ── */
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-6 py-16 flex flex-col items-center gap-4 text-center">
           <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center">
             <BookOpen size={28} className="text-slate-400" />
@@ -386,7 +493,8 @@ export default function StudentDashboard() {
         </div>
       ) : (
         <>
-          {/* 2 — Section label */}
+          {/* Attempt tracker */}
+          {/* Section label */}
           <div className="flex items-center gap-3">
             <div className="w-1 h-6 rounded-full" style={{ background: colors.primary }} />
             <h2 className="text-lg font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>
@@ -399,7 +507,7 @@ export default function StudentDashboard() {
             )}
           </div>
 
-          {/* 4 — Level cards grid (skeletons while progress loads) */}
+          {/* Level cards grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {isProgressLoading
               ? visibleLevels.map((_, i) => <LevelCardSkeleton key={i} />)
@@ -410,6 +518,7 @@ export default function StudentDashboard() {
                     status={statuses[i]}
                     levelData={getLevel(userId, level.id)}
                     levelSettings={levelSettings}
+                    attemptCount={attemptsByLevel[String(level.id)] || 0}
                   />
                 ))
             }

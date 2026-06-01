@@ -1,4 +1,4 @@
-// In dev: Vite proxies /api → http://localhost:3002 (keep VITE_API_URL empty in .env)
+// In dev: Vite proxies /api → http://localhost:3001 (keep VITE_API_URL empty in .env)
 // In prod: VITE_API_URL is set in .env.production or the Vercel dashboard
 const BASE = import.meta.env.VITE_API_URL || '';
 
@@ -7,7 +7,16 @@ const USER_KEY          = 'rqa_user';
 export const SESSION_TOKEN_KEY = 'rqa_session_token';
 
 // Paths that don't need an Authorization header
-const NO_AUTH_PATHS = ['/api/auth/login', '/api/auth/register', '/api/auth/reset-password'];
+const NO_AUTH_PATHS = [
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/register-coach',
+  '/api/auth/google-login',
+  '/api/auth/verify-email',
+  '/api/auth/forgot-password',
+  '/api/auth/verify-reset-otp',
+  '/api/auth/reset-password-token',
+];
 
 function getToken() {
   const token = localStorage.getItem(TOKEN_KEY);
@@ -30,8 +39,6 @@ async function request(method, path, body, attempt = 0) {
   }
   if (token && !isNoAuth) headers['Authorization'] = `Bearer ${token}`;
 
-  // Hard 55-second timeout via AbortController.
-  // Render free tier cold start can take 30-50 s; without this fetch hangs forever.
   const controller = new AbortController();
   const timeoutId  = setTimeout(() => controller.abort(), 55000);
 
@@ -47,7 +54,6 @@ async function request(method, path, body, attempt = 0) {
   } catch (err) {
     clearTimeout(timeoutId);
     if (attempt < 2) {
-      // Wait then retry — Render needs time to wake up
       await new Promise(r => setTimeout(r, 5000));
       return request(method, path, body, attempt + 1);
     }
@@ -57,7 +63,6 @@ async function request(method, path, body, attempt = 0) {
   let data;
   try { data = await res.json(); } catch { data = {}; }
 
-  // 503 = DB still initialising — retry automatically up to 3 times
   if (res.status === 503 && attempt < 3) {
     await new Promise(r => setTimeout(r, 4000));
     return request(method, path, body, attempt + 1);
@@ -67,14 +72,9 @@ async function request(method, path, body, attempt = 0) {
     const msg = data.data || data.error || data.message || `Request failed (${res.status})`;
     const err = new Error(msg);
     err.status = res.status;
-
-    // Do NOT call clearSession() here. A 401 from any endpoint other than
-    // /api/auth/me could be transient (Neon cold start, race condition). Only
-    // AuthContext — which calls api.me() — should decide to wipe the session.
     if (res.status === 401) {
       console.warn(`[RQA] 401 from ${path} — session may need re-validation`);
     }
-
     throw err;
   }
   return data?.status === 'success' ? data.data : data;
@@ -86,14 +86,33 @@ export const api = {
   put:    (path, body)  => request('PUT',    path, body),
   delete: (path)        => request('DELETE', path),
 
-  // Auth
-  register: (schoolName, className, password) =>
-    request('POST', '/api/auth/register', { schoolName, className, password }),
+  // Auth — Student
+  register: (data) =>
+    request('POST', '/api/auth/register', data),
+
+  // Auth — Innovation Coach
+  registerCoach: (data) =>
+    request('POST', '/api/auth/register-coach', data),
+
+  // Auth — Google Sign-In
+  googleLogin: (idToken, role = 'student') =>
+    request('POST', '/api/auth/google-login', { idToken, role }),
+
+  // Auth — Email verification
+  verifyEmail: (token) =>
+    request('GET', `/api/auth/verify-email?token=${encodeURIComponent(token)}`),
+
+  // Auth — Forgot password OTP flow (3-step)
+  forgotPassword: (email) =>
+    request('POST', '/api/auth/forgot-password', { email }),
+  verifyResetOtp: (email, otp) =>
+    request('POST', '/api/auth/verify-reset-otp', { email, otp }),
+  resetPasswordWithToken: (token, newPassword) =>
+    request('POST', '/api/auth/reset-password-token', { token, newPassword }),
+
   login: (identifier, password, force = false) =>
     request('POST', '/api/auth/login', { identifier, password, ...(force ? { force: true } : {}) }),
   me: () => request('GET', '/api/auth/me'),
-  resetPassword: (uniqueId, schoolName, className, newPassword) =>
-    request('POST', '/api/auth/reset-password', { uniqueId, schoolName, className, newPassword }),
   logout: () => request('POST', '/api/auth/logout'),
   heartbeat: () => request('POST', '/api/auth/heartbeat', {
     sessionToken: localStorage.getItem(SESSION_TOKEN_KEY) || '',
@@ -152,13 +171,13 @@ export const api = {
   updateQuestionBank: (id, data) => request('PUT', `/api/question-banks/${id}`, data),
   deleteQuestionBank: (id) => request('DELETE', `/api/question-banks/${id}`),
 
-  // QB Levels (relational — belong to a question bank)
+  // QB Levels
   getQbLevels:   (bankId) => request('GET', `/api/qb-levels?bankId=${bankId}`),
   createQbLevel: (data)   => request('POST', '/api/qb-levels', data),
   updateQbLevel: (id, data) => request('PUT', `/api/qb-levels/${id}`, data),
   deleteQbLevel: (id)     => request('DELETE', `/api/qb-levels/${id}`),
 
-  // QB Categories (relational — belong to a qb_level)
+  // QB Categories
   getQbCategories:   (levelId) => request('GET', `/api/qb-categories?levelId=${levelId}`),
   createQbCategory:  (data)    => request('POST', '/api/qb-categories', data),
   updateQbCategory:  (id, data) => request('PUT', `/api/qb-categories/${id}`, data),
@@ -167,17 +186,13 @@ export const api = {
   // Questions by QB category
   getQuestionsByCategory: (categoryId) => request('GET', `/api/questions?categoryId=${categoryId}`),
 
-  // Exam Level CRUD (add / delete levels)
+  // Exam Level CRUD
   createLevel: (data) => request('POST', '/api/levels', data),
   deleteLevel: (id) => request('DELETE', `/api/levels/${id}`),
 
-  // S3 presigned upload flow:
-  // 1. getPresignedUrl  → server creates upload record, returns { id, presignedUrl, url }
-  // 2. uploadToS3       → PUT file bytes directly to S3 (no auth header)
-  // 3. confirmUpload    → server marks record as uploaded, returns { id, url }
+  // S3 uploads
   getPresignedUrl: (filename, contentType) =>
     request('POST', '/api/uploads/presign', { filename, contentType }),
-
   uploadToS3: async (presignedUrl, file) => {
     const res = await fetch(presignedUrl, {
       method: 'PUT',
@@ -186,7 +201,6 @@ export const api = {
     });
     if (!res.ok) throw new Error(`S3 upload failed (${res.status})`);
   },
-
   confirmUpload: (id) =>
     request('PUT', `/api/uploads/${id}/confirm`, {}),
 };

@@ -93,7 +93,7 @@ export default function LevelContent() {
 
   const handleStartQuiz = () => {
     markRead();
-    markContentRead(user.uniqueId, id);
+    markContentRead(user.id, id);
     navigate(`/level/${id}/quiz`);
   };
 

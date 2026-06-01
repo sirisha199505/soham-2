@@ -7,6 +7,7 @@ import {
   List, AlignLeft, Layers, Tag, HelpCircle, Check,
   FolderOpen, Folder, Upload, Download, FileSpreadsheet, AlertCircle,
   ChevronRight, Database, MoreVertical, Calendar, ToggleLeft, Loader2,
+  Users, UserCheck, Globe,
 } from 'lucide-react';
 import Modal from '../../components/ui/Modal';
 import { api } from '../../utils/api';
@@ -65,9 +66,9 @@ const levelPal = (idx) => LEVEL_PALETTE[idx % LEVEL_PALETTE.length];
 
 // ─── Question-type config ─────────────────────────────────────────────────
 const Q_TYPES = [
-  { value:'mcq',       label:'MCQ',                icon:List,       sub:'4 options · text or image'     },
+  { value:'mcq',       label:'MCQ',                icon:List,       sub:'4 options · text or image'      },
   { value:'match',     label:'Match the Following', icon:AlignLeft,  sub:'Pair matching · text or image'  },
-  { value:'image',     label:'Image-Based',         icon:Image,      sub:'Question image + options'       },
+  { value:'label',     label:'Label Question',      icon:Image,      sub:'Identify & label image parts'   },
   { value:'truefalse', label:'True / False',        icon:ToggleLeft, sub:'2 options · True or False'      },
 ];
 const DIFF_CFG = {
@@ -76,14 +77,21 @@ const DIFF_CFG = {
   hard:   { label:'Hard',   cls:'bg-red-100   text-red-700'   },
 };
 
+// ─── Applicable-For config ────────────────────────────────────────────────
+const AF_CFG = {
+  student: { label:'Students Only', badge:'bg-indigo-100 text-indigo-700', border:'border-indigo-400', icon: Users    },
+  trainer: { label:'Trainers Only',  badge:'bg-violet-100 text-violet-700', border:'border-violet-400', icon: UserCheck },
+  both:    { label:'Both',           badge:'bg-teal-100   text-teal-700',   border:'border-teal-400',   icon: Globe    },
+};
+
 // ─── Blank factories ──────────────────────────────────────────────────────
 const blankOpt  = () => ({ text: '', imageUrl: '' });
 const blankPair = () => ({ left: '', leftImage: '', right: '', rightImage: '' });
-const blankMcq       = () => ({ type:'mcq',       text:'', imageUrl:'', difficulty:'easy', options:[blankOpt(),blankOpt(),blankOpt(),blankOpt()], correct:null, explanation:'' });
-const blankMatch     = () => ({ type:'match',     text:'', imageUrl:'', difficulty:'easy', pairs:[blankPair(),blankPair(),blankPair(),blankPair()], explanation:'' });
-const blankImage     = () => ({ type:'image',     text:'', imageUrl:'', difficulty:'easy', options:[blankOpt(),blankOpt(),blankOpt(),blankOpt()], correct:null, explanation:'' });
-const blankTrueFalse = () => ({ type:'truefalse', text:'', imageUrl:'', difficulty:'easy', options:[{text:'True',imageUrl:''},{text:'False',imageUrl:''}], correct:null, explanation:'' });
-const blankForType   = (t) => t==='match'?blankMatch():t==='image'?blankImage():t==='truefalse'?blankTrueFalse():blankMcq();
+const blankMcq       = (af='student') => ({ type:'mcq',       text:'', imageUrl:'', difficulty:'easy', applicableFor:af, options:[blankOpt(),blankOpt(),blankOpt(),blankOpt()], correct:null, explanation:'' });
+const blankMatch     = (af='student') => ({ type:'match',     text:'', imageUrl:'', difficulty:'easy', applicableFor:af, pairs:[blankPair(),blankPair(),blankPair(),blankPair()], explanation:'' });
+const blankLabel     = (af='student') => ({ type:'label',     text:'', imageUrl:'', difficulty:'easy', applicableFor:af, options:[blankOpt(),blankOpt(),blankOpt(),blankOpt()], correct:null, explanation:'' });
+const blankTrueFalse = (af='student') => ({ type:'truefalse', text:'', imageUrl:'', difficulty:'easy', applicableFor:af, options:[{text:'True',imageUrl:''},{text:'False',imageUrl:''}], correct:null, explanation:'' });
+const blankForType   = (t, af='student') => t==='match'?blankMatch(af):t==='label'?blankLabel(af):t==='truefalse'?blankTrueFalse(af):blankMcq(af);
 
 // ─── CSV parser ───────────────────────────────────────────────────────────
 function parseCSV(text) {
@@ -97,9 +105,9 @@ function parseCSV(text) {
     const text = clean(cols[1]);
     if (!text) continue;
     const diff = ['easy','medium','hard'].includes(clean(cols[2])) ? clean(cols[2]) : 'easy';
-    if (type==='mcq')       questions.push({ id:uid('q'), type:'mcq',   text, difficulty:diff, options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
-    else if (type==='match') questions.push({ id:uid('q'), type:'match', text, difficulty:diff, pairs:[{left:clean(cols[10]),leftImage:'',right:clean(cols[11]),rightImage:''},{left:clean(cols[12]),leftImage:'',right:clean(cols[13]),rightImage:''},{left:clean(cols[14]),leftImage:'',right:clean(cols[15]),rightImage:''},{left:clean(cols[16]),leftImage:'',right:clean(cols[17]),rightImage:''}], explanation:'' });
-    else if (type==='image') questions.push({ id:uid('q'), type:'image', text, difficulty:diff, imageUrl:clean(cols[9])||'', options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
+    if (type==='mcq')                         questions.push({ id:uid('q'), type:'mcq',   text, difficulty:diff, options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
+    else if (type==='match')                  questions.push({ id:uid('q'), type:'match', text, difficulty:diff, pairs:[{left:clean(cols[10]),leftImage:'',right:clean(cols[11]),rightImage:''},{left:clean(cols[12]),leftImage:'',right:clean(cols[13]),rightImage:''},{left:clean(cols[14]),leftImage:'',right:clean(cols[15]),rightImage:''},{left:clean(cols[16]),leftImage:'',right:clean(cols[17]),rightImage:''}], explanation:'' });
+    else if (type==='label'||type==='image')  questions.push({ id:uid('q'), type:'label', text, difficulty:diff, imageUrl:clean(cols[9])||'', options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
   }
   return questions;
 }
@@ -245,7 +253,7 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
     const headers = ['type','text','difficulty','opt_a','opt_b','opt_c','opt_d','correct','explanation','image_url(img only)','p1_left','p1_right','p2_left','p2_right','p3_left','p3_right','p4_left','p4_right'];
     const rows = [
       ['mcq','What is a servo motor?','easy','A DC motor with feedback control','A stepper motor','A linear actuator','An AC induction motor','A','Servo motors use encoders for closed-loop position control.','','','','','','','','',''],
-      ['image','What component is shown?','medium','Servo motor','DC motor','Stepper motor','Solenoid','C','','https://example.com/component.jpg','','','','','','','',''],
+      ['label','What component is shown?','medium','Servo motor','DC motor','Stepper motor','Solenoid','C','','https://example.com/component.jpg','','','','','','','',''],
       ['match','Match each component to its function','easy','','','','','','','','Sensor','Detects input signals','Motor','Converts electricity to motion','CPU','Processes instructions','Battery','Stores electrical energy'],
     ];
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
@@ -289,7 +297,7 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
           <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100">
             <p className="text-sm font-bold text-indigo-800 mb-3">Supported Column Formats</p>
             <div className="grid grid-cols-3 gap-3">
-              {[{type:'MCQ',cols:['type','text','difficulty','opt_a–opt_d','correct (A–D)']},{type:'Image',cols:['type','text','image_url','opt_a–opt_d','correct']},{type:'Match',cols:['type','text','difficulty','p1_left, p1_right','… (4 pairs)']}].map(f=>(
+              {[{type:'MCQ',cols:['type','text','difficulty','opt_a–opt_d','correct (A–D)']},{type:'Label',cols:['type=label','text','image_url','opt_a–opt_d','correct']},{type:'Match',cols:['type','text','difficulty','p1_left, p1_right','… (4 pairs)']}].map(f=>(
                 <div key={f.type} className="bg-white rounded-xl p-3 border border-indigo-100">
                   <p className="text-xs font-bold text-indigo-700 mb-2">{f.type}</p>
                   {f.cols.map(c=><p key={c} className="text-[10px] text-slate-500 font-mono">• {c}</p>)}
@@ -314,7 +322,7 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
       {step==='preview' && (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-3">
-            {[{l:'Total',v:parsed.length,c:'bg-slate-100 text-slate-700'},{l:'MCQ',v:parsed.filter(q=>q.type==='mcq').length,c:'bg-blue-100 text-blue-700'},{l:'Match',v:parsed.filter(q=>q.type==='match').length,c:'bg-violet-100 text-violet-700'},{l:'Image',v:parsed.filter(q=>q.type==='image').length,c:'bg-rose-100 text-rose-700'}].map(s=>(
+            {[{l:'Total',v:parsed.length,c:'bg-slate-100 text-slate-700'},{l:'MCQ',v:parsed.filter(q=>q.type==='mcq').length,c:'bg-blue-100 text-blue-700'},{l:'Match',v:parsed.filter(q=>q.type==='match').length,c:'bg-violet-100 text-violet-700'},{l:'Label',v:parsed.filter(q=>q.type==='label').length,c:'bg-rose-100 text-rose-700'}].map(s=>(
               <div key={s.l} className={`px-4 py-2 rounded-xl text-center ${s.c}`}><p className="text-lg font-bold">{s.v}</p><p className="text-[10px] font-semibold">{s.l}</p></div>
             ))}
           </div>
@@ -360,15 +368,18 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Question Form Modal
 // ═══════════════════════════════════════════════════════════════════════════
-function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catName }) {
-  const [form, setForm]     = useState(() => initial ? { ...initial, options: initial.options?.map(normalizeOpt), pairs: initial.pairs?.map(normalizePair) } : blankMcq());
+function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catName, defaultAudience = 'student' }) {
+  const initAF = initial?.applicableFor || defaultAudience || 'student';
+  const [form, setForm]     = useState(() => initial
+    ? { ...initial, options: initial.options?.map(normalizeOpt), pairs: initial.pairs?.map(normalizePair), applicableFor: initAF }
+    : blankMcq(defaultAudience));
   const [errors, setErrors] = useState({});
 
   const set     = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const setOpt  = (i, field, val) => setForm(p => { const opts = (Array.isArray(p.options)?p.options:[]).map(normalizeOpt); opts[i]={...opts[i],[field]:val}; return {...p,options:opts}; });
   const setPair = (i, side, val) => setForm(p => { const pairs=(p.pairs||[]).map(normalizePair); pairs[i]={...pairs[i],[side]:val}; return {...p,pairs}; });
 
-  const handleTypeChange = (t) => { setForm(p => ({ ...blankForType(t), id: p.id, difficulty: p.difficulty, text: p.text, imageUrl: p.imageUrl || '' })); setErrors({}); };
+  const handleTypeChange = (t) => { setForm(p => ({ ...blankForType(t, p.applicableFor || defaultAudience), id: p.id, difficulty: p.difficulty, text: p.text, imageUrl: p.imageUrl || '' })); setErrors({}); };
 
   const validate = () => {
     const e = {};
@@ -423,17 +434,21 @@ function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catNam
           <label className={lbl}>Question Text <span className="text-slate-400 normal-case font-normal">(or image only)</span></label>
           <textarea rows={3} value={form.text} onChange={e => set('text', e.target.value)} placeholder="Type your question here…"
             className={`${inp} resize-none ${errors.text ? 'border-red-400' : ''}`}/>
-          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-semibold mb-1"><Image size={11}/> Question Image <span className="font-normal">(optional)</span></div>
+          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-semibold mt-1"><Image size={11}/> Question Image <span className="font-normal">(optional)</span></div>
+          <input type="url" value={form.imageUrl || ''} onChange={e => set('imageUrl', e.target.value)}
+            placeholder="Paste image URL here…"
+            className={`${inp} text-sm`}/>
+          <p className="text-[10px] text-slate-400 text-center font-semibold">— or upload a file —</p>
           <ImageUpload value={form.imageUrl || ''} onChange={v => set('imageUrl', v)} />
           {errors.text && <p className="text-xs text-red-500">{errors.text}</p>}
         </div>
-        {(form.type==='mcq'||form.type==='image') && (
+        {(form.type==='mcq'||form.type==='label') && (
           <div>
             <label className={lbl}>Answer Options <span className="text-red-400">*</span><span className="normal-case font-normal text-slate-400 ml-1">Click letter to mark correct</span></label>
             <div className="space-y-2">
               {(form.options||[]).map((opt,i)=>{ const optObj=normalizeOpt(opt); const correct=form.correct===i; return (
                 <div key={i} className={`rounded-xl border-2 p-3 transition-all ${correct?'border-green-300 bg-green-50':errors[`opt${i}`]?'border-red-300':'border-slate-100 bg-slate-50/60'}`}>
-                  <div className="flex items-center gap-2.5 mb-2">
+                  <div className="flex items-center gap-2.5">
                     <button type="button" onClick={()=>set('correct',i)}
                       className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 shrink-0 transition-all ${correct?'bg-green-500 border-green-500 text-white':'border-slate-300 text-slate-400 hover:border-green-400'}`}>
                       {String.fromCharCode(65+i)}
@@ -442,7 +457,6 @@ function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catNam
                       className={`flex-1 bg-transparent outline-none text-sm placeholder-slate-300 ${correct?'text-green-800 font-semibold':'text-slate-700'}`}/>
                     {correct && <span className="flex items-center gap-1 text-[10px] font-bold text-green-600 shrink-0"><Check size={10}/>Correct</span>}
                   </div>
-                  <ImageUpload value={optObj.imageUrl} onChange={v=>setOpt(i,'imageUrl',v)} compact/>
                   {errors[`opt${i}`] && <p className="text-[10px] text-red-500 mt-1">{errors[`opt${i}`]}</p>}
                 </div>
               );})}
@@ -509,6 +523,23 @@ function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catNam
           </div>
         </div>
         <div>
+          <label className={lbl}>Applicable For <span className="text-red-400">*</span></label>
+          <div className="flex gap-2">
+            {Object.entries(AF_CFG).map(([k, v]) => {
+              const AfIcon = v.icon;
+              const active = (form.applicableFor || 'student') === k;
+              return (
+                <button key={k} type="button" onClick={() => set('applicableFor', k)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
+                    active ? `${v.badge} ${v.border}` : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                  }`}>
+                  <AfIcon size={12}/>{v.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div>
           <label className={lbl}>Explanation <span className="font-normal normal-case text-slate-400">(optional)</span></label>
           <textarea rows={2} value={form.explanation||''} onChange={e=>set('explanation',e.target.value)} placeholder="Explain why this is the correct answer…"
             className={`${inp} resize-none`}/>
@@ -532,10 +563,15 @@ function QuestionRow({ q, index, onEdit, onDelete }) {
         <span className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">{index}</span>
         <button onClick={()=>setExpanded(p=>!p)} className="flex-1 text-left min-w-0">
           <p className="text-sm font-semibold text-slate-800 truncate">{q.text || '[Image question]'}</p>
-          <div className="flex items-center gap-1.5 mt-0.5">
+          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
             <TypeIcon size={11} className="text-slate-400"/>
             <span className="text-[10px] text-slate-400">{typeConf.label}</span>
             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-0.5 ${diff.cls}`}>{diff.label}</span>
+            {(() => { const af=q.applicableFor||'student'; const cfg=AF_CFG[af]||AF_CFG.student; const AfIcon=cfg.icon; return (
+              <span className={`flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${cfg.badge}`}>
+                <AfIcon size={9}/>{cfg.label}
+              </span>
+            ); })()}
           </div>
         </button>
         <div className="flex items-center gap-1 shrink-0">
@@ -618,6 +654,7 @@ function CategorySection({ cat, levelId, levelName, bankId, pal, onRenamed, onDe
         difficulty:    q.difficulty,
         imageUrl:      q.imageUrl || '',
         explanation:   q.explanation || '',
+        applicableFor: q.applicableFor || 'student',
         qbCategoryId:  cat.id,
         qbLevelId:     levelId,
         levelId:       undefined,
@@ -641,6 +678,7 @@ function CategorySection({ cat, levelId, levelName, bankId, pal, onRenamed, onDe
         options: flattenOptions(updated.options), pairs: flattenPairs(updated.pairs),
         correctAnswer: updated.correct, difficulty: updated.difficulty,
         imageUrl: updated.imageUrl || '', explanation: updated.explanation || '',
+        applicableFor: updated.applicableFor || 'student',
       });
       showToast?.('Question updated!');
     } catch (err) {
@@ -681,6 +719,8 @@ function CategorySection({ cat, levelId, levelName, bankId, pal, onRenamed, onDe
   };
 
   const qCount = questions.length;
+  const visibleQuestions = questions;
+  const visCount = qCount;
 
   return (
     <div className={`rounded-2xl border-2 ${pal.border} overflow-hidden`}>
@@ -714,18 +754,18 @@ function CategorySection({ cat, levelId, levelName, bankId, pal, onRenamed, onDe
         <div className="p-4 bg-white">
           {loading ? (
             <div className="flex items-center justify-center py-6"><Loader2 size={20} className="animate-spin text-slate-300"/></div>
-          ) : qCount === 0 ? (
+          ) : visCount === 0 ? (
             <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
               <HelpCircle size={28} className="text-slate-300 mx-auto mb-2"/>
               <p className="text-sm font-semibold text-slate-400">No questions yet</p>
-              <p className="text-xs text-slate-400 mt-0.5 mb-3">Add MCQ, Match, or Image-based questions</p>
+              <p className="text-xs text-slate-400 mt-0.5 mb-3">Add MCQ, Match, Label, or True/False questions</p>
               <button onClick={()=>setQModal('add')} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white" style={{background:'linear-gradient(135deg,#6366f1,#8b5cf6)'}}>
                 <Plus size={12}/>Add First Question
               </button>
             </div>
           ) : (
             <div className="space-y-2">
-              {questions.map((q,i)=>(
+              {visibleQuestions.map((q,i)=>(
                 <QuestionRow key={q.id} q={q} index={i+1} onEdit={()=>setQModal(q)} onDelete={()=>setDeleteQ(q)}/>
               ))}
               <button onClick={()=>setQModal('add')} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-slate-200 text-xs font-semibold text-slate-400 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50/40 transition-all">
@@ -740,7 +780,8 @@ function CategorySection({ cat, levelId, levelName, bankId, pal, onRenamed, onDe
         <QuestionFormModal isOpen onClose={()=>setQModal(null)}
           onSave={qModal==='add' ? handleAdd : handleEdit}
           initial={qModal==='add' ? null : qModal}
-          levelName={levelName} catName={cat.name}/>
+          levelName={levelName} catName={cat.name}
+          defaultAudience="student"/>
       )}
       <DeleteModal isOpen={!!deleteQ} onClose={()=>setDeleteQ(null)} onConfirm={handleDeleteQ}
         title="Delete Question?" message={`"${deleteQ?.text||'This question'}" will be permanently removed.`}/>
@@ -1235,6 +1276,7 @@ export default function QuestionBankAdmin() {
   return (
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-5">
       {toast && <Toast msg={toast}/>}
+
       {selectedBank ? (
         <BankDetail
           bank={selectedBank}

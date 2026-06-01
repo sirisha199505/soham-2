@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Users, Trophy, TrendingUp, CheckCircle, BarChart2,
   ArrowRight, RefreshCw, Activity, BookOpen, Settings,
-  AlertCircle, ChevronRight,
+  AlertCircle, ChevronRight, UserCheck,
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -12,7 +12,11 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../utils/api';
 
-function computeStats(students) {
+function computeStats(users) {
+  // api.getStudents() returns role-0 (students) AND role-2 (coaches) together
+  const students   = users.filter(u => u.role !== 'coach');
+  const coachCount = users.filter(u => u.role === 'coach').length;
+
   const levelCounts = {}; // String(levelId) → completion count
   const allScores = [];
   let passCount = 0, failCount = 0;
@@ -34,7 +38,7 @@ function computeStats(students) {
 
   const avgScore = allScores.length ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length) : 0;
   const passRate = passCount + failCount > 0 ? Math.round((passCount / (passCount + failCount)) * 100) : 0;
-  return { totalStudents: students.length, totalAttempts, avgScore, passRate, passCount, failCount, levelCounts };
+  return { totalStudents: students.length, coachCount, totalAttempts, avgScore, passRate, passCount, failCount, levelCounts };
 }
 
 /* ── static chart data ── */
@@ -47,7 +51,9 @@ const COMPLETION_TREND = [
   { month: 'Apr', l1: 35, l2: 18, l3: 9 },
 ];
 
-const LEVEL_COLORS = ['#3BC0EF', '#8B5CF6', '#10B981'];
+// Extended palette — cycles if there are ever more levels than colours
+const LEVEL_COLORS = ['#3BC0EF', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#14B8A6', '#6366F1'];
+const levelColor = (i) => LEVEL_COLORS[i % LEVEL_COLORS.length];
 
 /* ── small components ── */
 function StatCard({ label, value, icon, color, sub, to }) {
@@ -81,7 +87,7 @@ function QuickAction({ icon, label, to, color }) {
   );
 }
 
-const EMPTY_STATS = { totalStudents: 0, totalAttempts: 0, avgScore: 0, passRate: 0, passCount: 0, failCount: 0, levelCounts: {} };
+const EMPTY_STATS = { totalStudents: 0, coachCount: 0, totalAttempts: 0, avgScore: 0, passRate: 0, passCount: 0, failCount: 0, levelCounts: {} };
 
 export default function AdminDashboard() {
   const { user } = useAuth();
@@ -142,10 +148,10 @@ export default function AdminDashboard() {
   ];
   const PIE_COLORS = ['#10B981', '#EF4444'];
 
-  const levelCompletionData = levelsList.slice(0, 3).map((lvl, i) => ({
+  const levelCompletionData = levelsList.map((lvl, i) => ({
     level:     lvl.title || `Level ${i + 1}`,
     completed: stats.levelCounts?.[String(lvl.id)] || 0,
-    color:     LEVEL_COLORS[i],
+    color:     levelColor(i),
   }));
 
   return (
@@ -172,27 +178,28 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      {/* ── Top stat cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ── Top stat cards — grows dynamically with level count ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
         <StatCard label="Total Students" value={stats.totalStudents} icon={<Users size={18} />} color="#4F46E5" sub="Registered" to="/admin/students" />
-        {levelsList.slice(0, 3).map((lvl, i) => (
+        {levelsList.map((lvl, i) => (
           <StatCard
             key={lvl.id}
             label={`${lvl.title || `Level ${i + 1}`} Done`}
             value={stats.levelCounts?.[String(lvl.id)] || 0}
             icon={i === levelsList.length - 1 ? <Trophy size={18} /> : <CheckCircle size={18} />}
-            color={LEVEL_COLORS[i]}
+            color={levelColor(i)}
             sub="Completions"
           />
         ))}
       </div>
 
       {/* ── Second stat row ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Pass Rate"     value={`${stats.passRate}%`}   icon={<TrendingUp size={18} />} color="#10B981" sub="Across all levels" />
-        <StatCard label="Avg Score"     value={`${stats.avgScore}%`}   icon={<BarChart2 size={18} />}  color="#F59E0B" sub="All attempts" />
-        <StatCard label="Total Attempts" value={stats.totalAttempts}   icon={<BookOpen size={18} />}   color="#3BC0EF" sub="Exam submissions" />
-        <StatCard label="Pass / Fail"   value={`${stats.passCount}/${stats.failCount}`} icon={<Activity size={18} />} color="#EF4444" sub="Count breakdown" />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <StatCard label="Innovation Coaches" value={stats.coachCount}              icon={<UserCheck size={18} />}  color="#8B5CF6" sub="Registered coaches" />
+        <StatCard label="Pass Rate"          value={`${stats.passRate}%`}          icon={<TrendingUp size={18} />} color="#10B981" sub="Across all levels" />
+        <StatCard label="Avg Score"          value={`${stats.avgScore}%`}          icon={<BarChart2 size={18} />}  color="#F59E0B" sub="All attempts" />
+        <StatCard label="Total Attempts"     value={stats.totalAttempts}           icon={<BookOpen size={18} />}   color="#3BC0EF" sub="Exam submissions" />
+        <StatCard label="Pass / Fail"        value={`${stats.passCount}/${stats.failCount}`} icon={<Activity size={18} />} color="#EF4444" sub="Count breakdown" />
       </div>
 
       {/* ── Charts row ── */}
@@ -210,10 +217,10 @@ export default function AdminDashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={COMPLETION_TREND} margin={{ left: -10, right: 10 }}>
                 <defs>
-                  {LEVEL_COLORS.map((c, i) => (
+                  {levelsList.map((_, i) => (
                     <linearGradient key={i} id={`grad${i}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor={c} stopOpacity={0.2} />
-                      <stop offset="95%" stopColor={c} stopOpacity={0} />
+                      <stop offset="5%"  stopColor={levelColor(i)} stopOpacity={0.2} />
+                      <stop offset="95%" stopColor={levelColor(i)} stopOpacity={0} />
                     </linearGradient>
                   ))}
                 </defs>
@@ -222,9 +229,11 @@ export default function AdminDashboard() {
                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 10px 40px rgba(0,0,0,.1)', fontSize: 12 }} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Area type="monotone" dataKey="l1" name="Level 1" stroke={LEVEL_COLORS[0]} strokeWidth={2} fill="url(#grad0)" />
-                <Area type="monotone" dataKey="l2" name="Level 2" stroke={LEVEL_COLORS[1]} strokeWidth={2} fill="url(#grad1)" />
-                <Area type="monotone" dataKey="l3" name="Level 3" stroke={LEVEL_COLORS[2]} strokeWidth={2} fill="url(#grad2)" />
+                {levelsList.map((lvl, i) => (
+                  <Area key={lvl.id} type="monotone" dataKey={`l${i + 1}`}
+                    name={lvl.title || `Level ${i + 1}`}
+                    stroke={levelColor(i)} strokeWidth={2} fill={`url(#grad${i})`} />
+                ))}
               </AreaChart>
             </ResponsiveContainer>
           </div>

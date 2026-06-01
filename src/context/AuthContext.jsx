@@ -6,7 +6,7 @@ import { recoverPendingAttempt } from '../utils/quizGenerator';
 const AuthContext = createContext(null);
 const TOKEN_KEY = 'rqa_token';
 const USER_KEY  = 'rqa_user';
-const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
 
 function readStoredUser() {
   try {
@@ -20,23 +20,25 @@ function hasStoredToken() {
   return t && t !== 'undefined' && t !== 'null';
 }
 
-const ROLE_MAP_INIT = { 0: 'student', 1: 'admin', 2: 'teacher' };
+// Normalize role: treat legacy 'teacher' as 'coach'
+function normalizeRole(role) {
+  if (typeof role === 'number') {
+    return { 0: 'student', 1: 'admin', 2: 'coach' }[role] || 'student';
+  }
+  return role === 'teacher' ? 'coach' : (role || 'student');
+}
+
 function normalizeStoredUser(raw) {
   if (!raw) return raw;
-  const role = typeof raw.role === 'number' ? (ROLE_MAP_INIT[raw.role] || 'student') : (raw.role || 'student');
+  const role = normalizeRole(raw.role);
   return { ...raw, role, name: raw.name || raw.full_name || '', full_name: raw.full_name || raw.name || '' };
 }
 
 export function AuthProvider({ children }) {
-  const [user, setUser]                   = useState(() => normalizeStoredUser(readStoredUser()));
-  const [kickedOut, setKickedOut]         = useState(false);
-  // While we're verifying a stored token on page load, don't render protected routes yet.
-  const [initializing, setInitializing]   = useState(() => !!hasStoredToken());
-  const heartbeatRef                      = useRef(null);
+  const [user, setUser]                 = useState(() => normalizeStoredUser(readStoredUser()));
+  const [initializing, setInitializing] = useState(() => !!hasStoredToken());
+  const heartbeatRef                    = useRef(null);
 
-  // On mount: if a stored token exists, try to refresh user data from the server.
-  // Only clear the session if we get a definitive 401 (token explicitly rejected).
-  // 404 (endpoint doesn't exist on this backend) or network errors keep the user logged in.
   useEffect(() => {
     if (!hasStoredToken()) {
       setInitializing(false);
@@ -47,91 +49,82 @@ export function AuthProvider({ children }) {
         const normalized = normalizeStoredUser(freshUser);
         localStorage.setItem(USER_KEY, JSON.stringify(normalized));
         setUser(normalized);
-        // After confirming the session is valid, silently retry any quiz attempt
-        // that failed to persist during the previous session (e.g. Render cold start).
         recoverPendingAttempt().catch(() => {});
       })
       .catch((err) => {
         if (err?.status === 401) {
-          // Token explicitly rejected by server — it's expired or the secret changed
           clearSession();
           setUser(null);
         }
-        // 404 (endpoint not on this backend), 500, or network error:
-        // keep the stored user — don't punish them for a missing endpoint
       })
       .finally(() => setInitializing(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Listen for explicit session-clear events (e.g. manual logout from other tabs)
   useEffect(() => {
     const handle = () => setUser(null);
     window.addEventListener('auth:logout', handle);
     return () => window.removeEventListener('auth:logout', handle);
   }, []);
 
-  // Heartbeat: keep student session alive and detect forced logout from another device
+  // Heartbeat — keeps session_active_at fresh for all logged-in users
   useEffect(() => {
-    if (!user || user.role !== 'student') {
+    if (!user) {
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       return;
     }
-
-    const beat = async () => {
-      try {
-        await api.heartbeat();
-      } catch (err) {
-        if (err?.status === 409) {
-          // Another device force-logged in — invalidate this session
-          sessionStorage.setItem('rqa_kicked_out', '1');
-          clearSession();
-          setUser(null);
-          setKickedOut(true);
-        }
-      }
-    };
-
-    // Run once immediately on login, then every 5 minutes
+    const beat = () => api.heartbeat().catch(() => {});
     beat();
     heartbeatRef.current = setInterval(beat, HEARTBEAT_INTERVAL_MS);
     return () => clearInterval(heartbeatRef.current);
   }, [user?.role]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Register a new student ── */
-  const register = useCallback(async (schoolName, className, password) => {
-    const data = await api.register(schoolName, className, password);
-    // Do not store session token here — registration does not create an active session.
-    // Session token is only set after a proper login.
-    return data.uniqueId;
+  const register = useCallback(async (data) => {
+    return api.register(data);
   }, []);
 
-  /* ── Login ── */
-  const login = useCallback(async (identifier, password, force = false) => {
-    const data = await api.login(identifier, password, force);
+  /* ── Register an Innovation Coach ── */
+  const registerCoach = useCallback(async (data) => {
+    return api.registerCoach(data);
+  }, []);
+
+  /* ── Google Sign-In ── */
+  const googleLogin = useCallback(async (idToken, role = 'student') => {
+    const data = await api.googleLogin(idToken, role);
     const normalized = normalizeStoredUser(data.user);
     localStorage.setItem(TOKEN_KEY, data.token);
     localStorage.setItem(USER_KEY, JSON.stringify(normalized));
     if (data.sessionToken) {
       localStorage.setItem(SESSION_TOKEN_KEY, data.sessionToken);
     }
-    setKickedOut(false);
+    setUser(normalized);
+    return getDashboardRoute(normalized.role);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Login ── */
+  const login = useCallback(async (identifier, password) => {
+    const data = await api.login(identifier, password);
+    const normalized = normalizeStoredUser(data.user);
+    localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(USER_KEY, JSON.stringify(normalized));
+    if (data.sessionToken) {
+      localStorage.setItem(SESSION_TOKEN_KEY, data.sessionToken);
+    }
     setUser(normalized);
     return getDashboardRoute(normalized.role);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const logout = useCallback(async () => {
-    try { await api.logout(); } catch { /* ignore — session cleared locally regardless */ }
+    try { await api.logout(); } catch { /* ignore */ }
     clearSession();
     setUser(null);
-    setKickedOut(false);
   }, []);
 
-  /* ── Student list (admin) ── */
   const getStudentList = useCallback(async () => {
     return api.getStudents();
   }, []);
 
-  // Backward-compat stubs for old quiz pages (no-ops in API mode)
+  // Backward-compat stubs
   const hasAttemptedQuiz  = () => false;
   const markQuizStarted   = () => {};
   const markQuizComplete  = () => {};
@@ -144,9 +137,10 @@ export function AuthProvider({ children }) {
     login,
     logout,
     register,
+    registerCoach,
+    googleLogin,
     isAuthenticated: !!user,
     initializing,
-    kickedOut,
     getStudentList,
     hasAttemptedQuiz,
     markQuizStarted,
@@ -156,8 +150,6 @@ export function AuthProvider({ children }) {
     isQuizStarted,
   };
 
-  // Hold the entire tree while the token is being verified so no protected
-  // route fires API calls before we know whether the session is valid.
   if (initializing) {
     return (
       <AuthContext.Provider value={value}>

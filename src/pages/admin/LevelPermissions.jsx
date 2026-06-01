@@ -8,7 +8,19 @@ import {
 } from 'lucide-react';
 import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
-import { LEVELS } from '../../utils/levelData';
+
+// Fallback color palette for levels not in the static list
+const LEVEL_COLORS = [
+  { from: '#3BC0EF', to: '#1E3A8A' },
+  { from: '#8B5CF6', to: '#6d28d9' },
+  { from: '#10B981', to: '#047857' },
+  { from: '#F59E0B', to: '#D97706' },
+  { from: '#EF4444', to: '#B91C1C' },
+  { from: '#EC4899', to: '#BE185D' },
+  { from: '#14B8A6', to: '#0F766E' },
+  { from: '#6366F1', to: '#4F46E5' },
+];
+function levelColor(idx) { return LEVEL_COLORS[idx % LEVEL_COLORS.length]; }
 
 function formatDate(iso) {
   if (!iso) return '—';
@@ -87,8 +99,7 @@ function GlobalToggle({ targetLevel, global: globalAccess, onToggle }) {
 }
 
 /* ── Level Tab Button ── */
-function TabButton({ levelId, active, onClick, pendingCount }) {
-  const level = LEVELS.find(l => l.id === levelId);
+function TabButton({ levelId, levelTitle, color, active, onClick, pendingCount }) {
   return (
     <button
       onClick={onClick}
@@ -96,9 +107,9 @@ function TabButton({ levelId, active, onClick, pendingCount }) {
         ${active
           ? 'text-white shadow-sm'
           : 'text-slate-500 bg-slate-100 hover:bg-slate-200'}`}
-      style={active ? { background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` } : {}}
+      style={active ? { background: `linear-gradient(135deg, ${color.from}, ${color.to})` } : {}}
     >
-      Level {levelId} Approvals
+      {levelTitle || `Level ${levelId}`} Approvals
       {pendingCount > 0 && (
         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold
           ${active ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700'}`}>
@@ -147,7 +158,8 @@ function StatsRow({ rows }) {
 /* ── Main Page ── */
 export default function LevelPermissions() {
   const { approvals: ctxApprovals, setApproval: ctxSetApproval, globalAccess, setGlobalAccess: ctxSetGlobalAccess } = useLevel();
-  const [activeTab,   setActiveTab]   = useState(2);
+  // activeTab is a level ID — null until DB levels load
+  const [activeTab,   setActiveTab]   = useState(null);
   const [search,      setSearch]      = useState('');
   const [filter,      setFilter]      = useState('all');
   const [selected,    setSelected]    = useState(new Set());
@@ -155,23 +167,38 @@ export default function LevelPermissions() {
   const [global,      setGlobal]      = useState({});
   const [toast,       setToast]       = useState(null);
   const [apiStudents, setApiStudents] = useState([]);
+  // All DB levels sorted by order
+  const [dbLevels,    setDbLevels]    = useState([]);
 
   // Sync from LevelContext (which loads from API)
   useEffect(() => { setApprovals(ctxApprovals); }, [ctxApprovals]);
   useEffect(() => { setGlobal(globalAccess); }, [globalAccess]);
 
-  // Fetch full student list with per-level progress
+  // Fetch full student list + level list from DB
   useEffect(() => {
     api.getStudents().then(setApiStudents).catch(() => {});
+    api.getLevelSettings()
+      .then(data => {
+        const sorted = Array.isArray(data)
+          ? [...data].sort((a, b) => (a.order || a.id) - (b.order || b.id))
+          : [];
+        setDbLevels(sorted);
+        // Default to second level (index 1) — first level needing approval
+        if (sorted.length > 1) setActiveTab(prev => prev ?? sorted[1].id);
+      })
+      .catch(() => {});
   }, []);
+
+  // Levels that can have approval (all except the first)
+  const approvableLevels = useMemo(() => dbLevels.slice(1), [dbLevels]);
 
   function showToast(msg, type = 'success') {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 2500);
   }
 
-  /* rebuild rows whenever tab, students or approvals change */
-  const allRows = useMemo(() => buildRows(activeTab, apiStudents, approvals), [activeTab, apiStudents, approvals]);
+  /* rebuild rows whenever tab, students or approvals change — guard against null activeTab */
+  const allRows = useMemo(() => activeTab ? buildRows(activeTab, apiStudents, approvals) : [], [activeTab, apiStudents, approvals]);
 
   const filtered = useMemo(() => {
     let rows = allRows;
@@ -186,9 +213,14 @@ export default function LevelPermissions() {
     return rows;
   }, [allRows, filter, search]);
 
-  /* Counts for tabs */
-  const level2Pending = useMemo(() => buildRows(2, apiStudents, approvals).filter(r => r.approval === 'pending').length, [apiStudents, approvals]);
-  const level3Pending = useMemo(() => buildRows(3, apiStudents, approvals).filter(r => r.approval === 'pending').length, [apiStudents, approvals]);
+  /* Pending counts for ALL approvable levels */
+  const pendingCounts = useMemo(() => {
+    const map = {};
+    approvableLevels.forEach(lvl => {
+      map[lvl.id] = buildRows(lvl.id, apiStudents, approvals).filter(r => r.approval === 'pending').length;
+    });
+    return map;
+  }, [approvableLevels, apiStudents, approvals]);
 
   /* Write approval change via API */
   function applyApproval(ids, status) {
@@ -237,7 +269,10 @@ export default function LevelPermissions() {
   const pendingSelected  = filtered.filter(r => selected.has(r.id) && r.approval === 'pending');
   const approvedSelected = filtered.filter(r => selected.has(r.id) && r.approval === 'approved');
 
-  const level = LEVELS.find(l => l.id === activeTab);
+  // Color for the active tab — dynamic from DB level index
+  const activeTabIdx   = dbLevels.findIndex(l => l.id === activeTab);
+  const activeColor    = levelColor(activeTabIdx >= 0 ? activeTabIdx : 0);
+  const activeTabTitle = dbLevels.find(l => l.id === activeTab)?.title || (activeTab ? `Level ${activeTab}` : '');
 
   return (
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-6">
@@ -262,7 +297,7 @@ export default function LevelPermissions() {
             Level Permission Management
           </h1>
           <p className="text-sm text-slate-400 mt-0.5">
-            Approve or reject student access to Level 2 and Level 3
+            Approve or reject student access to exam levels
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-500 bg-white border border-slate-200 rounded-xl px-4 py-2">
@@ -294,10 +329,25 @@ export default function LevelPermissions() {
       {/* Global toggle */}
       <GlobalToggle targetLevel={activeTab} global={global} onToggle={handleGlobalToggle} />
 
-      {/* Tab switcher */}
-      <div className="flex items-center gap-2">
-        <TabButton levelId={2} active={activeTab === 2} onClick={() => { setActiveTab(2); setSelected(new Set()); setFilter('all'); scrollToTop(); }} pendingCount={level2Pending} />
-        <TabButton levelId={3} active={activeTab === 3} onClick={() => { setActiveTab(3); setSelected(new Set()); setFilter('all'); scrollToTop(); }} pendingCount={level3Pending} />
+      {/* Tab switcher — one tab per approvable level (all except Level 1) */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {approvableLevels.map((lvl, idx) => {
+          const col = levelColor(dbLevels.indexOf(lvl));
+          return (
+            <TabButton
+              key={lvl.id}
+              levelId={lvl.id}
+              levelTitle={lvl.title}
+              color={col}
+              active={activeTab === lvl.id}
+              onClick={() => { setActiveTab(lvl.id); setSelected(new Set()); setFilter('all'); scrollToTop(); }}
+              pendingCount={pendingCounts[lvl.id] || 0}
+            />
+          );
+        })}
+        {approvableLevels.length === 0 && (
+          <p className="text-sm text-slate-400 italic">No approvable levels yet. Add levels 2+ in Exam Levels.</p>
+        )}
       </div>
 
       {/* Stats */}
@@ -370,7 +420,7 @@ export default function LevelPermissions() {
             <p className="font-semibold text-sm">No students found</p>
             <p className="text-xs mt-1">
               {allRows.length === 0
-                ? `No students have completed Level ${activeTab - 1} yet`
+                ? `No students have completed the previous level yet`
                 : 'Try adjusting your search or filter'}
             </p>
           </div>
@@ -387,9 +437,9 @@ export default function LevelPermissions() {
                   <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Student Name</th>
                   <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Class</th>
                   <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Student ID</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Level {activeTab - 1} Score</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Previous Level Score</th>
                   <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Completed On</th>
-                  <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Level {activeTab} Status</th>
+                  <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{activeTabTitle} Status</th>
                   <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Action</th>
                 </tr>
               </thead>
@@ -409,7 +459,7 @@ export default function LevelPermissions() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                          style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}>
+                          style={{ background: `linear-gradient(135deg, ${activeColor.from}, ${activeColor.to})` }}>
                           {row.name.charAt(0).toUpperCase()}
                         </div>
                         <div>
@@ -505,7 +555,7 @@ export default function LevelPermissions() {
         {filtered.length > 0 && (
           <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-xs text-slate-400">
             <span>Showing {filtered.length} of {allRows.length} students</span>
-            <span>Level {activeTab} Approval Queue</span>
+            <span>{activeTabTitle} Approval Queue</span>
           </div>
         )}
       </div>

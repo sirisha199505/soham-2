@@ -5,12 +5,13 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { ROLES, ROLE_LABELS } from '../../utils/constants';
 import { getSidebarItems } from '../../utils/rolePermissions';
-import { formatUniqueId } from '../../utils/uniqueId';
 import Avatar from '../ui/Avatar';
 
 const ROLE_BADGE_STYLE = {
   student:        { bg: '#3BC0EF15', color: '#1589b5', dot: '#3BC0EF' },
+  coach:          { bg: '#FAAB3418', color: '#b97308', dot: '#FAAB34' },
   teacher:        { bg: '#FAAB3418', color: '#b97308', dot: '#FAAB34' },
+  admin:          { bg: '#4F46E518', color: '#4338ca', dot: '#4F46E5' },
   school_admin:   { bg: '#1E3A8A18', color: '#1E3A8A', dot: '#1E3A8A' },
   district_admin: { bg: '#8B5CF618', color: '#7c3aed', dot: '#8B5CF6' },
   super_admin:    { bg: '#10B98118', color: '#059669', dot: '#10B981' },
@@ -146,40 +147,15 @@ export default function Navbar({ onMenuClick }) {
             className="flex items-center gap-2.5 pl-1.5 pr-3 py-1.5 rounded-xl hover:bg-white transition-all hover:shadow-sm"
           >
             <div className="relative">
-              {/* Students show ID-based avatar, others show name */}
-              {user?.role === ROLES.STUDENT
-                ? (
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white"
-                    style={{ background: `linear-gradient(135deg, ${roleBadge.dot}, ${roleBadge.dot}99)` }}
-                  >
-                    ID
-                  </div>
-                )
-                : <Avatar name={user?.name} size="sm" />
-              }
+              <Avatar name={user?.name} size="sm" />
               <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-white" />
             </div>
             <div className="hidden md:block text-left">
-              {user?.role === ROLES.STUDENT ? (
-                <>
-                  <p className="text-sm font-bold text-slate-800 leading-tight font-mono tracking-wider">
-                    #{formatUniqueId(user?.uniqueId)}
-                  </p>
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: roleBadge.dot }} />
-                    <p className="text-[11px] font-medium" style={{ color: roleBadge.color }}>Student</p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm font-bold text-slate-800 leading-tight">{user?.name?.split(' ')[0]}</p>
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: roleBadge.dot }} />
-                    <p className="text-[11px] font-medium" style={{ color: roleBadge.color }}>{ROLE_LABELS[user?.role]}</p>
-                  </div>
-                </>
-              )}
+              <p className="text-sm font-bold text-slate-800 leading-tight">{user?.name?.split(' ')[0] || 'User'}</p>
+              <div className="flex items-center gap-1 mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: roleBadge.dot }} />
+                <p className="text-[11px] font-medium" style={{ color: roleBadge.color }}>{ROLE_LABELS[user?.role]}</p>
+              </div>
             </div>
             <ChevronDown size={14} className="text-slate-400 hidden md:block" />
           </button>
@@ -190,30 +166,12 @@ export default function Navbar({ onMenuClick }) {
               <div className="px-4 py-4 border-b border-slate-50"
                 style={{ background: `linear-gradient(135deg, ${roleBadge.bg}, transparent)` }}>
                 <div className="flex items-center gap-3">
-                  {user?.role === ROLES.STUDENT ? (
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white shrink-0"
-                      style={{ background: `linear-gradient(135deg, ${roleBadge.dot}, ${roleBadge.dot}99)` }}
-                    >
-                      ID
-                    </div>
-                  ) : (
-                    <Avatar name={user?.name} size="md" />
-                  )}
+                  <Avatar name={user?.name} size="md" />
                   <div className="min-w-0">
-                    {user?.role === ROLES.STUDENT ? (
-                      <>
-                        <p className="font-bold text-slate-800 text-sm font-mono tracking-wider">
-                          #{formatUniqueId(user?.uniqueId)}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-0.5">Student Account</p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="font-bold text-slate-800 text-sm truncate">{user?.name}</p>
-                        <p className="text-xs text-slate-500 truncate">{user?.email}</p>
-                      </>
-                    )}
+                    <p className="font-bold text-slate-800 text-sm truncate">{user?.name || 'User'}</p>
+                    <p className="text-xs text-slate-500 truncate mt-0.5">
+                      {user?.email?.includes('@student.rq') ? (user?.phoneNumber || 'Student Account') : user?.email}
+                    </p>
                     <span
                       className="inline-flex items-center gap-1 mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
                       style={{ background: roleBadge.bg, color: roleBadge.color }}

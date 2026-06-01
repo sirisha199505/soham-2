@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:all": "concurrently \"cd backend && node server.js\" \"vite\" --names \"API,UI\" --prefix-colors \"cyan,magenta\"",
+    "dev:all": "concurrently --names \"API,UI\" --prefix-colors \"cyan,magenta\" \"bash -c 'cd \\\"../soham phase-2 api/soham phase-2 api\\\" && bundle exec puma -p 3001'\" \"vite\"",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"

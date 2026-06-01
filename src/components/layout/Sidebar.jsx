@@ -8,7 +8,6 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { ROLES, ROLE_LABELS } from '../../utils/constants';
-import { formatUniqueId } from '../../utils/uniqueId';
 import { getSidebarItems } from '../../utils/rolePermissions';
 import Avatar from '../ui/Avatar';
 
@@ -17,10 +16,12 @@ const ICON_MAP = {
   Database, PlusCircle, ClipboardList, BarChart2, Users,
   Building2, Globe, Settings, Activity,
   Layers, HelpCircle, FileText, Upload, Shield, BookMarked,
+  // HelpCircle is already imported above — no duplicate needed
 };
 
 const ROLE_COLORS = {
   student:        '#3BC0EF',
+  coach:          '#FAAB34',
   teacher:        '#FAAB34',
   admin:          '#4F46E5',
   school_admin:   '#1E3A8A',
@@ -112,42 +113,22 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
       {/* User footer */}
       <div style={{ borderTop: '1px solid #f1f5f9' }} className="p-3">
         {!collapsed ? (
-          <div className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-slate-50 group transition-colors">
+          <div className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-slate-50 transition-colors">
             <div className="relative shrink-0">
-              {user?.role === ROLES.STUDENT ? (
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold text-white"
-                  style={{ background: `linear-gradient(135deg, ${roleColor}, ${roleColor}99)` }}>
-                  ID
-                </div>
-              ) : (
-                <Avatar name={user?.name} size="sm" />
-              )}
+              <Avatar name={user?.name} size="sm" />
               <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-white" />
             </div>
             <div className="flex-1 min-w-0">
-              {user?.role === ROLES.STUDENT ? (
-                <p className="text-sm font-bold text-slate-800 font-mono tracking-wider truncate leading-tight">
-                  #{formatUniqueId(user?.uniqueId)}
-                </p>
-              ) : (
-                <>
-                  <p className="text-sm font-semibold text-slate-800 truncate leading-tight">{user?.name}</p>
-                  <p className="text-[11px] truncate mt-0.5" style={{ color: roleColor }}>{user?.email}</p>
-                </>
-              )}
+              <p className="text-sm font-semibold text-slate-800 truncate leading-tight">{user?.name || 'User'}</p>
+              <p className="text-[11px] truncate mt-0.5" style={{ color: roleColor }}>
+                {user?.email?.includes('@student.rq') ? ROLE_LABELS[user?.role] : user?.email}
+              </p>
             </div>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
             <div className="relative">
-              {user?.role === ROLES.STUDENT ? (
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold text-white"
-                  style={{ background: `linear-gradient(135deg, ${roleColor}, ${roleColor}99)` }}>
-                  ID
-                </div>
-              ) : (
-                <Avatar name={user?.name} size="sm" />
-              )}
+              <Avatar name={user?.name} size="sm" />
               <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-green-500 border-2 border-white" />
             </div>
           </div>

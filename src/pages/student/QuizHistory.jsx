@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
   Clock, CheckCircle, XCircle, Minus, Trophy, ChevronDown, ChevronUp,
-  Calendar, Target, BookOpen, ArrowRight, Filter, RefreshCw,
+  Calendar, Target, BookOpen, ArrowRight, Filter, RefreshCw, RotateCcw,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
 import { CATEGORY_META, CATEGORIES } from '../../utils/questionBank';
 import { formatDuration, getPerformanceLabel } from '../../utils/helpers';
@@ -138,11 +139,12 @@ function QuestionReview({ q, answer, index }) {
 const LEVEL_PALETTE = ['#3BC0EF', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#6366f1', '#14b8a6'];
 function lvlColor(id) { return LEVEL_PALETTE[(Number(id) - 1) % LEVEL_PALETTE.length] || '#4F46E5'; }
 
-function AttemptCard({ attempt }) {
+function AttemptCard({ attempt, attemptLimit, usedCount }) {
   const [open, setOpen] = useState(false);
-  const col    = lvlColor(attempt.levelId);
-  const passed = (attempt.score?.pct ?? 0) >= 50;
-  const date   = attempt.date ? new Date(attempt.date) : null;
+  const col       = lvlColor(attempt.levelId);
+  const passed    = (attempt.score?.pct ?? 0) >= 50;
+  const date      = attempt.date ? new Date(attempt.date) : null;
+  const remaining = Math.max(0, (attemptLimit ?? 3) - (usedCount ?? 0));
 
   const catBreakdown = useMemo(() => {
     const qs  = attempt.questions || [];
@@ -178,6 +180,15 @@ function AttemptCard({ attempt }) {
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                 {passed ? '✓ Passed' : '✗ Failed'}
               </span>
+              {remaining > 0 ? (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 flex items-center gap-1">
+                  <RotateCcw size={9}/> {remaining} left
+                </span>
+              ) : (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-400">
+                  No retakes
+                </span>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
               {date && (
@@ -258,16 +269,17 @@ function AttemptCard({ attempt }) {
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function QuizHistory() {
   const { user }                   = useAuth();
+  const { levelSettings }          = useLevel();
   const [attempts,  setAttempts]   = useState([]);
   const [loading,   setLoading]    = useState(true);
   const [error,     setError]      = useState(null);
   const [lvlFilter, setLvlFilter]  = useState('all');
 
   const load = () => {
-    if (!user?.uniqueId) return;
+    if (!user?.id) return;
     setLoading(true);
     setError(null);
-    api.getAttempts(user.uniqueId)
+    api.getAttempts(user.id)
       .then(data => {
         setAttempts(Array.isArray(data) ? data : []);
         setLoading(false);
@@ -278,7 +290,17 @@ export default function QuizHistory() {
       });
   };
 
-  useEffect(load, [user?.uniqueId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(load, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Total attempts used per level (for computing remaining)
+  const attemptsCountByLevel = useMemo(() => {
+    const map = {};
+    attempts.forEach(a => {
+      const k = String(a.levelId);
+      map[k] = (map[k] || 0) + 1;
+    });
+    return map;
+  }, [attempts]);
 
   // Assign sequential attempt number per level (chronological order)
   const attemptsWithNumbers = useMemo(() => {
@@ -470,7 +492,14 @@ export default function QuizHistory() {
             <p className="text-slate-400 text-sm">No attempts for this level yet.</p>
           </div>
         ) : (
-          filtered.map(attempt => <AttemptCard key={attempt.id ?? attempt.date} attempt={attempt}/>)
+          filtered.map(attempt => (
+            <AttemptCard
+              key={attempt.id ?? attempt.date}
+              attempt={attempt}
+              attemptLimit={levelSettings[attempt.levelId]?.attemptLimit ?? 3}
+              usedCount={attemptsCountByLevel[String(attempt.levelId)] ?? 0}
+            />
+          ))
         )}
       </div>
     </div>

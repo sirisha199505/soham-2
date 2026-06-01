@@ -21,6 +21,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 import Login          from './pages/auth/Login';
 import Register       from './pages/auth/Register';
 import ForgotPassword from './pages/auth/ForgotPassword';
+import VerifyEmail    from './pages/auth/VerifyEmail';
 import Dashboard      from './pages/dashboard/Dashboard';
 import QuizList       from './pages/quiz/QuizList';
 import QuizAttempt    from './pages/quiz/QuizAttempt';
@@ -40,6 +41,7 @@ import LiveMonitoring    from './pages/admin/LiveMonitoring';
 import AdminReports      from './pages/admin/AdminReports';
 import ImportExport      from './pages/admin/ImportExport';
 import SystemSettings    from './pages/admin/SystemSettings';
+import AdminHelpSupport  from './pages/admin/AdminHelpSupport';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 1000 * 60 * 5 } },
@@ -69,7 +71,11 @@ export default function App() {
                 <Route path="/login"           element={<Login />} />
                 <Route path="/register"        element={<Register />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password"  element={<ForgotPassword />} />
               </Route>
+
+              {/* Email verification (full page, no auth layout) */}
+              <Route path="/verify-email" element={<VerifyEmail />} />
 
               {/* Quiz attempt (full screen, no sidebar) */}
               <Route path="/quiz/:id/attempt" element={
@@ -114,10 +120,11 @@ export default function App() {
                 <Route path="/admin/reports"       element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><AdminReports /></ProtectedRoute>} />
                 <Route path="/admin/import-export" element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><ImportExport /></ProtectedRoute>} />
                 <Route path="/admin/settings"      element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><SystemSettings /></ProtectedRoute>} />
+                <Route path="/admin/help"          element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><AdminHelpSupport /></ProtectedRoute>} />
 
-                {/* Legacy aliases */}
-                <Route path="/reports"    element={<AdminReports />} />
-                <Route path="/monitoring" element={<LiveMonitoring />} />
+                {/* Legacy aliases — admin only */}
+                <Route path="/reports"    element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><AdminReports /></ProtectedRoute>} />
+                <Route path="/monitoring" element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><LiveMonitoring /></ProtectedRoute>} />
               </Route>
 
               <Route path="*" element={<NotFound />} />

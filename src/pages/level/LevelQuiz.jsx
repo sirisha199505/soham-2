@@ -61,7 +61,7 @@ function ResultQuestionCard({ q, answer, index, levelColor }) {
 
       {/* Options / pairs */}
       <div className="px-4 py-3 space-y-2">
-        {(q.type === 'mcq' || q.type === 'image' || q.type === 'tf') && Array.isArray(q.options) && (
+        {(q.type === 'mcq' || q.type === 'image' || q.type === 'label' || q.type === 'tf') && Array.isArray(q.options) && (
           <div className="grid gap-1.5">
             {q.options.map((opt, i) => {
               const text = typeof opt === 'string' ? opt : (opt?.text || '');
@@ -127,73 +127,295 @@ function ResultQuestionCard({ q, answer, index, levelColor }) {
 function getOptText(opt)  { return typeof opt === 'string' ? opt : (opt?.text || ''); }
 function getOptImage(opt) { return typeof opt === 'string' ? '' : (opt?.imageUrl || ''); }
 
-// ─── Match Question Renderer ──────────────────────────────────────────────
-function MatchQuestion({ q, answer, onChange, levelColor }) {
-  const cur = answer || {};
+// ─── Drag-and-Drop Match Question ────────────────────────────────────────
+function DragMatchQuestion({ q, answer, onChange, levelColor }) {
+  const placed = answer || {};
   const [shuffledRight] = useState(() => {
-    const indices = q.pairs.map((_, i) => i);
-    for (let i = indices.length - 1; i > 0; i--) {
+    const arr = q.pairs.map((_, i) => i);
+    for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [indices[i], indices[j]] = [indices[j], indices[i]];
+      [arr[i], arr[j]] = [arr[j], arr[i]];
     }
-    return indices;
+    return arr;
   });
+  const [selected,     setSelected]     = useState(null); // { rightIdx, from:'bank'|'slot', leftIdx }
+  const [dragOverSlot, setDragOverSlot] = useState(null); // leftIdx | 'bank' | null
+  const dragRef = useRef(null);
 
-  const handleSelect = (leftIdx, rightShuffledIdx) => {
-    const newAns = { ...cur };
-    Object.keys(newAns).forEach(k => {
-      if (newAns[k] === rightShuffledIdx) delete newAns[k];
-    });
-    newAns[leftIdx] = rightShuffledIdx;
-    onChange(newAns);
+  const placedSet = new Set(Object.values(placed).map(Number));
+  const unplaced  = shuffledRight.filter(ri => !placedSet.has(ri));
+  const allPlaced = unplaced.length === 0;
+
+  const placeCard = (rightIdx, fromSlotIdx, targetLeftIdx) => {
+    const n = { ...placed };
+    if (fromSlotIdx !== undefined) {
+      const existingInTarget = n[targetLeftIdx];
+      delete n[fromSlotIdx];
+      if (existingInTarget !== undefined) n[fromSlotIdx] = existingInTarget;
+    }
+    n[targetLeftIdx] = rightIdx;
+    onChange(n);
+  };
+
+  const removeFromSlot = (leftIdx) => {
+    const n = { ...placed };
+    delete n[leftIdx];
+    onChange(n);
+  };
+
+  // ── Click interactions ────────────────────────────────────────────────
+  const handleBankCardClick = (rightIdx) => {
+    setSelected(s => (s?.rightIdx === rightIdx && s?.from === 'bank') ? null : { rightIdx, from: 'bank' });
+  };
+  const handleSlotClick = (leftIdx) => {
+    const inSlot = placed[leftIdx];
+    if (selected) {
+      placeCard(selected.rightIdx, selected.from === 'slot' ? selected.leftIdx : undefined, leftIdx);
+      setSelected(null);
+    } else if (inSlot !== undefined) {
+      setSelected({ rightIdx: Number(inSlot), from: 'slot', leftIdx });
+    }
+  };
+  const handleBankAreaClick = () => {
+    if (selected?.from === 'slot') removeFromSlot(selected.leftIdx);
+    setSelected(null);
+  };
+
+  // ── HTML5 drag ────────────────────────────────────────────────────────
+  const startDrag = (e, rightIdx, from, leftIdx) => {
+    dragRef.current = { rightIdx, from, leftIdx };
+    e.dataTransfer.effectAllowed = 'move';
+    setSelected(null);
+  };
+  const endDrag = () => { dragRef.current = null; setDragOverSlot(null); };
+
+  const dropOnSlot = (e, leftIdx) => {
+    e.preventDefault();
+    setDragOverSlot(null);
+    const src = dragRef.current;
+    if (!src) return;
+    placeCard(src.rightIdx, src.from === 'slot' ? src.leftIdx : undefined, leftIdx);
+    dragRef.current = null;
+  };
+  const dropOnBank = (e) => {
+    e.preventDefault();
+    setDragOverSlot(null);
+    const src = dragRef.current;
+    if (src?.from === 'slot') removeFromSlot(src.leftIdx);
+    dragRef.current = null;
   };
 
   return (
     <div className="space-y-4">
-      {q.pairs.map((pair, leftIdx) => (
-        <div key={leftIdx} className="flex items-start gap-3">
-          {/* Left */}
-          <div className="flex-1 text-sm font-semibold text-slate-700 bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 min-w-0">
-            {pair.leftImage && (
-              <img src={pair.leftImage} alt="" className="w-full h-20 object-cover rounded-lg mb-2 border border-slate-200"/>
-            )}
-            {pair.left && <span>{pair.left}</span>}
+      <p className="text-[11px] text-slate-400 text-center font-medium">
+        Drag cards to matching slots · or tap a card then tap a slot
+      </p>
+
+      {/* Answer Bank */}
+      <div
+        onDragOver={e => { e.preventDefault(); setDragOverSlot('bank'); }}
+        onDragLeave={() => setDragOverSlot(null)}
+        onDrop={dropOnBank}
+        onClick={handleBankAreaClick}
+        className={`rounded-2xl border-2 p-3 min-h-[64px] transition-all duration-200 ${
+          dragOverSlot === 'bank'
+            ? 'border-indigo-400 bg-indigo-50'
+            : 'border-dashed border-slate-200 bg-slate-50/60'
+        }`}>
+        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2">Answer Bank</p>
+        {allPlaced ? (
+          <div className="flex items-center justify-center gap-1.5 py-1 text-green-600 text-sm font-semibold">
+            <CheckCircle size={14}/> All items matched!
           </div>
-          <span className="text-slate-400 text-lg shrink-0 mt-3">→</span>
-          {/* Right options */}
-          <div className="flex-1 flex flex-col gap-1.5 min-w-0">
-            {shuffledRight.map((rightOrigIdx) => {
-              const rp = q.pairs[rightOrigIdx];
-              const selected = cur[leftIdx] === rightOrigIdx;
-              const usedByOther = Object.entries(cur).some(
-                ([k, v]) => Number(k) !== leftIdx && v === rightOrigIdx
-              );
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {unplaced.map(rightIdx => {
+              const rp    = q.pairs[rightIdx];
+              const isSel = selected?.rightIdx === rightIdx && selected?.from === 'bank';
               return (
-                <button
-                  key={rightOrigIdx}
-                  onClick={() => handleSelect(leftIdx, rightOrigIdx)}
-                  disabled={usedByOther}
-                  className={`text-left text-xs font-medium px-3 py-2 rounded-lg border-2 transition-all ${
-                    selected
-                      ? 'text-white border-transparent'
-                      : usedByOther
-                        ? 'opacity-30 cursor-not-allowed border-slate-200 bg-slate-50 text-slate-500'
-                        : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
-                  }`}
-                  style={selected ? {
-                    background: `linear-gradient(135deg, ${levelColor.from}, ${levelColor.to})`,
-                  } : {}}
-                >
-                  {rp.rightImage && (
-                    <img src={rp.rightImage} alt="" className="w-full h-16 object-cover rounded-lg mb-1.5"/>
-                  )}
+                <div key={rightIdx} draggable
+                  onDragStart={e => startDrag(e, rightIdx, 'bank', undefined)}
+                  onDragEnd={endDrag}
+                  onClick={e => { e.stopPropagation(); handleBankCardClick(rightIdx); }}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 text-sm font-semibold
+                    cursor-grab active:cursor-grabbing select-none transition-all duration-150
+                    ${isSel
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700 scale-105 shadow-md ring-2 ring-indigo-200'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200 hover:bg-indigo-50/30 hover:scale-[1.02]'
+                    }`}>
+                  {rp.rightImage && <img src={rp.rightImage} alt="" className="w-8 h-8 object-cover rounded-lg border border-slate-100"/>}
                   {rp.right}
-                </button>
+                </div>
               );
             })}
           </div>
+        )}
+      </div>
+
+      {/* Match slots */}
+      <div className="space-y-2.5">
+        {q.pairs.map((pair, leftIdx) => {
+          const placedRightIdx = placed[leftIdx] !== undefined ? Number(placed[leftIdx]) : undefined;
+          const rp             = placedRightIdx !== undefined ? q.pairs[placedRightIdx] : null;
+          const isOver         = dragOverSlot === leftIdx;
+          const isSlotSel      = selected?.from === 'slot' && selected?.leftIdx === leftIdx;
+          const canDrop        = !!selected && !rp;
+
+          return (
+            <div key={leftIdx} className="flex items-stretch gap-2.5">
+              {/* Left side */}
+              <div className="flex-1 bg-white rounded-xl px-3 py-3 border border-slate-200 flex items-center gap-2 min-w-0 shadow-sm">
+                {pair.leftImage && <img src={pair.leftImage} alt="" className="w-10 h-10 object-cover rounded-lg border border-slate-100 shrink-0"/>}
+                <span className="text-sm font-semibold text-slate-700 leading-snug">{pair.left}</span>
+              </div>
+
+              <span className="text-slate-300 text-base self-center shrink-0">→</span>
+
+              {/* Drop zone */}
+              <div
+                draggable={!!rp}
+                onDragStart={rp ? e => startDrag(e, placedRightIdx, 'slot', leftIdx) : undefined}
+                onDragEnd={endDrag}
+                onDragOver={e => { e.preventDefault(); setDragOverSlot(leftIdx); }}
+                onDragLeave={() => setDragOverSlot(null)}
+                onDrop={e => dropOnSlot(e, leftIdx)}
+                onClick={() => handleSlotClick(leftIdx)}
+                className={`flex-1 rounded-xl border-2 px-3 py-3 min-h-[52px] flex items-center
+                  transition-all duration-150 select-none
+                  ${rp
+                    ? `${isSlotSel ? 'border-indigo-400 bg-indigo-50 cursor-grab' : 'border-green-300 bg-green-50 cursor-grab'} active:cursor-grabbing`
+                    : `border-dashed cursor-pointer ${
+                        isOver || canDrop
+                          ? 'border-indigo-400 bg-indigo-50'
+                          : 'border-slate-200 bg-slate-50/50 hover:border-indigo-200 hover:bg-slate-50'
+                      }`
+                  }`}>
+                {rp ? (
+                  <div className="flex items-center gap-2 w-full">
+                    {rp.rightImage && <img src={rp.rightImage} alt="" className="w-8 h-8 object-cover rounded-lg shrink-0"/>}
+                    <span className={`text-sm font-semibold flex-1 ${isSlotSel ? 'text-indigo-700' : 'text-green-700'}`}>{rp.right}</span>
+                    <button
+                      onMouseDown={e => e.stopPropagation()}
+                      onClick={e => { e.stopPropagation(); removeFromSlot(leftIdx); setSelected(null); }}
+                      className="w-5 h-5 rounded-full bg-white border border-slate-200 flex items-center justify-center
+                        text-slate-400 hover:bg-red-50 hover:border-red-200 hover:text-red-500 transition-colors shrink-0">
+                      <X size={9}/>
+                    </button>
+                  </div>
+                ) : (
+                  <span className={`text-xs mx-auto font-medium transition-colors ${
+                    isOver || canDrop ? 'text-indigo-400' : 'text-slate-300'
+                  }`}>
+                    {canDrop ? 'Tap to place' : 'Drop here'}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Drag-and-Drop Label Question ─────────────────────────────────────────
+function DragLabelQuestion({ q, answer, onChange, levelColor }) {
+  const opts = q.options || [];
+  const [shuffledOpts] = useState(() => {
+    const arr = opts.map((_, i) => i);
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  });
+  const [dragOver, setDragOver] = useState(false);
+  const dragRef = useRef(null);
+
+  const placed = answer; // number | null | undefined
+  const getText = (opt) => (typeof opt === 'string' ? opt : opt?.text || '');
+
+  const handleOptClick = (optIdx) => {
+    onChange(placed === optIdx ? null : optIdx);
+  };
+
+  const handleDragStart = (e, optIdx) => {
+    dragRef.current = optIdx;
+    e.dataTransfer.effectAllowed = 'move';
+  };
+  const handleDropToZone = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (dragRef.current !== null && dragRef.current !== undefined) onChange(dragRef.current);
+    dragRef.current = null;
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[11px] text-slate-400 text-center font-medium">
+        Drag a label to the answer zone · or tap to select
+      </p>
+
+      {/* Answer drop zone */}
+      <div>
+        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Your Answer</p>
+        <div
+          onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDropToZone}
+          onClick={(placed !== null && placed !== undefined) ? () => onChange(null) : undefined}
+          className={`min-h-[60px] rounded-xl border-2 flex items-center px-4 py-3 transition-all duration-200 ${
+            placed !== null && placed !== undefined
+              ? 'border-green-300 bg-green-50 cursor-pointer'
+              : dragOver
+                ? 'border-indigo-400 bg-indigo-50'
+                : 'border-dashed border-slate-200 bg-slate-50'
+          }`}>
+          {(placed !== null && placed !== undefined) ? (
+            <div className="flex items-center gap-3 w-full">
+              <span className="w-7 h-7 rounded-full bg-green-500 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                {String.fromCharCode(65 + placed)}
+              </span>
+              <span className="text-sm font-semibold text-green-800 flex-1">{getText(opts[placed])}</span>
+              <span className="text-[10px] text-green-500 font-medium">Tap to remove</span>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400 text-center w-full font-medium">
+              {dragOver ? '↓ Release to place' : 'Drag or tap a label below'}
+            </p>
+          )}
         </div>
-      ))}
+      </div>
+
+      {/* Labels bank */}
+      <div>
+        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Labels</p>
+        <div className="grid grid-cols-2 gap-2">
+          {shuffledOpts.map(optIdx => {
+            const text     = getText(opts[optIdx]);
+            const isPlaced = placed === optIdx;
+            return (
+              <div key={optIdx}
+                draggable={!isPlaced}
+                onDragStart={!isPlaced ? e => handleDragStart(e, optIdx) : undefined}
+                onDragEnd={() => { dragRef.current = null; }}
+                onClick={() => handleOptClick(optIdx)}
+                className={`flex items-center gap-2.5 px-3 py-3 rounded-xl border-2 transition-all duration-150 select-none
+                  ${isPlaced
+                    ? 'border-green-200 bg-green-50/60 opacity-60 cursor-default'
+                    : 'border-slate-200 bg-white text-slate-700 cursor-grab active:cursor-grabbing hover:border-indigo-200 hover:bg-indigo-50/30 hover:scale-[1.01]'
+                  }`}>
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0
+                  ${isPlaced ? 'bg-green-200 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
+                  {String.fromCharCode(65 + optIdx)}
+                </span>
+                <span className={`text-sm font-semibold flex-1 ${isPlaced ? 'text-green-500' : ''}`}>{text}</span>
+                {isPlaced && <CheckCircle size={12} className="text-green-500 shrink-0"/>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -241,16 +463,16 @@ export default function LevelQuiz() {
     color:    QUIZ_FALLBACK_COLORS[(id - 1) % QUIZ_FALLBACK_COLORS.length],
   } : null);
 
-  const status = getLevelStatus(user?.uniqueId, id);
+  const status = getLevelStatus(user?.id, id);
 
   // ── All state declarations must come before any useEffect ───────────────────
   const [questions,       setQuestions]       = useState([]);
   const [loading,         setLoading]         = useState(true);
   // Initialize quizStarted=true immediately if a valid session exists (prevents redirect on refresh)
   const [quizStarted,     setQuizStarted]     = useState(() => {
-    if (!user?.uniqueId) return false;
+    if (!user?.id) return false;
     try {
-      const key   = `rqa_quiz_${id}_${user.uniqueId}`;
+      const key   = `rqa_quiz_${id}_${user.id}`;
       const saved = sessionStorage.getItem(key);
       if (saved) {
         const { expiresAt } = JSON.parse(saved);
@@ -273,13 +495,14 @@ export default function LevelQuiz() {
   const [showReview,           setShowReview]           = useState(false);
   const [insufficientWarning,  setInsufficientWarning]  = useState('');
   const [showBackWarning,      setShowBackWarning]      = useState(false);
+  const [noAttemptsError,      setNoAttemptsError]      = useState(null);
 
   const quizDuration  = useRef(600);
   const startRef      = useRef(new Date());
   const submittingRef = useRef(false);
 
   // Session key for timer/answer persistence across refresh and back navigation
-  const sessionKey = user?.uniqueId ? `rqa_quiz_${id}_${user.uniqueId}` : null;
+  const sessionKey = user?.id ? `rqa_quiz_${id}_${user.id}` : null;
 
   // ── Navigation guard ────────────────────────────────────────────────────────
   const quizInProgress = quizStarted && !result && !isSubmitting;
@@ -298,7 +521,6 @@ export default function LevelQuiz() {
       } catch { /* ignore */ }
     }
     if (status === 'locked') navigate('/dashboard', { replace: true });
-    if (status === 'completed' && !quizStarted && !result) navigate('/dashboard', { replace: true });
   }, [status, navigate, quizStarted, result, sessionKey]);
 
   // Refresh level settings on mount so recently-deleted levels redirect immediately
@@ -307,7 +529,7 @@ export default function LevelQuiz() {
   // Generate questions on mount — enforce admin-configured question count
   useEffect(() => {
     Promise.all([
-      generateLevelQuiz(user?.uniqueId, id),
+      generateLevelQuiz(user?.id, id),
       api.getLevelSettings().catch(() => []),
     ]).then(([qs, lvls]) => {
       const lvlData = Array.isArray(lvls) ? lvls.find(l => l.id === id) : null;
@@ -318,7 +540,11 @@ export default function LevelQuiz() {
           `Only ${qs.length} of ${maxQ} configured questions are available in the Question Bank for this level.`
         );
       }
-      setQuestions(limited.map(q => q.type === 'truefalse' ? { ...q, type: 'tf' } : q));
+      setQuestions(limited.map(q => {
+        if (q.type === 'truefalse') return { ...q, type: 'tf' };
+        if (q.type === 'image')     return { ...q, type: 'label' };
+        return q;
+      }));
 
       // Restore in-progress session (survives refresh and back navigation)
       if (sessionKey) {
@@ -341,7 +567,12 @@ export default function LevelQuiz() {
       }
 
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch(err => {
+      if (err?.status === 403) {
+        setNoAttemptsError(err.message || 'You have used all attempts for this level.');
+      }
+      setLoading(false);
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -484,9 +715,9 @@ export default function LevelQuiz() {
     // on one call does not block or contaminate the other.
     // recordUsedQuestions is best-effort and never blocks the result screen.
     const [attemptSaved, progressSaved] = await Promise.allSettled([
-      withRetry(() => saveQuizAttempt(user.uniqueId, attemptData)),
-      withRetry(() => markLevelComplete(user.uniqueId, id, score)),
-      recordUsedQuestions(user.uniqueId, questions.map(q => q.id)),
+      withRetry(() => saveQuizAttempt(user.id, attemptData)),
+      withRetry(() => markLevelComplete(user.id, id, score)),
+      recordUsedQuestions(user.id, questions.map(q => q.id)),
     ]);
 
     if (attemptSaved.status === 'rejected' || progressSaved.status === 'rejected') {
@@ -532,12 +763,37 @@ export default function LevelQuiz() {
   }[tState];
 
   // Loading guard — wait for both questions and timer to initialize
-  if (loading || timeLeft === null) {
+  if (loading || (timeLeft === null && !noAttemptsError)) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-10 text-center">
           <div className="w-10 h-10 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin mx-auto mb-4" />
           <p className="text-slate-500 text-sm">Loading quiz…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // No attempts remaining guard (403 from quiz generation)
+  if (noAttemptsError) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-10 text-center">
+          <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+            <Trophy size={32} className="text-red-400" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-700 mb-2">No Attempts Remaining</h2>
+          <p className="text-slate-500 text-sm mb-6">{noAttemptsError}</p>
+          <div className="flex gap-3 justify-center">
+            <button onClick={() => navigate('/dashboard')}
+              className="px-6 py-3 rounded-xl bg-slate-800 text-white font-semibold text-sm">
+              Back to Dashboard
+            </button>
+            <button onClick={() => navigate('/quiz-history')}
+              className="px-6 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50">
+              Quiz History
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -585,7 +841,7 @@ export default function LevelQuiz() {
       'You can review and change answers before final submission.',
       'Once submitted, answers cannot be changed.',
       'Do not refresh or close the browser tab during the exam.',
-      'Each level can only be attempted once — your score is final.',
+      'Attempts per level are limited — check your dashboard for remaining attempts.',
     ];
     const timeLimit = Number(levelSettings[id]?.timeLimit) || 10;
 
@@ -808,7 +1064,9 @@ export default function LevelQuiz() {
 
   /* ── Quiz screen ───────────────────────────────────────────────── */
   const catMeta = CATEGORY_META[q.category] || { label: q.category, color: colors.primary };
-  const typeLabel = q.type === 'match' ? 'Match the Following' : q.type === 'image' ? 'Image Based' : 'Multiple Choice';
+  const typeLabel = q.type === 'match' ? 'Match the Following'
+    : q.type === 'label' ? 'Label Question'
+    : 'Multiple Choice';
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -925,9 +1183,9 @@ export default function LevelQuiz() {
                 {q.text && <p className="text-slate-800 font-semibold leading-relaxed text-base">{q.text}</p>}
               </div>
 
-              {/* Match type */}
+              {/* Match type — drag-and-drop */}
               {q.type === 'match' && (
-                <MatchQuestion
+                <DragMatchQuestion
                   q={q}
                   answer={answers[q.id]}
                   onChange={val => handleAnswer(q.id, val)}
@@ -935,8 +1193,18 @@ export default function LevelQuiz() {
                 />
               )}
 
-              {/* MCQ / Image type */}
-              {(q.type === 'mcq' || q.type === 'image' || q.type === 'tf') && Array.isArray(q.options) && (
+              {/* Label type — drag-and-drop */}
+              {q.type === 'label' && (
+                <DragLabelQuestion
+                  q={q}
+                  answer={answers[q.id]}
+                  onChange={val => handleAnswer(q.id, val)}
+                  levelColor={level.color}
+                />
+              )}
+
+              {/* MCQ / True-False */}
+              {(q.type === 'mcq' || q.type === 'tf') && Array.isArray(q.options) && (
                 <div className={`grid gap-3 ${q.type === 'tf' ? 'grid-cols-2' : 'grid-cols-1'}`}>
                   {q.options.map((opt, i) => {
                     const selected   = answers[q.id] === i;
