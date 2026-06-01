@@ -31,57 +31,15 @@ function shuffleOptions(q) {
   };
 }
 
-// ── Type-balanced quiz builder ────────────────────────────────────────────────
-// Guarantees: 4 MCQ + 4 True/False + 4 Label + 4 Match + 4 random = 20.
-// Runs client-side as a safety net — the backend already applies the same
-// logic, but this ensures correctness even if the DB has uneven type counts.
-//
-// normaliseType maps legacy / alternate spellings to canonical keys.
-const CANONICAL = { image: 'label', tf: 'truefalse' };
-function normaliseType(t) { return CANONICAL[t] || t || 'mcq'; }
-
-const TYPE_QUOTAS = { mcq: 4, truefalse: 4, label: 4, match: 4 };
-const RANDOM_QUOTA = 4;
-const TOTAL_TARGET = Object.values(TYPE_QUOTAS).reduce((s, v) => s + v, 0) + RANDOM_QUOTA; // 20
-
-function balanceByType(questions, total = TOTAL_TARGET) {
-  if (!questions.length) return [];
-
-  // Group into type buckets
-  const byType = {};
-  questions.forEach(q => {
-    const t = normaliseType(q.type);
-    if (!byType[t]) byType[t] = [];
-    byType[t].push(q);
-  });
-  Object.values(byType).forEach(arr => fisherYates(arr));
-
-  const selected   = [];
-  const usedIds    = new Set();
-
-  // Pick from each required type bucket (up to quota)
-  for (const [type, quota] of Object.entries(TYPE_QUOTAS)) {
-    const candidates = (byType[type] || []).filter(q => !usedIds.has(q.id));
-    candidates.slice(0, quota).forEach(q => { selected.push(q); usedIds.add(q.id); });
-  }
-
-  // Fill remaining slots from whatever types are left
-  const randomNeeded = Math.max(0, total - selected.length);
-  if (randomNeeded > 0) {
-    const remaining = fisherYates(questions.filter(q => !usedIds.has(q.id)));
-    remaining.slice(0, randomNeeded).forEach(q => { selected.push(q); usedIds.add(q.id); });
-  }
-
-  return fisherYates(selected).slice(0, total);
-}
-
 // ── Public API ───────────────────────────────────────────────────────────────
 
 export async function generateLevelQuiz(studentId, levelId) {
   try {
-    const raw       = await api.generateQuiz(studentId, levelId);
-    const balanced  = balanceByType(raw, TOTAL_TARGET);
-    return balanced.map(shuffleOptions);
+    const raw = await api.generateQuiz(studentId, levelId);
+    // Backend already selects random questions in a shuffled order.
+    // Re-shuffle here so every page-load presents a different question order,
+    // then shuffle the answer options of each individual question.
+    return fisherYates(raw).map(shuffleOptions);
   } catch (err) {
     if (err?.status === 403) throw err;
     console.error('generateLevelQuiz failed:', err.message);
