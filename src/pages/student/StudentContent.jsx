@@ -148,11 +148,10 @@ function PDFCanvasReader({ pdfData, filename, level, onClose }) {
         const page         = await pdfDoc.getPage(pageNum);
         if (cancelled) return;
 
-        // Compute scale: fit to container width, then apply zoom multiplier
+        // Fill the full container width, then apply zoom multiplier
         const containerW   = containerRef.current?.clientWidth ?? 800;
-        const padding      = 64; // 32px each side
         const baseViewport = page.getViewport({ scale: 1 });
-        const fitScale     = (containerW - padding) / baseViewport.width;
+        const fitScale     = containerW / baseViewport.width;
         const finalScale   = fitScale * zoom;
 
         const viewport = page.getViewport({ scale: finalScale });
@@ -219,7 +218,7 @@ function PDFCanvasReader({ pdfData, filename, level, onClose }) {
           <p className="text-[10px] text-slate-400 font-medium">
             {status === 'loading' ? 'Loading document…'
               : status === 'error' ? 'Could not load'
-              : `Page ${pageNum} of ${numPages} · PDF`}
+              : `Page ${pageNum} of ${numPages}`}
           </p>
         </div>
 
@@ -285,8 +284,7 @@ function PDFCanvasReader({ pdfData, filename, level, onClose }) {
       {/* ── Canvas viewport ── */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto"
-        style={{ background: '#f0f2f5' }}
+        className="flex-1 overflow-auto bg-white"
       >
         {status === 'loading' && (
           <div className="flex flex-col items-center justify-center h-full gap-4 min-h-64">
@@ -318,15 +316,11 @@ function PDFCanvasReader({ pdfData, filename, level, onClose }) {
         )}
 
         {status === 'ready' && (
-          <div className="flex justify-center px-8 py-8">
-            {/* Page shadow card */}
-            <div className="rounded-xl overflow-hidden shadow-2xl"
-              style={{ background: '#fff', maxWidth: '100%' }}>
-              <canvas
-                ref={canvasRef}
-                style={{ display: 'block', maxWidth: '100%' }}
-              />
-            </div>
+          <div className="w-full bg-white">
+            <canvas
+              ref={canvasRef}
+              style={{ display: 'block', width: '100%' }}
+            />
           </div>
         )}
       </div>
@@ -502,7 +496,7 @@ function ReaderModal({ page, level, onClose }) {
         {page.type === 'pdf' ? (
           <PDFCanvasReader
             pdfData={page.pdfData}
-            filename={page.pdfName || page.title || 'Document'}
+            filename={page.title || 'Study Material'}
             level={level}
             onClose={onClose}
           />
@@ -559,15 +553,11 @@ function MaterialCard({ page, index, levelId, level, onRead }) {
         {/* Title */}
         <h3 className="font-bold text-slate-800 text-sm leading-snug mb-2 line-clamp-2"
           style={{ fontFamily: 'Space Grotesk' }}>
-          {page.title || page.pdfName || `Material ${index + 1}`}
+          {page.title || `Study Material ${index + 1}`}
         </h3>
 
         {/* Meta */}
         <div className="flex items-center gap-2 flex-wrap mb-4">
-          <span className="flex items-center gap-1 text-[10px] text-slate-400">
-            <Layers size={9} /> {getSectionCount(page)}
-          </span>
-          <span className="text-slate-200 text-[10px]">·</span>
           <span className="flex items-center gap-1 text-[10px] text-slate-400">
             <Clock size={9} /> {estimateReadTime(page)} read
           </span>
@@ -588,13 +578,13 @@ function MaterialCard({ page, index, levelId, level, onRead }) {
         </div>
 
         {/* CTA */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
           <span className="flex items-center gap-1.5 text-xs font-semibold text-white px-3.5 py-2 rounded-xl transition-all"
             style={gradStyle}>
-            <Play size={11} /> {isRead ? 'Read Again' : 'Read Now'}
+            <Play size={11} /> Open
           </span>
           <span className="text-[10px] text-slate-400 font-medium group-hover:text-slate-600 transition-colors">
-            Click to open →
+            Click to read →
           </span>
         </div>
       </div>
