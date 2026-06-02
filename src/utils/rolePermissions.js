@@ -32,7 +32,7 @@ export const getSidebarItems = (role) => {
     return [
       { label: 'Dashboard',     path: '/dashboard',           icon: 'LayoutDashboard' },
       { label: 'Question Bank', path: '/admin/question-bank', icon: 'BookMarked' },
-      { label: 'Students',      path: '/admin/students',      icon: 'Users' },
+      { label: 'Students / Trainers', path: '/admin/students', icon: 'Users' },
       { label: 'Exam Levels',   path: '/admin/levels',        icon: 'Layers' },
       { label: 'Content',       path: '/admin/content',       icon: 'FileText' },
       { label: 'Settings',      path: '/admin/settings',      icon: 'Settings'    },
