@@ -69,6 +69,7 @@ function StudentModal({ student, levelList, onClose }) {
             {[
               { label: 'School',  value: student.schoolName },
               { label: 'Class',   value: student.className },
+              { label: 'Mobile',  value: student.phoneNumber || '—' },
               { label: 'Status',  value: student.disabled ? 'Disabled' : 'Active' },
             ].map(f => (
               <div key={f.label} className="bg-slate-50 rounded-xl p-3">
@@ -194,10 +195,11 @@ export default function StudentManagement() {
 
       const localDisabled = JSON.parse(localStorage.getItem(DISABLED_KEY) || '[]');
       setData(students.map(s => ({
-        id:         s.id,
-        name:       s.name || '—',
-        email:      s.email || '—',
-        role:       s.role || 'student',
+        id:          s.id,
+        name:        s.name || '—',
+        email:       s.email || '—',
+        phoneNumber: s.phoneNumber || '—',
+        role:        s.role || 'student',
         uniqueId:   s.uniqueId,
         schoolName: s.schoolName || '—',
         className:  s.className  || '—',
@@ -444,6 +446,9 @@ export default function StudentManagement() {
                       <div>
                         <p className="font-semibold text-slate-800 text-xs">{s.name}</p>
                         <p className="text-[10px] text-slate-400">{s.email}</p>
+                        {s.phoneNumber && s.phoneNumber !== '—' && (
+                          <p className="text-[10px] text-slate-400">{s.phoneNumber}</p>
+                        )}
                       </div>
                     </div>
                   </td>
