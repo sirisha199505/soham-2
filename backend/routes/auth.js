@@ -184,6 +184,13 @@ router.post('/register', async (req, res) => {
     res.status(201).json({
       uniqueId: user.unique_id,
       token:    makeToken(user),
+      loginId:  user.unique_id,
+      message:  'Registration successful! You can now log in.',
+      loginOptions: {
+        phone: cleanPhone || null,
+        email: email?.trim().toLowerCase() || null,
+        uniqueId: user.unique_id,
+      },
       user: {
         id:       user.unique_id,
         uniqueId: user.unique_id,

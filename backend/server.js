@@ -46,14 +46,17 @@ app.use('/api', (req, res, next) => {
 });
 
 // ─── 3. ROUTES (only reached after DB is ready) ───────────────────────────
-app.use('/api/auth',       require('./routes/auth'));
-app.use('/api/levels',     require('./routes/levels'));
-app.use('/api/questions',  require('./routes/questions'));
-app.use('/api/quiz',       require('./routes/quiz'));
-app.use('/api/students',   require('./routes/students'));
-app.use('/api/content',    require('./routes/content'));
-app.use('/api/settings',   require('./routes/settings'));
-app.use('/api/monitoring', require('./routes/monitoring'));
+app.use('/api/auth',            require('./routes/auth'));
+app.use('/api/levels',          require('./routes/levels'));
+app.use('/api/questions',       require('./routes/questions'));
+app.use('/api/quiz',            require('./routes/quiz'));
+app.use('/api/students',        require('./routes/students'));
+app.use('/api/content',         require('./routes/content'));
+app.use('/api/settings',        require('./routes/settings'));
+app.use('/api/monitoring',      require('./routes/monitoring'));
+app.use('/api/question-banks',  require('./routes/questionBanks'));
+app.use('/api/qb-levels',       require('./routes/qbLevels'));
+app.use('/api/qb-categories',   require('./routes/qbCategories'));
 
 // ─── 4. START LISTENING immediately so Render marks the service live ──────
 const server = app.listen(PORT, () => {

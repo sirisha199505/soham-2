@@ -28,10 +28,13 @@ router.get('/bank', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/questions — all questions flat (admin)
+// GET /api/questions — all questions flat, optional ?categoryId=X filter (admin)
 router.get('/', requireAdmin, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM questions ORDER BY category, created_at');
+    const { categoryId } = req.query;
+    const result = categoryId
+      ? await pool.query('SELECT * FROM questions WHERE qb_category_id=$1 ORDER BY created_at', [categoryId])
+      : await pool.query('SELECT * FROM questions ORDER BY category, created_at');
     res.json(result.rows.map(rowToQuestion));
   } catch (err) {
     console.error(err.message);
@@ -46,12 +49,12 @@ router.post('/', requireAdmin, async (req, res) => {
     const result = await pool.query(
       `INSERT INTO questions
          (id, category, bank_name, type, text, image_url, options, correct_answer,
-          pairs, explanation, difficulty, status, applicable_for)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+          pairs, explanation, difficulty, status, applicable_for, qb_category_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        ON CONFLICT (id) DO UPDATE
        SET category=$2, bank_name=$3, type=$4, text=$5, image_url=$6, options=$7,
            correct_answer=$8, pairs=$9, explanation=$10, difficulty=$11, status=$12,
-           applicable_for=$13
+           applicable_for=$13, qb_category_id=$14
        RETURNING *`,
       [
         q.id, q.category, q.bankName || 'Question Bank', q.type,
@@ -63,6 +66,7 @@ router.post('/', requireAdmin, async (req, res) => {
         q.difficulty || 'medium',
         q.status || 'active',
         sanitizeAF(q.applicableFor),
+        q.qbCategoryId || null,
       ]
     );
     res.status(201).json(rowToQuestion(result.rows[0]));

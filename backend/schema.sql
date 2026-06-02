@@ -129,3 +129,28 @@ CREATE TABLE IF NOT EXISTS system_settings (
 );
 
 INSERT INTO system_settings (id) VALUES (1) ON CONFLICT DO NOTHING;
+
+-- ── Question Bank hierarchy ─────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS question_banks (
+  id         SERIAL PRIMARY KEY,
+  name       VARCHAR(255) NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS qb_levels (
+  id         SERIAL PRIMARY KEY,
+  bank_id    INTEGER NOT NULL REFERENCES question_banks(id) ON DELETE CASCADE,
+  name       VARCHAR(255) NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS qb_categories (
+  id         SERIAL PRIMARY KEY,
+  level_id   INTEGER REFERENCES qb_levels(id) ON DELETE CASCADE,
+  bank_id    INTEGER REFERENCES question_banks(id) ON DELETE CASCADE,
+  name       VARCHAR(255) NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Link questions to a qb_category
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS qb_category_id INTEGER REFERENCES qb_categories(id) ON DELETE SET NULL;

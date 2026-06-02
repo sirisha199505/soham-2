@@ -211,16 +211,47 @@ export default function Register() {
           </h2>
         </div>
 
-        <div className="rounded-2xl p-5"
+        <div className="rounded-2xl p-5 space-y-3"
           style={{ background: 'rgba(255,255,255,0.05)', border: `1.5px solid ${colors.primary}40` }}>
-          <p className="text-slate-300 text-sm leading-relaxed">{success.message}</p>
-          {success.loginId && (
-            <div className="rounded-xl p-3 text-[13px] mt-3"
+          <p className="text-slate-300 text-sm">You can sign in using any of the following:</p>
+
+          {/* Phone */}
+          {success.loginOptions?.phone && (
+            <div className="rounded-xl p-3 flex items-center gap-3"
               style={{ background: 'rgba(59,192,239,0.10)', border: '1px solid rgba(59,192,239,0.25)' }}>
-              <p className="text-sky-300 font-semibold mb-0.5">Your Login ID</p>
-              <p className="text-sky-200 font-mono text-base">{success.loginId}</p>
+              <span className="text-sky-300 text-lg">📱</span>
+              <div>
+                <p className="text-[10px] text-sky-400 font-semibold uppercase tracking-wider">Mobile Number</p>
+                <p className="text-sky-200 font-mono text-sm">{success.loginOptions.phone}</p>
+              </div>
             </div>
           )}
+
+          {/* Email */}
+          {success.loginOptions?.email && (
+            <div className="rounded-xl p-3 flex items-center gap-3"
+              style={{ background: 'rgba(59,192,239,0.10)', border: '1px solid rgba(59,192,239,0.25)' }}>
+              <span className="text-sky-300 text-lg">✉️</span>
+              <div>
+                <p className="text-[10px] text-sky-400 font-semibold uppercase tracking-wider">Email Address</p>
+                <p className="text-sky-200 font-mono text-sm">{success.loginOptions.email}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Student ID */}
+          {success.loginOptions?.uniqueId && (
+            <div className="rounded-xl p-3 flex items-center gap-3"
+              style={{ background: 'rgba(59,192,239,0.10)', border: '1px solid rgba(59,192,239,0.25)' }}>
+              <span className="text-sky-300 text-lg">🪪</span>
+              <div>
+                <p className="text-[10px] text-sky-400 font-semibold uppercase tracking-wider">Student ID</p>
+                <p className="text-sky-200 font-mono text-sm tracking-widest">{success.loginOptions.uniqueId}</p>
+              </div>
+            </div>
+          )}
+
+          <p className="text-[11px] text-slate-500 pt-1">Save these details. Use any one to log in with your password.</p>
         </div>
 
         <button onClick={() => navigate('/login')}
