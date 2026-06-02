@@ -84,7 +84,7 @@ export default function Login() {
     setLoading(true);
     try {
       const identifier = form.identifier.replace(/\s/g, '');
-      const route = await login(identifier, form.password);
+      const route = await login(identifier, form.password, tab);
       navigate(route, { replace: true });
     } catch (err) {
       setError(err.message || 'Login failed. Please check your credentials.');

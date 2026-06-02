@@ -102,9 +102,25 @@ export function AuthProvider({ children }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Login ── */
-  const login = useCallback(async (identifier, password) => {
+  // expectedTab: 'student' | 'coach' | 'admin' — must match the actual account role
+  const login = useCallback(async (identifier, password, expectedTab) => {
     const data = await api.login(identifier, password);
     const normalized = normalizeStoredUser(data.user);
+    const role = normalized.role;
+
+    if (expectedTab) {
+      const isStudent = role === 'student';
+      const isTrainer = role === 'coach' || role === 'teacher';
+      const isAdmin   = !isStudent && !isTrainer;
+
+      if (expectedTab === 'student' && !isStudent)
+        throw new Error(isTrainer ? 'These credentials belong to a Trainer account. Please use the Trainer tab.' : 'These credentials belong to an Admin account. Please use the Admin tab.');
+      if (expectedTab === 'coach' && !isTrainer)
+        throw new Error(isStudent ? 'These credentials belong to a Student account. Please use the Student tab.' : 'These credentials belong to an Admin account. Please use the Admin tab.');
+      if (expectedTab === 'admin' && !isAdmin)
+        throw new Error(isStudent ? 'These credentials belong to a Student account. Please use the Student tab.' : 'These credentials belong to a Trainer account. Please use the Trainer tab.');
+    }
+
     localStorage.setItem(TOKEN_KEY, data.token);
     localStorage.setItem(USER_KEY, JSON.stringify(normalized));
     if (data.sessionToken) {
