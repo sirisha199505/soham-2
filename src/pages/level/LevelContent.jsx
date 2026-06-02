@@ -276,21 +276,8 @@ export default function LevelContent() {
                   {sec.heading}
                 </h2>
               </div>
-              <div className="px-5 py-4 space-y-1.5">
-                {(sec.body || '').split('\n').map((line, li) => {
-                  if (!line.trim()) return <div key={li} className="h-1.5" />;
-                  const parts = line.split(/(\*\*[^*]+\*\*)/g);
-                  return (
-                    <p key={li} className="text-slate-600 leading-relaxed text-sm md:text-base">
-                      {parts.map((part, pi) =>
-                        part.startsWith('**') && part.endsWith('**')
-                          ? <strong key={pi} className="text-slate-800 font-semibold">{part.slice(2, -2)}</strong>
-                          : part
-                      )}
-                    </p>
-                  );
-                })}
-              </div>
+              <div className="px-5 py-4 rich-content text-sm md:text-base text-slate-600 leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: sec.body || '' }} />
             </div>
           ))
         )}

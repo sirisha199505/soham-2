@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
+import RichTextEditor from '../../components/ui/RichTextEditor';
 
 const PALETTE = [
   { from: '#3BC0EF', to: '#1E3A8A' },
@@ -29,22 +30,30 @@ function SectionEditor({ sections, onChange }) {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {sections.map((sec, i) => (
-        <div key={i} className="bg-slate-50 rounded-xl p-4 space-y-3 relative">
+        <div key={i} className="bg-slate-50 rounded-xl p-4 space-y-3 relative border border-slate-100">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase">Section {i + 1}</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Section {i + 1}</span>
             <button onClick={() => remove(i)} className="p-1 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors">
               <X size={13} />
             </button>
           </div>
-          <input value={sec.heading} onChange={e => update(i, 'heading', e.target.value)}
-            placeholder="Section heading…"
-            className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
-          <textarea value={sec.body} onChange={e => update(i, 'body', e.target.value)}
-            placeholder="Section body… (use **bold** for emphasis)"
-            rows={4}
-            className="w-full px-3 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 resize-none" />
+          <div>
+            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Heading</label>
+            <input value={sec.heading} onChange={e => update(i, 'heading', e.target.value)}
+              placeholder="Section heading…"
+              className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Body</label>
+            <RichTextEditor
+              value={sec.body}
+              onChange={val => update(i, 'body', val)}
+              placeholder="Write section content — use the toolbar for headings, bold, lists, links…"
+              minHeight={160}
+            />
+          </div>
         </div>
       ))}
       <button onClick={add}
@@ -91,7 +100,7 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>
             {page ? 'Edit Content Page' : 'Add Content Page'}

@@ -280,21 +280,20 @@ export default function ForgotPassword() {
             </div>
             <h2 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: 'Space Grotesk' }}>Forgot Password</h2>
             <p className="text-white/60 text-sm">
-              Enter your registered phone number or email. We'll send a 6-digit OTP to verify your identity.
+              Enter your registered email address. We'll send a 6-digit OTP to reset your password.
             </p>
           </div>
           <form onSubmit={handleSendOtp} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Phone Number or Email</label>
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Email Address</label>
               <div className="relative">
                 <Mail size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"/>
-                <input type="text" placeholder="9876543210 or your@email.com"
+                <input type="email" placeholder="your@email.com"
                   value={contact} onChange={e => setContact(e.target.value)} required
                   className={`${inputCls} pl-11 pr-4`} style={inputBase}/>
               </div>
               <p className="text-[11px] text-slate-500 pl-1">
-                Students: OTP will be sent to your registered mobile number via SMS.
-                Trainers / Admins: OTP will be sent to your registered email.
+                OTP will be sent to your registered email address.
               </p>
             </div>
             <button type="submit" disabled={loading}
@@ -316,9 +315,8 @@ export default function ForgotPassword() {
             </div>
             <h2 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: 'Space Grotesk' }}>Enter OTP</h2>
             <p className="text-white/60 text-sm">
-              We sent a 6-digit code to <span className="text-white font-semibold">{contact}</span>{' '}
-              via {isPhone ? 'SMS' : 'email'}.
-              {!isPhone && ' Check your inbox (and spam folder).'}
+              We sent a 6-digit code to <span className="text-white font-semibold">{contact}</span>.
+              {' '}Check your inbox (and spam folder).
             </p>
           </div>
 
