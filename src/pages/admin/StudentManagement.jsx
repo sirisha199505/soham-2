@@ -29,6 +29,7 @@ function LevelBadge({ data, levelId, overrideIds }) {
       <div className="flex items-center gap-1">
         <CheckCircle size={11} className={ok ? 'text-green-500' : 'text-red-400'} />
         <span className={`text-[10px] font-bold ${ok ? 'text-green-700' : 'text-red-500'}`}>{pct}%</span>
+        <span className="text-[9px] font-semibold px-1 py-0.5 rounded bg-yellow-100 text-yellow-700">best</span>
       </div>
     );
   }
@@ -94,7 +95,13 @@ function StudentModal({ student, levelList, onClose }) {
                   <div className="text-right">
                     {d?.status === 'completed' ? (
                       <div>
-                        <p className="text-sm font-bold text-green-600">{d.score?.pct}%</p>
+                        <div className="flex items-center justify-end gap-1 mb-0.5">
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700">Best</span>
+                          <p className={`text-sm font-bold ${(d.score?.pct ?? 0) >= 50 ? 'text-green-600' : 'text-red-500'}`}>{d.score?.pct ?? 0}%</p>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${(d.score?.pct ?? 0) >= 50 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                            {(d.score?.pct ?? 0) >= 50 ? '✓' : '✗'}
+                          </span>
+                        </div>
                         <p className="text-[10px] text-slate-400">{d.score?.correct}/{d.score?.total} correct</p>
                       </div>
                     ) : (

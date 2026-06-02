@@ -139,7 +139,7 @@ function QuestionReview({ q, answer, index }) {
 const LEVEL_PALETTE = ['#3BC0EF', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#6366f1', '#14b8a6'];
 function lvlColor(id) { return LEVEL_PALETTE[(Number(id) - 1) % LEVEL_PALETTE.length] || '#4F46E5'; }
 
-function AttemptCard({ attempt, attemptLimit, usedCount }) {
+function AttemptCard({ attempt, attemptLimit, usedCount, isBest }) {
   const [open, setOpen] = useState(false);
   const col       = lvlColor(attempt.levelId);
   const passed    = (attempt.score?.pct ?? 0) >= 50;
@@ -162,7 +162,9 @@ function AttemptCard({ attempt, attemptLimit, usedCount }) {
   }, [attempt]);
 
   return (
-    <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${open ? 'border-indigo-200' : 'border-slate-100'}`}>
+    <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
+      isBest ? 'border-yellow-300 ring-1 ring-yellow-200' : open ? 'border-indigo-200' : 'border-slate-100'
+    }`}>
       <button onClick={() => setOpen(p => !p)} className="w-full text-left">
         <div className="flex items-center gap-4 p-4">
           <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shrink-0"
@@ -175,6 +177,11 @@ function AttemptCard({ attempt, attemptLimit, usedCount }) {
               {attempt.attemptNum && (
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
                   Attempt #{attempt.attemptNum}
+                </span>
+              )}
+              {isBest && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 flex items-center gap-0.5">
+                  <Trophy size={9}/> Best Score
                 </span>
               )}
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
@@ -314,6 +321,18 @@ export default function QuizHistory() {
       })
       .sort((a, b) => new Date(b.date) - new Date(a.date));
   }, [attempts]);
+
+  // Best attempt ID per level (highest pct wins)
+  const bestAttemptIds = useMemo(() => {
+    const bestByLevel = {};
+    attemptsWithNumbers.forEach(a => {
+      const k = String(a.levelId);
+      if (!bestByLevel[k] || (a.score?.pct ?? 0) > (bestByLevel[k].score?.pct ?? 0)) {
+        bestByLevel[k] = a;
+      }
+    });
+    return new Set(Object.values(bestByLevel).map(a => a.id ?? a.date));
+  }, [attemptsWithNumbers]);
 
   // Level filter options derived from actual data — no hardcoded list
   const levelFilterOptions = useMemo(() => {
@@ -498,6 +517,7 @@ export default function QuizHistory() {
               attempt={attempt}
               attemptLimit={levelSettings[attempt.levelId]?.attemptLimit ?? 3}
               usedCount={attemptsCountByLevel[String(attempt.levelId)] ?? 0}
+              isBest={bestAttemptIds.has(attempt.id ?? attempt.date)}
             />
           ))
         )}

@@ -279,17 +279,24 @@ function LevelCard({ level, status, levelData, levelSettings, attemptCount }) {
         {/* Score (if completed) */}
         {isCompleted && score && (
           <div className="space-y-1.5">
+            {/* Best Score block */}
             <div className="rounded-xl p-3 flex items-center gap-3"
               style={{ background: scoreColor.bg, border: `1px solid ${scoreColor.border}` }}>
               <Trophy size={20} style={{ color: scoreColor.text }} className="shrink-0" />
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700">
+                    Best Score
+                  </span>
                   <p className="text-lg font-bold leading-none" style={{ color: scoreColor.text, fontFamily: 'Space Grotesk' }}>
                     {scorePct}%
                   </p>
                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
                     style={{ background: scoreColor.border, color: scoreColor.text }}>
                     {perf.emoji} {perf.label}
+                  </span>
+                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${scorePct >= 50 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                    {scorePct >= 50 ? '✓ Passed' : '✗ Failed'}
                   </span>
                 </div>
                 <p className="text-[10px] mt-0.5" style={{ color: scoreColor.text }}>
@@ -298,6 +305,7 @@ function LevelCard({ level, status, levelData, levelSettings, attemptCount }) {
               </div>
             </div>
 
+            {/* Last attempt row (shown only when it differs from best) */}
             {showLastAttempt && (
               <div className="rounded-xl px-3 py-2 flex items-center justify-between"
                 style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
