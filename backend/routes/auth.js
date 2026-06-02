@@ -57,7 +57,7 @@ async function sendSmsOtp(phone, otp) {
 // ── POST /api/auth/forgot-password ─────────────────────────────────────────────
 // Body: { contact }  — contact is a phone number (10 digits) OR an email address
 router.post('/forgot-password', async (req, res) => {
-  const { contact } = req.body;
+  const contact = req.body.contact || req.body.email || '';
   if (!contact) return res.status(400).json({ error: 'Phone number or email is required.' });
 
   const cleanPhone = contact.replace(/\D/g, '');
@@ -116,7 +116,8 @@ router.post('/forgot-password', async (req, res) => {
 
 // ── POST /api/auth/verify-reset-otp ────────────────────────────────────────────
 router.post('/verify-reset-otp', async (req, res) => {
-  const { contact, otp } = req.body;
+  const contact = req.body.contact || req.body.email || '';
+  const { otp } = req.body;
   if (!contact || !otp) return res.status(400).json({ error: 'Contact and OTP are required.' });
 
   const cleanPhone = contact.replace(/\D/g, '');
