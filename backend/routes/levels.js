@@ -109,19 +109,25 @@ router.post('/progress/:userId/:levelId/complete', requireAuth, async (req, res)
     const dbUserId = userRes.rows[0].id;
     const now = new Date().toISOString();
 
-    // Get existing progress to compare scores
-    const existing = await pool.query(
-      'SELECT score, completed_at FROM level_progress WHERE user_id=$1 AND level_id=$2',
-      [dbUserId, levelId]
-    );
+    // Get first-completion date and best previous score from quiz_attempts
+    // (more reliable than reading level_progress.score which can be stale)
+    const [existingProgress, prevBestResult] = await Promise.all([
+      pool.query(
+        'SELECT completed_at FROM level_progress WHERE user_id=$1 AND level_id=$2',
+        [dbUserId, levelId]
+      ),
+      pool.query(
+        `SELECT score FROM quiz_attempts
+         WHERE user_id=$1 AND level_id=$2 AND score IS NOT NULL
+         ORDER BY (score->>'pct')::int DESC NULLS LAST
+         LIMIT 1`,
+        [dbUserId, levelId]
+      ),
+    ]);
 
-    let bestScore = score;
-    let firstCompletedAt = now;
-    if (existing.rowCount > 0 && existing.rows[0].score) {
-      const prev = existing.rows[0].score;
-      firstCompletedAt = existing.rows[0].completed_at || now;
-      bestScore = (score.pct >= (prev.pct ?? -1)) ? score : prev;
-    }
+    const firstCompletedAt = existingProgress.rows[0]?.completed_at || now;
+    const prevBestPct      = prevBestResult.rows[0]?.score?.pct ?? -1;
+    const bestScore        = score.pct >= prevBestPct ? score : prevBestResult.rows[0].score;
 
     await pool.query(
       `INSERT INTO level_progress (user_id, level_id, status, score, last_score, completed_at, last_completed_at)
