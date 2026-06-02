@@ -206,7 +206,7 @@ export default function ForgotPassword() {
     } finally {
       setLoading(false);
     }
-  }, [email, otp]);
+  }, [contact, otp]);
 
   // ── Step 3: set new password ──────────────────────────────────────────────
   const handleResetPassword = useCallback(async (e) => {

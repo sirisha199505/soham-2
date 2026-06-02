@@ -112,8 +112,8 @@ export default function Login() {
   const tabConfig = {
     student: {
       title: 'Student Sign In',
-      subtitle: 'Use your phone number, email address, or Student ID',
-      idLabel: 'Phone / Email / Student ID',
+      subtitle: 'Use your phone number or email address',
+      idLabel: 'Phone / Email',
       idPlaceholder: 'e.g. 9876543210 or email@example.com',
       idType: 'text',
       idIcon: Phone,
