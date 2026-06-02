@@ -426,7 +426,7 @@ export default function StudentManagement() {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
                 {[
-                  '#', 'Name / Email', tab === 'coaches' ? 'Organization' : 'School',
+                  '#', 'Name', 'Mobile', tab === 'coaches' ? 'Organization' : 'School',
                   ...levelList.map(l => l.title || `Level ${l.id}`),
                   'Status', 'Actions',
                 ].map(h => (
@@ -438,20 +438,25 @@ export default function StudentManagement() {
               {paginated.map((s, i) => (
                 <tr key={s.id} className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors ${s.disabled ? 'opacity-60' : ''}`}>
                   <td className="px-4 py-3.5 text-xs text-slate-400">{(page - 1) * PER_PAGE + i + 1}</td>
+                  {/* Name + Email */}
                   <td className="px-4 py-3.5">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
                         <Hash size={13} className="text-indigo-400" />
                       </div>
                       <div>
-                        <p className="font-semibold text-slate-800 text-xs">{s.name}</p>
-                        <p className="text-[10px] text-slate-400">{s.email}</p>
-                        {s.phoneNumber && s.phoneNumber !== '—' && (
-                          <p className="text-[10px] text-slate-400">{s.phoneNumber}</p>
-                        )}
+                        <p className="font-semibold text-slate-800 text-xs">{s.name || '—'}</p>
+                        <p className="text-[10px] text-slate-400">{s.email !== '—' ? s.email : ''}</p>
                       </div>
                     </div>
                   </td>
+                  {/* Mobile */}
+                  <td className="px-4 py-3.5">
+                    {s.phoneNumber && s.phoneNumber !== '—'
+                      ? <span className="text-xs font-medium text-slate-700">{s.phoneNumber}</span>
+                      : <span className="text-xs text-slate-300">—</span>}
+                  </td>
+                  {/* School / Org */}
                   <td className="px-4 py-3.5">
                     <p className="text-xs font-medium text-slate-700 truncate max-w-[140px]">{s.schoolName}</p>
                   </td>
