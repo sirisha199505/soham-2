@@ -98,16 +98,18 @@ function parseCSV(text) {
   const lines = text.trim().split('\n').filter(Boolean);
   if (lines.length < 2) return [];
   const questions = [];
+  const AF_VALUES = ['student', 'trainer', 'both'];
   for (const row of lines.slice(1)) {
     const cols = row.match(/(".*?"|[^,]+|(?<=,)(?=,)|(?<=,)$|^(?=,))/g) || [];
     const clean = (c='') => c.replace(/^"|"$/g,'').trim();
     const type = clean(cols[0])?.toLowerCase();
     const text = clean(cols[1]);
     if (!text) continue;
-    const diff = ['easy','medium','hard'].includes(clean(cols[2])) ? clean(cols[2]) : 'easy';
-    if (type==='mcq')                         questions.push({ id:uid('q'), type:'mcq',   text, difficulty:diff, options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
-    else if (type==='match')                  questions.push({ id:uid('q'), type:'match', text, difficulty:diff, pairs:[{left:clean(cols[10]),leftImage:'',right:clean(cols[11]),rightImage:''},{left:clean(cols[12]),leftImage:'',right:clean(cols[13]),rightImage:''},{left:clean(cols[14]),leftImage:'',right:clean(cols[15]),rightImage:''},{left:clean(cols[16]),leftImage:'',right:clean(cols[17]),rightImage:''}], explanation:'' });
-    else if (type==='label'||type==='image')  questions.push({ id:uid('q'), type:'label', text, difficulty:diff, imageUrl:clean(cols[9])||'', options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
+    const diff         = ['easy','medium','hard'].includes(clean(cols[2])) ? clean(cols[2]) : 'easy';
+    const applicableFor = AF_VALUES.includes(clean(cols[18])?.toLowerCase()) ? clean(cols[18]).toLowerCase() : 'student';
+    if (type==='mcq')                         questions.push({ id:uid('q'), type:'mcq',   text, difficulty:diff, applicableFor, options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
+    else if (type==='match')                  questions.push({ id:uid('q'), type:'match', text, difficulty:diff, applicableFor, pairs:[{left:clean(cols[10]),leftImage:'',right:clean(cols[11]),rightImage:''},{left:clean(cols[12]),leftImage:'',right:clean(cols[13]),rightImage:''},{left:clean(cols[14]),leftImage:'',right:clean(cols[15]),rightImage:''},{left:clean(cols[16]),leftImage:'',right:clean(cols[17]),rightImage:''}], explanation:'' });
+    else if (type==='label'||type==='image')  questions.push({ id:uid('q'), type:'label', text, difficulty:diff, applicableFor, imageUrl:clean(cols[9])||'', options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
   }
   return questions;
 }
@@ -250,14 +252,16 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
   };
 
   const downloadTemplate = () => {
-    const headers = ['type','text','difficulty','opt_a','opt_b','opt_c','opt_d','correct','explanation','image_url(img only)','p1_left','p1_right','p2_left','p2_right','p3_left','p3_right','p4_left','p4_right'];
+    const headers = ['type','text','difficulty','opt_a','opt_b','opt_c','opt_d','correct','explanation','image_url(img only)','p1_left','p1_right','p2_left','p2_right','p3_left','p3_right','p4_left','p4_right','applicable_for'];
     const rows = [
-      ['mcq','What is a servo motor?','easy','A DC motor with feedback control','A stepper motor','A linear actuator','An AC induction motor','A','Servo motors use encoders for closed-loop position control.','','','','','','','','',''],
-      ['label','What component is shown?','medium','Servo motor','DC motor','Stepper motor','Solenoid','C','','https://example.com/component.jpg','','','','','','','',''],
-      ['match','Match each component to its function','easy','','','','','','','','Sensor','Detects input signals','Motor','Converts electricity to motion','CPU','Processes instructions','Battery','Stores electrical energy'],
+      ['mcq','What is a servo motor?','easy','A DC motor with feedback control','A stepper motor','A linear actuator','An AC induction motor','A','Servo motors use encoders for closed-loop position control.','','','','','','','','','','student'],
+      ['mcq','What is PID control used for in robotics?','medium','Speed control only','Position and speed control','Power supply regulation','Sensor calibration','B','PID stands for Proportional-Integral-Derivative control.','','','','','','','','','','trainer'],
+      ['mcq','Which protocol is used for wireless robot communication?','hard','I2C','SPI','Bluetooth / Wi-Fi','UART','C','Bluetooth and Wi-Fi are standard wireless protocols.','','','','','','','','','','both'],
+      ['label','What component is shown?','medium','Servo motor','DC motor','Stepper motor','Solenoid','C','','https://example.com/component.jpg','','','','','','','','','student'],
+      ['match','Match each component to its function','easy','','','','','','','','Sensor','Detects input signals','Motor','Converts electricity to motion','CPU','Processes instructions','Battery','Stores electrical energy','both'],
     ];
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    ws['!cols'] = [{wch:10},{wch:50},{wch:10},{wch:30},{wch:22},{wch:22},{wch:22},{wch:8},{wch:46},{wch:36},{wch:18},{wch:22},{wch:18},{wch:22},{wch:18},{wch:22},{wch:18},{wch:22}];
+    ws['!cols'] = [{wch:10},{wch:50},{wch:10},{wch:30},{wch:22},{wch:22},{wch:22},{wch:8},{wch:46},{wch:36},{wch:18},{wch:22},{wch:18},{wch:22},{wch:18},{wch:22},{wch:18},{wch:22},{wch:16}];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Questions');
     XLSX.writeFile(wb, 'question_bank_template.xlsx');

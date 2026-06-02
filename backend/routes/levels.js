@@ -58,7 +58,19 @@ router.get('/progress/:userId', requireAuth, async (req, res) => {
 
     const dbUserId = userRes.rows[0].id;
     const [progressResult, approvalsResult] = await Promise.all([
-      pool.query('SELECT * FROM level_progress WHERE user_id=$1', [dbUserId]),
+      pool.query(
+        `SELECT lp.*,
+                (SELECT qa.score
+                 FROM quiz_attempts qa
+                 WHERE qa.user_id = lp.user_id
+                   AND qa.level_id = lp.level_id
+                   AND qa.score IS NOT NULL
+                 ORDER BY (qa.score->>'pct')::int DESC NULLS LAST
+                 LIMIT 1) AS best_attempt_score
+         FROM level_progress lp
+         WHERE lp.user_id = $1`,
+        [dbUserId]
+      ),
       pool.query('SELECT level_id, status FROM level_approvals WHERE user_id=$1', [dbUserId]),
     ]);
 
@@ -66,7 +78,7 @@ router.get('/progress/:userId', requireAuth, async (req, res) => {
     progressResult.rows.forEach(r => {
       progress[r.level_id] = {
         status:          r.status,
-        score:           r.score,
+        score:           r.best_attempt_score || r.score,
         lastScore:       r.last_score,
         completedAt:     r.completed_at,
         lastCompletedAt: r.last_completed_at,
