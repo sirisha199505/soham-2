@@ -1231,37 +1231,6 @@ function BanksOverview({ banks, onSelect, onCreate, onDelete, onRename }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Migration notice — one-time banner reminding admin to review Applicable For
-// ═══════════════════════════════════════════════════════════════════════════
-const NOTICE_KEY = 'rqa_af_notice_dismissed';
-
-function MigrationNotice() {
-  const [visible, setVisible] = useState(() => !localStorage.getItem(NOTICE_KEY));
-  if (!visible) return null;
-  return (
-    <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4">
-      <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-bold text-amber-800">Action required — review "Applicable For" on all questions</p>
-        <p className="text-xs text-amber-700 mt-0.5">
-          All existing questions have been set to <span className="font-semibold">Both</span> by default.
-          Open each question, set the correct audience (Students Only / Trainers Only / Both), and save.
-          Trainers will only receive questions tagged <span className="font-semibold">Trainers Only</span> or <span className="font-semibold">Both</span> during their quiz.
-        </p>
-      </div>
-      <button
-        onClick={() => { localStorage.setItem(NOTICE_KEY, '1'); setVisible(false); }}
-        className="shrink-0 text-amber-500 hover:text-amber-700 transition-colors text-xs font-semibold underline mt-0.5"
-      >
-        Dismiss
-      </button>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // Main
 // ═══════════════════════════════════════════════════════════════════════════
 export default function QuestionBankAdmin() {
@@ -1308,9 +1277,6 @@ export default function QuestionBankAdmin() {
   return (
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-5">
       {toast && <Toast msg={toast}/>}
-
-      {/* Migration notice — shown until dismissed, reminds admin to review Applicable For */}
-      <MigrationNotice />
 
       {selectedBank ? (
         <BankDetail
