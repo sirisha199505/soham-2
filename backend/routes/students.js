@@ -75,4 +75,21 @@ router.get('/', requireAdmin, async (req, res) => {
   }
 });
 
+// PATCH /api/students/:uniqueId/phone — admin updates a student's phone number
+router.patch('/:uniqueId/phone', requireAdmin, async (req, res) => {
+  const { phoneNumber } = req.body;
+  const clean = (phoneNumber || '').replace(/\D/g, '') || null;
+  try {
+    const result = await pool.query(
+      'UPDATE users SET phone_number=$1 WHERE unique_id=$2 RETURNING phone_number',
+      [clean, req.params.uniqueId]
+    );
+    if (result.rowCount === 0) return res.status(404).json({ error: 'User not found.' });
+    res.json({ phoneNumber: result.rows[0].phone_number });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ error: 'Failed to update phone number.' });
+  }
+});
+
 module.exports = router;

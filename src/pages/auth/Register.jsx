@@ -213,7 +213,7 @@ export default function Register() {
 
         <div className="rounded-2xl p-5 space-y-3"
           style={{ background: 'rgba(255,255,255,0.05)', border: `1.5px solid ${colors.primary}40` }}>
-          <p className="text-slate-300 text-sm">You can sign in using any of the following:</p>
+          <p className="text-slate-300 text-sm font-semibold">Login with your email or mobile number</p>
 
           {/* Phone */}
           {success.loginOptions?.phone && (
@@ -251,7 +251,7 @@ export default function Register() {
             </div>
           )}
 
-          <p className="text-[11px] text-slate-500 pt-1">Save these details. Use any one to log in with your password.</p>
+          <p className="text-[11px] text-slate-500 pt-1">Save these details — use any one to sign in with your password.</p>
         </div>
 
         <button onClick={() => navigate('/login')}

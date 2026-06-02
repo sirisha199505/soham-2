@@ -39,12 +39,25 @@ function LevelBadge({ data, levelId, overrideIds }) {
 }
 
 /* ── Detail Modal ── */
-function StudentModal({ student, levelList, onClose }) {
+function StudentModal({ student, levelList, onClose, onPhoneUpdated }) {
   if (!student) return null;
-  // Use actual DB levels when available; fall back to generic placeholders
   const levels = levelList.length > 0
     ? levelList.map((lvl, i) => ({ id: lvl.id, label: lvl.title || `Level ${i + 1}`, idx: i }))
     : [1, 2, 3].map((n, i) => ({ id: n, label: `Level ${n}`, idx: i }));
+
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [phoneVal,     setPhoneVal]     = useState(student.phoneNumber === '—' ? '' : (student.phoneNumber || ''));
+  const [phoneSaving,  setPhoneSaving]  = useState(false);
+
+  const savePhone = async () => {
+    setPhoneSaving(true);
+    try {
+      const result = await api.updateStudentPhone(student.uniqueId, phoneVal.replace(/\D/g, ''));
+      onPhoneUpdated?.(student.uniqueId, result.phoneNumber);
+      setEditingPhone(false);
+    } catch { /* ignore */ }
+    setPhoneSaving(false);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -63,16 +76,49 @@ function StudentModal({ student, levelList, onClose }) {
 
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: 'School',  value: student.schoolName },
-              { label: 'Class',   value: student.className },
-              { label: 'Mobile',  value: student.phoneNumber || '—' },
-              { label: 'Status',  value: student.disabled ? 'Disabled' : 'Active' },
+              { label: 'School', value: student.schoolName },
+              { label: 'Class',  value: student.className },
+              { label: 'Status', value: student.disabled ? 'Disabled' : 'Active' },
             ].map(f => (
               <div key={f.label} className="bg-slate-50 rounded-xl p-3">
                 <p className="text-[10px] font-semibold text-slate-400 uppercase mb-0.5">{f.label}</p>
                 <p className="text-sm font-semibold text-slate-700">{f.value}</p>
               </div>
             ))}
+
+            {/* Editable Mobile field */}
+            <div className="bg-slate-50 rounded-xl p-3">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase mb-1">Mobile</p>
+              {editingPhone ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    autoFocus
+                    type="tel"
+                    value={phoneVal}
+                    onChange={e => setPhoneVal(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') savePhone(); if (e.key === 'Escape') setEditingPhone(false); }}
+                    placeholder="10-digit number"
+                    className="flex-1 text-xs px-2 py-1 rounded-lg border border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
+                  />
+                  <button onClick={savePhone} disabled={phoneSaving}
+                    className="text-[10px] font-bold px-2 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
+                    {phoneSaving ? '…' : 'Save'}
+                  </button>
+                  <button onClick={() => setEditingPhone(false)}
+                    className="text-[10px] font-bold px-2 py-1 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100">
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-700">{phoneVal || '—'}</p>
+                  <button onClick={() => setEditingPhone(true)}
+                    className="text-[10px] text-indigo-500 hover:text-indigo-700 font-semibold underline ml-2">
+                    Edit
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -496,7 +542,17 @@ export default function StudentManagement() {
         )}
       </div>
 
-      {viewStudent && <StudentModal student={viewStudent} levelList={levelList} onClose={() => setViewStudent(null)} />}
+      {viewStudent && (
+        <StudentModal
+          student={viewStudent}
+          levelList={levelList}
+          onClose={() => setViewStudent(null)}
+          onPhoneUpdated={(uniqueId, phone) => {
+            setData(prev => prev.map(s => s.uniqueId === uniqueId ? { ...s, phoneNumber: phone || '—' } : s));
+            setViewStudent(prev => prev?.uniqueId === uniqueId ? { ...prev, phoneNumber: phone || '—' } : prev);
+          }}
+        />
+      )}
     </div>
   );
 }

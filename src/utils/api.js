@@ -152,7 +152,8 @@ export const api = {
   saveAttempt: (data) => request('POST', '/api/quiz/attempts', data),
 
   // Students
-  getStudents: () => request('GET', '/api/students'),
+  getStudents:        () => request('GET', '/api/students'),
+  updateStudentPhone: (uniqueId, phoneNumber) => request('PATCH', `/api/students/${uniqueId}/phone`, { phoneNumber }),
   resetStudentProgress: (userId) => request('DELETE', `/api/levels/progress/${userId}`),
 
   // Content
