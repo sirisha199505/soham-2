@@ -4,9 +4,14 @@ const { requireAuth, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
-const CATEGORIES = ['robotics', 'chemistry', 'physics', 'mathematics'];
+const CATEGORIES    = ['robotics', 'chemistry', 'physics', 'mathematics'];
+const VALID_AF      = ['student', 'trainer', 'both'];
 
-// GET /api/questions/bank — all questions grouped by category (each has bankName field)
+function sanitizeAF(val) {
+  return VALID_AF.includes(val) ? val : 'both';
+}
+
+// GET /api/questions/bank — all questions grouped by category
 router.get('/bank', requireAuth, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM questions ORDER BY bank_name, category, created_at');
@@ -39,11 +44,14 @@ router.post('/', requireAdmin, async (req, res) => {
   const q = req.body;
   try {
     const result = await pool.query(
-      `INSERT INTO questions (id, category, bank_name, type, text, image_url, options, correct_answer, pairs, explanation, difficulty, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      `INSERT INTO questions
+         (id, category, bank_name, type, text, image_url, options, correct_answer,
+          pairs, explanation, difficulty, status, applicable_for)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
        ON CONFLICT (id) DO UPDATE
-       SET category=$2, bank_name=$3, type=$4, text=$5, image_url=$6, options=$7, correct_answer=$8,
-           pairs=$9, explanation=$10, difficulty=$11, status=$12
+       SET category=$2, bank_name=$3, type=$4, text=$5, image_url=$6, options=$7,
+           correct_answer=$8, pairs=$9, explanation=$10, difficulty=$11, status=$12,
+           applicable_for=$13
        RETURNING *`,
       [
         q.id, q.category, q.bankName || 'Question Bank', q.type,
@@ -54,6 +62,7 @@ router.post('/', requireAdmin, async (req, res) => {
         q.explanation || null,
         q.difficulty || 'medium',
         q.status || 'active',
+        sanitizeAF(q.applicableFor),
       ]
     );
     res.status(201).json(rowToQuestion(result.rows[0]));
@@ -68,8 +77,10 @@ router.put('/:id', requireAdmin, async (req, res) => {
   const q = req.body;
   try {
     await pool.query(
-      `UPDATE questions SET category=$2, bank_name=$3, type=$4, text=$5, image_url=$6, options=$7,
-       correct_answer=$8, pairs=$9, explanation=$10, difficulty=$11, status=$12
+      `UPDATE questions
+       SET category=$2, bank_name=$3, type=$4, text=$5, image_url=$6, options=$7,
+           correct_answer=$8, pairs=$9, explanation=$10, difficulty=$11, status=$12,
+           applicable_for=$13
        WHERE id=$1`,
       [
         req.params.id, q.category, q.bankName || 'Question Bank', q.type,
@@ -80,6 +91,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
         q.explanation || null,
         q.difficulty || 'medium',
         q.status || 'active',
+        sanitizeAF(q.applicableFor),
       ]
     );
     res.json({ success: true });
@@ -108,7 +120,7 @@ router.post('/seed', requireAuth, async (req, res) => {
       return res.json({ seeded: false, message: 'Questions already exist.' });
     }
 
-    const questions = req.body; // array of question objects
+    const questions = req.body;
     if (!Array.isArray(questions) || questions.length === 0) {
       return res.status(400).json({ error: 'No questions provided.' });
     }
@@ -118,8 +130,10 @@ router.post('/seed', requireAuth, async (req, res) => {
       await client.query('BEGIN');
       for (const q of questions) {
         await client.query(
-          `INSERT INTO questions (id, category, bank_name, type, text, image_url, options, correct_answer, pairs, explanation, difficulty, status)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+          `INSERT INTO questions
+             (id, category, bank_name, type, text, image_url, options, correct_answer,
+              pairs, explanation, difficulty, status, applicable_for)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
            ON CONFLICT (id) DO NOTHING`,
           [
             q.id, q.category, q.bankName || 'Question Bank', q.type,
@@ -130,6 +144,7 @@ router.post('/seed', requireAuth, async (req, res) => {
             q.explanation || null,
             q.difficulty || 'medium',
             q.status || 'active',
+            sanitizeAF(q.applicableFor),
           ]
         );
       }
@@ -149,18 +164,19 @@ router.post('/seed', requireAuth, async (req, res) => {
 
 function rowToQuestion(r) {
   return {
-    id:          r.id,
-    category:    r.category,
-    bankName:    r.bank_name || 'Question Bank',
-    type:        r.type,
-    text:        r.text,
-    imageUrl:    r.image_url,
-    options:     r.options,
-    correct:     r.correct_answer,
-    pairs:       r.pairs,
-    explanation: r.explanation,
-    difficulty:  r.difficulty,
-    status:      r.status,
+    id:            r.id,
+    category:      r.category,
+    bankName:      r.bank_name || 'Question Bank',
+    type:          r.type,
+    text:          r.text,
+    imageUrl:      r.image_url,
+    options:       r.options,
+    correct:       r.correct_answer,
+    pairs:         r.pairs,
+    explanation:   r.explanation,
+    difficulty:    r.difficulty,
+    status:        r.status,
+    applicableFor: r.applicable_for || 'both',
   };
 }
 

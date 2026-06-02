@@ -71,12 +71,14 @@ CREATE TABLE IF NOT EXISTS questions (
   correct_answer INTEGER,
   pairs          JSONB,
   explanation    TEXT,
-  difficulty     VARCHAR(50) DEFAULT 'medium',
-  status         VARCHAR(50) DEFAULT 'active',
-  created_at     TIMESTAMPTZ DEFAULT NOW()
+  difficulty     VARCHAR(50)  DEFAULT 'medium',
+  status         VARCHAR(50)  DEFAULT 'active',
+  applicable_for VARCHAR(20)  DEFAULT 'both',
+  created_at     TIMESTAMPTZ  DEFAULT NOW()
 );
--- Add bank_name to existing installs that pre-date this column
-ALTER TABLE questions ADD COLUMN IF NOT EXISTS bank_name VARCHAR(255) DEFAULT 'Question Bank';
+-- Add columns to existing installs that pre-date them
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS bank_name      VARCHAR(255) DEFAULT 'Question Bank';
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS applicable_for VARCHAR(20)  DEFAULT 'both';
 
 CREATE TABLE IF NOT EXISTS used_questions (
   user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

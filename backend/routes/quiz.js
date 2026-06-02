@@ -32,11 +32,21 @@ function shuffleOptions(q) {
 // Difficulty mapped per level: Level 1 = easy, Level 2 = medium, Level 3 = hard
 const LEVEL_DIFFICULTY = { '1': 'easy', '2': 'medium', '3': 'hard' };
 
+// Build an applicable_for WHERE clause based on the requesting user's role.
+// Students only receive 'student' or 'both' questions; trainers (coach/teacher)
+// only receive 'trainer' or 'both' questions; admins see everything.
+function afClause(role) {
+  if (role === 'coach' || role === 'teacher') return "applicable_for IN ('trainer','both')";
+  if (role === 'student')                     return "applicable_for IN ('student','both')";
+  return '1=1';
+}
+
 // GET /api/quiz/generate/:userId?level=1
 router.get('/generate/:userId', requireAuth, async (req, res) => {
   const { userId } = req.params;
   const levelId    = req.query.level || '';
   const difficulty = LEVEL_DIFFICULTY[levelId] || null;
+  const roleFilter = afClause(req.user.role);
 
   try {
     const userRes = await pool.query('SELECT id FROM users WHERE unique_id=$1', [userId]);
@@ -51,22 +61,22 @@ router.get('/generate/:userId', requireAuth, async (req, res) => {
 
     const selected = [];
     for (const cat of CATEGORIES) {
-      // Fetch questions filtered by difficulty for this level
+      // Fetch questions filtered by difficulty + role (applicable_for)
       let activeRes;
       if (difficulty) {
         activeRes = await pool.query(
-          "SELECT * FROM questions WHERE category=$1 AND status='active' AND difficulty=$2",
+          `SELECT * FROM questions WHERE category=$1 AND status='active' AND difficulty=$2 AND ${roleFilter}`,
           [cat, difficulty]
         );
-        // If not enough level-specific questions, fall back to any difficulty
+        // Fall back to any difficulty (keeping role filter) if not enough questions
         if (activeRes.rows.length < QUESTIONS_PER_CATEGORY) {
           activeRes = await pool.query(
-            "SELECT * FROM questions WHERE category=$1 AND status='active'", [cat]
+            `SELECT * FROM questions WHERE category=$1 AND status='active' AND ${roleFilter}`, [cat]
           );
         }
       } else {
         activeRes = await pool.query(
-          "SELECT * FROM questions WHERE category=$1 AND status='active'", [cat]
+          `SELECT * FROM questions WHERE category=$1 AND status='active' AND ${roleFilter}`, [cat]
         );
       }
 
