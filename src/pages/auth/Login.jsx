@@ -121,10 +121,10 @@ export default function Login() {
     },
     coach: {
       title: 'Trainer Sign In',
-      subtitle: 'Sign in with your registered email and password',
-      idLabel: 'Email Address',
-      idPlaceholder: 'trainer@organization.com',
-      idType: 'email',
+      subtitle: 'Sign in with your registered email or phone number',
+      idLabel: 'Email / Phone',
+      idPlaceholder: 'trainer@organization.com or 9876543210',
+      idType: 'text',
       idIcon: Mail,
       passHint: null,
     },
@@ -188,7 +188,7 @@ export default function Login() {
               type={cfg.idType} placeholder={cfg.idPlaceholder}
               value={form.identifier}
               onChange={e => setForm(p => ({ ...p, identifier: e.target.value }))}
-              required autoComplete={isAdmin || isCoach ? 'email' : 'off'}
+              required autoComplete={isAdmin ? 'email' : 'off'}
               className={`${inputCls} pl-11 pr-4`}
               style={{ ...inputStyle, ...(form.identifier ? inputFocus : {}) }}
             />

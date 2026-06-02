@@ -103,9 +103,9 @@ export const api = {
   // Auth — Forgot password OTP flow (3-step)
   // contact = phone number (10 digits) OR email address
   forgotPassword: (contact) =>
-    request('POST', '/api/auth/forgot-password', { contact }),
+    request('POST', '/api/auth/forgot-password', { email: contact }),
   verifyResetOtp: (contact, otp) =>
-    request('POST', '/api/auth/verify-reset-otp', { contact, otp }),
+    request('POST', '/api/auth/verify-reset-otp', { email: contact, otp }),
   resetPasswordWithToken: (token, newPassword) =>
     request('POST', '/api/auth/reset-password-token', { token, newPassword }),
 
