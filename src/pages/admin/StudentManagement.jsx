@@ -3,7 +3,7 @@ import { scrollToTop } from '../../utils/scroll';
 import {
   Users, Search, RefreshCw, CheckCircle,
   ChevronDown, Eye, Unlock, RotateCcw, UserX, UserCheck,
-  Hash, X, AlertTriangle, Info, Zap,
+  X, AlertTriangle, Info, Zap,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
@@ -55,14 +55,10 @@ function StudentModal({ student, levelList, onClose }) {
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={16} /></button>
         </div>
         <div className="p-6 space-y-4">
-          <div className="bg-indigo-50 rounded-2xl p-4 flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center">
-              <Hash size={20} className="text-indigo-500" />
-            </div>
-            <div>
-              <p className="font-mono font-bold text-slate-800 text-lg tracking-widest">{student.uniqueId}</p>
-              <p className="text-xs text-slate-500">{student.schoolName}</p>
-            </div>
+          <div className="bg-indigo-50 rounded-2xl p-4">
+            <p className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider mb-1">Student ID</p>
+            <p className="font-mono font-bold text-slate-800 text-lg tracking-widest">{student.uniqueId}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{student.schoolName}</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -440,14 +436,9 @@ export default function StudentManagement() {
                   <td className="px-4 py-3.5 text-xs text-slate-400">{(page - 1) * PER_PAGE + i + 1}</td>
                   {/* Name + Email */}
                   <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-                        <Hash size={13} className="text-indigo-400" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-slate-800 text-xs">{s.name || '—'}</p>
-                        <p className="text-[10px] text-slate-400">{s.email !== '—' ? s.email : ''}</p>
-                      </div>
+                    <div>
+                      <p className="font-semibold text-slate-800 text-xs">{s.name || '—'}</p>
+                      <p className="text-[10px] text-slate-400">{s.email !== '—' ? s.email : ''}</p>
                     </div>
                   </td>
                   {/* Mobile */}

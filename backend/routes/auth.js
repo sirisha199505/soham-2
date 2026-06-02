@@ -65,33 +65,52 @@ router.post('/forgot-password', async (req, res) => {
 
   try {
     let user;
+    let deliveryEmail = null;
+    let deliveryPhone = null;
+
     if (isPhone) {
-      const r = await pool.query('SELECT id, name, phone_number FROM users WHERE phone_number=$1', [cleanPhone]);
-      if (r.rowCount > 0) user = r.rows[0];
+      const r = await pool.query(
+        'SELECT id, name, email, phone_number FROM users WHERE phone_number=$1', [cleanPhone]
+      );
+      if (r.rowCount > 0) {
+        user          = r.rows[0];
+        deliveryPhone = cleanPhone;
+        // Fall back to email if SMS not configured
+        if (!process.env.SMS_API_KEY && user.email) {
+          deliveryPhone = null;
+          deliveryEmail = user.email;
+        }
+      }
     } else {
-      const r = await pool.query('SELECT id, name, email FROM users WHERE LOWER(email)=$1', [contact.trim().toLowerCase()]);
-      if (r.rowCount > 0) user = r.rows[0];
+      const r = await pool.query(
+        'SELECT id, name, email FROM users WHERE LOWER(email)=$1', [contact.trim().toLowerCase()]
+      );
+      if (r.rowCount > 0) {
+        user          = r.rows[0];
+        deliveryEmail = user.email;
+      }
     }
 
     // Always return success to avoid contact enumeration
     if (!user) return res.json({ success: true });
+    if (!deliveryPhone && !deliveryEmail) return res.json({ success: true });
 
-    const otp = String(Math.floor(100000 + Math.random() * 900000));
-    const key = isPhone ? `phone:${cleanPhone}` : `email:${contact.trim().toLowerCase()}`;
-    otpStore.set(key, { otp, expiresAt: Date.now() + OTP_TTL_MS, userId: user.id });
+    const otp    = String(Math.floor(100000 + Math.random() * 900000));
+    const storeKey = deliveryPhone
+      ? `phone:${deliveryPhone}`
+      : `email:${deliveryEmail.toLowerCase()}`;
+    otpStore.set(storeKey, { otp, expiresAt: Date.now() + OTP_TTL_MS, userId: user.id });
 
-    if (isPhone) {
-      await sendSmsOtp(cleanPhone, otp);
+    if (deliveryPhone) {
+      await sendSmsOtp(deliveryPhone, otp);
+      res.json({ success: true, via: 'sms' });
     } else {
-      await sendEmailOtp(contact.trim(), user.name, otp);
+      await sendEmailOtp(deliveryEmail, user.name, otp);
+      res.json({ success: true, via: 'email', maskedEmail: deliveryEmail.replace(/(.{2}).+(@.+)/, '$1***$2') });
     }
-
-    res.json({ success: true, via: isPhone ? 'sms' : 'email' });
   } catch (err) {
     console.error('Forgot password error:', err.message);
-    res.status(500).json({ error: isPhone
-      ? 'Failed to send OTP SMS. Please try again.'
-      : 'Failed to send OTP email. Please try again.' });
+    res.status(500).json({ error: 'Failed to send OTP. Please try again.' });
   }
 });
 
@@ -102,8 +121,11 @@ router.post('/verify-reset-otp', async (req, res) => {
 
   const cleanPhone = contact.replace(/\D/g, '');
   const isPhone    = cleanPhone.length >= 10 && !contact.includes('@');
-  const key        = isPhone ? `phone:${cleanPhone}` : `email:${contact.trim().toLowerCase()}`;
-  const stored     = otpStore.get(key);
+  // Try phone key first, then email key (handles SMS→email fallback)
+  const phoneKey = `phone:${cleanPhone}`;
+  const emailKey = `email:${contact.trim().toLowerCase()}`;
+  const key      = otpStore.has(phoneKey) ? phoneKey : emailKey;
+  const stored   = otpStore.get(key);
 
   if (!stored)                           return res.status(400).json({ error: 'No OTP was requested. Please request a new one.' });
   if (Date.now() > stored.expiresAt)     { otpStore.delete(key); return res.status(400).json({ error: 'OTP has expired. Please request a new one.' }); }
