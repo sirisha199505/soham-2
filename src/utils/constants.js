@@ -11,8 +11,8 @@ export const ROLES = {
 
 export const ROLE_LABELS = {
   student: 'Student',
-  coach: 'Innovation Coach',
-  teacher: 'Innovation Coach',
+  coach: 'Trainer',
+  teacher: 'Trainer',
   admin: 'Administrator',
   school_admin: 'School Admin',
   district_admin: 'District Admin',

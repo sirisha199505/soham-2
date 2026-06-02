@@ -277,7 +277,7 @@ export default function StudentManagement() {
   // Filter base data to match the active tab before computing stats
   const tabData      = data.filter(s => tab === 'coaches' ? s.role === 'coach' : s.role !== 'coach');
   const totalInTab   = tabData.length;
-  const tabLabel     = tab === 'coaches' ? 'Total Coaches' : 'Total Students';
+  const tabLabel     = tab === 'coaches' ? 'Total Trainers' : 'Total Students';
 
   // Build mini-stats dynamically from ALL DB levels — scoped to the active tab
   const miniStats = [
@@ -316,7 +316,7 @@ export default function StudentManagement() {
       <div className="flex gap-2 border-b border-slate-200">
         {[
           { id: 'students', label: 'Students', count: data.filter(s => s.role !== 'coach').length },
-          { id: 'coaches',  label: 'Innovation Coaches', count: data.filter(s => s.role === 'coach').length },
+          { id: 'coaches',  label: 'Trainers', count: data.filter(s => s.role === 'coach').length },
         ].map(t => (
           <button key={t.id} onClick={() => { setTab(t.id); setPage(1); setSearch(''); }}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors
@@ -370,7 +370,7 @@ export default function StudentManagement() {
       {/* Info banner */}
       <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5">
         <Info size={13} className="text-blue-500 shrink-0" />
-        <p className="text-xs text-blue-700">Showing {filtered.length} {tab === 'coaches' ? 'coach' : 'student'}{filtered.length !== 1 ? 's' : ''}. Admin overrides are marked with ★</p>
+        <p className="text-xs text-blue-700">Showing {filtered.length} {tab === 'coaches' ? 'trainer' : 'student'}{filtered.length !== 1 ? 's' : ''}. Admin overrides are marked with ★</p>
       </div>
 
       {/* Bulk Actions bar — visible whenever a level filter is active */}
@@ -406,7 +406,7 @@ export default function StudentManagement() {
       {/* Table */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
         <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
-          <p className="text-sm font-semibold text-slate-700">{filtered.length} {tab === 'coaches' ? 'coach' : 'student'}{filtered.length !== 1 ? 's' : ''}</p>
+          <p className="text-sm font-semibold text-slate-700">{filtered.length} {tab === 'coaches' ? 'trainer' : 'student'}{filtered.length !== 1 ? 's' : ''}</p>
           <p className="text-xs text-slate-400">Page {page} of {Math.max(totalPages, 1)}</p>
         </div>
         {paginated.length === 0 ? (

@@ -13,7 +13,7 @@ const FAQ_SECTIONS = [
       },
       {
         q: 'What does "Applicable For" mean on a question?',
-        a: '"Applicable For" controls which audience sees the question during a quiz. Setting it to "Students Only" means only students get that question. "Trainers Only" means only coaches/trainers see it. "Both" makes it available to everyone.',
+        a: '"Applicable For" controls which audience sees the question during a quiz. Setting it to "Students Only" means only students get that question. "Trainers Only" means only trainers see it. "Both" makes it available to everyone.',
       },
       {
         q: 'How do I bulk-import questions using Excel?',
@@ -58,8 +58,8 @@ const FAQ_SECTIONS = [
         a: 'In User Management, find the student, click "Actions → Disable Account". Disabled accounts cannot log in. To re-enable, click "Actions → Enable Account".',
       },
       {
-        q: 'What is the difference between Students and Innovation Coaches?',
-        a: 'Students (role 0) take quizzes and progress through levels. Innovation Coaches (role 2) are assigned trainers/educators who can view coach-specific quiz content. Both appear in the User Management page on separate tabs.',
+        q: 'What is the difference between Students and Trainers?',
+        a: 'Students (role 0) take quizzes and progress through levels. Trainers (role 2) are assigned educators who can view trainer-specific quiz content. Both appear in the User Management page on separate tabs.',
       },
     ],
   },

@@ -195,7 +195,7 @@ export default function AdminDashboard() {
 
       {/* ── Second stat row ── */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard label="Innovation Coaches" value={stats.coachCount}              icon={<UserCheck size={18} />}  color="#8B5CF6" sub="Registered coaches" />
+        <StatCard label="Trainers"            value={stats.coachCount}              icon={<UserCheck size={18} />}  color="#8B5CF6" sub="Registered trainers" />
         <StatCard label="Pass Rate"          value={`${stats.passRate}%`}          icon={<TrendingUp size={18} />} color="#10B981" sub="Across all levels" />
         <StatCard label="Avg Score"          value={`${stats.avgScore}%`}          icon={<BarChart2 size={18} />}  color="#F59E0B" sub="All attempts" />
         <StatCard label="Total Attempts"     value={stats.totalAttempts}           icon={<BookOpen size={18} />}   color="#3BC0EF" sub="Exam submissions" />

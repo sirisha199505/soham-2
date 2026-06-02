@@ -142,7 +142,7 @@ export default function HelpSupport() {
           Still need help?
         </h2>
         <p className="text-sm text-slate-500 mb-4">
-          Contact your school administrator or Innovation Coach for assistance with your account or exam access.
+          Contact your school administrator or Trainer for assistance with your account or exam access.
         </p>
         <div className="flex items-center gap-2 text-sm text-slate-500">
           <Mail size={14} style={{ color: colors.primary }} />

@@ -80,7 +80,7 @@ const DIFF_CFG = {
 // ─── Applicable-For config ────────────────────────────────────────────────
 const AF_CFG = {
   student: { label:'Students Only',           badge:'bg-indigo-100 text-indigo-700', border:'border-indigo-400', icon: Users     },
-  trainer: { label:'Innovation Coaches Only', badge:'bg-violet-100 text-violet-700', border:'border-violet-400', icon: UserCheck },
+  trainer: { label:'Trainers Only',           badge:'bg-violet-100 text-violet-700', border:'border-violet-400', icon: UserCheck },
   both:    { label:'Both',                    badge:'bg-teal-100   text-teal-700',   border:'border-teal-400',   icon: Globe     },
 };
 

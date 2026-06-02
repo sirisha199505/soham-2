@@ -101,7 +101,7 @@ export default function Login() {
 
   const tabs = [
     { key: 'student', label: 'Student', Icon: GraduationCap },
-    { key: 'coach',   label: 'Coach',   Icon: Briefcase     },
+    { key: 'coach',   label: 'Trainer', Icon: Briefcase     },
     { key: 'admin',   label: 'Admin',   Icon: ShieldCheck   },
   ];
 
@@ -123,10 +123,10 @@ export default function Login() {
       passHint: null,
     },
     coach: {
-      title: 'Innovation Coach Sign In',
+      title: 'Trainer Sign In',
       subtitle: 'Sign in with your registered email and password',
       idLabel: 'Email Address',
-      idPlaceholder: 'coach@organization.com',
+      idPlaceholder: 'trainer@organization.com',
       idType: 'email',
       idIcon: Mail,
       passHint: null,
@@ -232,7 +232,7 @@ export default function Login() {
           {loading && <Loader2 size={16} className="animate-spin" />}
           {loading
             ? (waitSec < 6 ? 'Signing in…' : `Server waking up… ${waitSec}s`)
-            : isAdmin ? 'Login as Admin' : isCoach ? 'Login as Coach' : 'Sign In'}
+            : isAdmin ? 'Login as Admin' : isCoach ? 'Login as Trainer' : 'Sign In'}
           {!loading && <ChevronRight size={16} />}
         </button>
       </form>
@@ -279,7 +279,7 @@ export default function Login() {
           <Link to="/register"
             className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-semibold transition-all hover:scale-[1.01]"
             style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${colors.primary}35`, color: colors.primary }}>
-            {isCoach ? 'Register as Innovation Coach' : 'Create your Student Account'}
+            {isCoach ? 'Register as Trainer' : 'Create your Student Account'}
             <ChevronRight size={15} />
           </Link>
         </>

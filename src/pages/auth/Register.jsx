@@ -238,7 +238,7 @@ export default function Register() {
       <div className="flex p-1 rounded-2xl mb-7" style={{ background: 'rgba(255,255,255,0.06)' }}>
         {[
           { key: 'student', label: 'Student',          Icon: GraduationCap },
-          { key: 'coach',   label: 'Innovation Coach', Icon: Briefcase     },
+          { key: 'coach',   label: 'Trainer',           Icon: Briefcase     },
         ].map(t => (
           <button key={t.key} onClick={() => { setTab(t.key); setError(''); }}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all
@@ -251,12 +251,12 @@ export default function Register() {
 
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: 'Space Grotesk' }}>
-          {tab === 'student' ? 'Student Registration' : 'Innovation Coach Registration'}
+          {tab === 'student' ? 'Student Registration' : 'Trainer Registration'}
         </h2>
         <p className="text-slate-400 text-sm">
           {tab === 'student'
             ? 'Create your student account to access Soham Quiz'
-            : 'Register as an Innovation Coach to manage students'}
+            : 'Register as a Trainer to manage students'}
         </p>
       </div>
 
@@ -337,10 +337,10 @@ export default function Register() {
       {/* ── COACH FORM ── */}
       {tab === 'coach' && (
         <form onSubmit={handleCoachSubmit} className="space-y-4">
-          <Field primaryColor={colors.primary} label="Coach Name"                 icon={User}     value={coachForm.coachName}        onChange={sC('coachName')}        placeholder="Full name" />
+          <Field primaryColor={colors.primary} label="Trainer Name"               icon={User}     value={coachForm.coachName}        onChange={sC('coachName')}        placeholder="Full name" />
           <Field primaryColor={colors.primary} label="Organization / Institution" icon={Briefcase} value={coachForm.organizationName} onChange={sC('organizationName')} placeholder="e.g. Soham Robotics Academy" />
           <Field primaryColor={colors.primary} label="Phone Number"               icon={Phone}    value={coachForm.phoneNumber}      onChange={sC('phoneNumber')}      placeholder="10-digit mobile number" type="tel" />
-          <Field primaryColor={colors.primary} label="Email ID"                   icon={Mail}     value={coachForm.email}            onChange={sC('email')}            placeholder="coach@email.com" type="email"
+          <Field primaryColor={colors.primary} label="Email ID"                   icon={Mail}     value={coachForm.email}            onChange={sC('email')}            placeholder="trainer@email.com" type="email"
             hint="Required for forgot password — a 6-digit OTP will be sent here." />
 
           <PasswordField primaryColor={colors.primary}
@@ -356,7 +356,7 @@ export default function Register() {
             className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3.5 rounded-2xl transition-all mt-2 disabled:opacity-60 hover:scale-[1.02] active:scale-[0.98]"
             style={{ background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.accent} 100%)`, boxShadow: `0 10px 32px ${colors.primary}50` }}>
             {loading && <Loader2 size={16} className="animate-spin" />}
-            {loading ? (waitSec < 6 ? 'Creating account…' : `Server waking up… ${waitSec}s`) : 'Create Coach Account'}
+            {loading ? (waitSec < 6 ? 'Creating account…' : `Server waking up… ${waitSec}s`) : 'Create Trainer Account'}
             {!loading && <ArrowRight size={16} />}
           </button>
         </form>

@@ -56,7 +56,7 @@ export default function StudentProfile() {
   const isCoach   = user?.role === 'coach' || user?.role === 'teacher';
   const roleColor = isCoach ? '#FAAB34' : colors.primary;
   const RoleIcon  = isCoach ? Briefcase : GraduationCap;
-  const roleLabel = isCoach ? 'Innovation Coach' : 'Student';
+  const roleLabel = isCoach ? 'Trainer' : 'Student';
 
   const initials = (user?.name || '?')
     .split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
