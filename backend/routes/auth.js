@@ -181,7 +181,16 @@ router.post('/register', async (req, res) => {
        cleanPhone, email?.trim().toLowerCase() || null, hash]
     );
     const user = result.rows[0];
-    res.status(201).json({ uniqueId: user.unique_id, token: makeToken(user) });
+    res.status(201).json({
+      uniqueId: user.unique_id,
+      token:    makeToken(user),
+      user: {
+        id:       user.unique_id,
+        uniqueId: user.unique_id,
+        name:     user.name,
+        role:     user.role,
+      },
+    });
   } catch (err) {
     console.error('Register error:', err.message);
     if (err.code === '23505') {
@@ -243,11 +252,14 @@ router.post('/login', async (req, res) => {
     res.json({
       token,
       user: {
-        id:       user.id,
-        uniqueId: user.unique_id,
-        email:    user.email,
-        name:     user.name,
-        role:     user.role,
+        id:          user.unique_id || String(user.id), // unique_id so frontend userId matches WHERE unique_id=$1
+        uniqueId:    user.unique_id,
+        email:       user.email,
+        name:        user.name,
+        role:        user.role,
+        phoneNumber: user.phone_number,
+        schoolName:  user.school_name,
+        className:   user.class_name,
       },
     });
   } catch (err) {
@@ -266,7 +278,7 @@ router.get('/me', requireAuth, async (req, res) => {
     if (result.rowCount === 0) return res.status(404).json({ error: 'User not found.' });
     const u = result.rows[0];
     res.json({
-      id:          u.id,
+      id:          u.unique_id || String(u.id), // same as login — frontend userId must match unique_id
       uniqueId:    u.unique_id,
       email:       u.email,
       name:        u.name,
