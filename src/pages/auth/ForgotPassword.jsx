@@ -142,7 +142,7 @@ export default function ForgotPassword() {
 
   // step: 'email' | 'otp' | 'password' | 'success'
   const [step,        setStep]       = useState('email');
-  const [email,       setEmail]      = useState('');
+  const [contact,     setContact]    = useState(''); // phone number or email
   const [otp,         setOtp]        = useState(['', '', '', '', '', '']);
   const [otpSentAt,   setOtpSentAt]  = useState(null);
   const [otpExpired,  setOtpExpired] = useState(false);
@@ -170,12 +170,14 @@ export default function ForgotPassword() {
   };
 
   // ── Step 1: send OTP ──────────────────────────────────────────────────────
+  const isPhone = /^\d{10,}$/.test(contact.replace(/\D/g, '')) && !contact.includes('@');
+
   const handleSendOtp = useCallback(async (e) => {
     e?.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await api.forgotPassword(email.trim().toLowerCase());
+      await api.forgotPassword(contact.trim());
       setOtp(['', '', '', '', '', '']);
       setOtpExpired(false);
       setOtpSentAt(Date.now());
@@ -186,7 +188,7 @@ export default function ForgotPassword() {
     } finally {
       setLoading(false);
     }
-  }, [email]);
+  }, [contact]);
 
   // ── Step 2: verify OTP ────────────────────────────────────────────────────
   const handleVerifyOtp = useCallback(async (e) => {
@@ -196,7 +198,7 @@ export default function ForgotPassword() {
     setError('');
     setLoading(true);
     try {
-      const result = await api.verifyResetOtp(email.trim().toLowerCase(), code);
+      const result = await api.verifyResetOtp(contact.trim(), code);
       setResetToken(result.resetToken);
       setStep('password');
     } catch (err) {
@@ -278,20 +280,21 @@ export default function ForgotPassword() {
             </div>
             <h2 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: 'Space Grotesk' }}>Forgot Password</h2>
             <p className="text-white/60 text-sm">
-              Enter your registered email address. We'll send a 6-digit OTP to verify your identity.
+              Enter your registered phone number or email. We'll send a 6-digit OTP to verify your identity.
             </p>
           </div>
           <form onSubmit={handleSendOtp} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Email Address</label>
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Phone Number or Email</label>
               <div className="relative">
                 <Mail size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"/>
-                <input type="email" placeholder="your@email.com"
-                  value={email} onChange={e => setEmail(e.target.value)} required
+                <input type="text" placeholder="9876543210 or your@email.com"
+                  value={contact} onChange={e => setContact(e.target.value)} required
                   className={`${inputCls} pl-11 pr-4`} style={inputBase}/>
               </div>
               <p className="text-[11px] text-slate-500 pl-1">
-                Must be the email used at registration. Phone-only accounts cannot use this flow.
+                Students: OTP will be sent to your registered mobile number via SMS.
+                Trainers / Admins: OTP will be sent to your registered email.
               </p>
             </div>
             <button type="submit" disabled={loading}
@@ -313,8 +316,9 @@ export default function ForgotPassword() {
             </div>
             <h2 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: 'Space Grotesk' }}>Enter OTP</h2>
             <p className="text-white/60 text-sm">
-              We sent a 6-digit code to <span className="text-white font-semibold">{email}</span>.
-              Check your inbox (and spam folder).
+              We sent a 6-digit code to <span className="text-white font-semibold">{contact}</span>{' '}
+              via {isPhone ? 'SMS' : 'email'}.
+              {!isPhone && ' Check your inbox (and spam folder).'}
             </p>
           </div>
 

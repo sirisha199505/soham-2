@@ -1,16 +1,20 @@
 -- RoboQuiz Database Schema
 
 CREATE TABLE IF NOT EXISTS users (
-  id           SERIAL PRIMARY KEY,
-  unique_id    VARCHAR(20)  UNIQUE,
-  email        VARCHAR(255) UNIQUE,
-  name         VARCHAR(255),
-  role         VARCHAR(50)  NOT NULL DEFAULT 'student',
-  school_name  VARCHAR(255),
-  class_name   VARCHAR(100),
-  password_hash TEXT        NOT NULL,
-  created_at   TIMESTAMPTZ  DEFAULT NOW()
+  id            SERIAL PRIMARY KEY,
+  unique_id     VARCHAR(20)  UNIQUE,
+  email         VARCHAR(255) UNIQUE,
+  name          VARCHAR(255),
+  role          VARCHAR(50)  NOT NULL DEFAULT 'student',
+  school_name   VARCHAR(255),
+  class_name    VARCHAR(100),
+  phone_number  VARCHAR(20),
+  password_hash TEXT         NOT NULL,
+  created_at    TIMESTAMPTZ  DEFAULT NOW()
 );
+-- Partial unique index: allows multiple NULLs, enforces uniqueness for actual numbers
+CREATE UNIQUE INDEX IF NOT EXISTS users_phone_number_idx ON users(phone_number) WHERE phone_number IS NOT NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number VARCHAR(20);
 
 CREATE TABLE IF NOT EXISTS level_settings (
   level_id    INTEGER PRIMARY KEY,

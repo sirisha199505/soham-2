@@ -268,18 +268,6 @@ export default function Register() {
         </div>
       )}
 
-      {/* Google Sign-In */}
-      {GOOGLE_CLIENT_ID && (
-        <>
-          <GoogleButton label="Register with Google" disabled={loading} onError={setError} />
-          <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
-            <span className="text-slate-600 text-xs font-medium px-2">or register with email</span>
-            <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
-          </div>
-        </>
-      )}
-
       {/* ── STUDENT FORM ── */}
       {tab === 'student' && (
         <form onSubmit={handleStudentSubmit} className="space-y-4">
