@@ -14,7 +14,7 @@ const inputCls = `w-full rounded-xl py-3 text-sm text-white placeholder:text-whi
 const inputStyle = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)' };
 
 // Defined outside Register — stable identity prevents input focus loss on re-render
-function Field({ label, icon: Icon, value, onChange, type = 'text', placeholder, required = true, hint, primaryColor }) {
+function Field({ label, icon: Icon, value, onChange, type = 'text', placeholder, required = true, hint, primaryColor, maxLength, inputMode }) {
   const focus = { borderColor: `${primaryColor}60`, boxShadow: `0 0 0 3px ${primaryColor}18` };
   return (
     <div className="space-y-1.5">
@@ -23,6 +23,7 @@ function Field({ label, icon: Icon, value, onChange, type = 'text', placeholder,
         <Icon size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
         <input
           type={type} placeholder={placeholder} value={value} onChange={onChange} required={required}
+          maxLength={maxLength} inputMode={inputMode}
           className={`${inputCls} pl-11 pr-4`}
           style={{ ...inputStyle, ...(value ? focus : {}) }}
         />
@@ -142,13 +143,19 @@ export default function Register() {
   const sS = (k) => (e) => setStudentForm(p => ({ ...p, [k]: e.target.value }));
   const sC = (k) => (e) => setCoachForm(p => ({ ...p, [k]: e.target.value }));
 
+  // Phone: digits only, no leading zero, capped at 10 (Indian mobile numbers
+  // are 10 digits and never start with 0).
+  const sanitizePhone = (v) => v.replace(/\D/g, '').replace(/^0+/, '').slice(0, 10);
+  const sSPhone = (e) => setStudentForm(p => ({ ...p, phoneNumber: sanitizePhone(e.target.value) }));
+  const sCPhone = (e) => setCoachForm(p => ({ ...p, phoneNumber: sanitizePhone(e.target.value) }));
+
   const handleStudentSubmit = async (e) => {
     e.preventDefault();
     setError('');
     const effectiveClass = studentForm.className === 'Other' ? studentForm.customClass.trim() : studentForm.className;
     if (!effectiveClass)                                           { setError('Please select or enter your class.'); return; }
     const cleanPhone = studentForm.phoneNumber.replace(/\D/g, '');
-    if (cleanPhone.length < 10)                                    { setError('Phone number must be at least 10 digits.'); return; }
+    if (cleanPhone.length !== 10 || cleanPhone.startsWith('0'))    { setError('Enter a valid 10-digit mobile number (no leading 0).'); return; }
     if (studentForm.password.length < 6)                           { setError('Password must be at least 6 characters.'); return; }
     if (studentForm.password !== studentForm.confirmPassword)      { setError('Passwords do not match.'); return; }
 
@@ -174,7 +181,7 @@ export default function Register() {
     e.preventDefault();
     setError('');
     const cleanPhone = coachForm.phoneNumber.replace(/\D/g, '');
-    if (cleanPhone.length < 10)                               { setError('Phone number must be at least 10 digits.'); return; }
+    if (cleanPhone.length !== 10 || cleanPhone.startsWith('0')) { setError('Enter a valid 10-digit mobile number (no leading 0).'); return; }
     if (coachForm.password.length < 6)                        { setError('Password must be at least 6 characters.'); return; }
     if (coachForm.password !== coachForm.confirmPassword)     { setError('Passwords do not match.'); return; }
 
@@ -330,7 +337,7 @@ export default function Register() {
             )}
           </div>
 
-          <Field primaryColor={colors.primary} label="Phone Number" icon={Phone} value={studentForm.phoneNumber} onChange={sS('phoneNumber')} placeholder="10-digit mobile number" type="tel" />
+          <Field primaryColor={colors.primary} label="Phone Number" icon={Phone} value={studentForm.phoneNumber} onChange={sSPhone} placeholder="10-digit mobile number" type="tel" maxLength={10} inputMode="numeric" />
           <Field primaryColor={colors.primary} label="Email ID (Optional)" icon={Mail} value={studentForm.email} onChange={sS('email')} placeholder="your@email.com" type="email" required={false}
             hint="Required for forgot password — a 6-digit OTP will be sent here" />
 
@@ -358,7 +365,7 @@ export default function Register() {
         <form onSubmit={handleCoachSubmit} className="space-y-4">
           <Field primaryColor={colors.primary} label="Trainer Name"               icon={User}     value={coachForm.coachName}        onChange={sC('coachName')}        placeholder="Full name" />
           <Field primaryColor={colors.primary} label="Organization / Institution" icon={Briefcase} value={coachForm.organizationName} onChange={sC('organizationName')} placeholder="e.g. Soham Robotics Academy" />
-          <Field primaryColor={colors.primary} label="Phone Number"               icon={Phone}    value={coachForm.phoneNumber}      onChange={sC('phoneNumber')}      placeholder="10-digit mobile number" type="tel" />
+          <Field primaryColor={colors.primary} label="Phone Number"               icon={Phone}    value={coachForm.phoneNumber}      onChange={sCPhone}                placeholder="10-digit mobile number" type="tel" maxLength={10} inputMode="numeric" />
           <Field primaryColor={colors.primary} label="Email ID"                   icon={Mail}     value={coachForm.email}            onChange={sC('email')}            placeholder="trainer@email.com" type="email"
             hint="Required for forgot password — a 6-digit OTP will be sent here." />
 
