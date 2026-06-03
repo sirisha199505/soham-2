@@ -706,6 +706,12 @@ export default function LevelQuiz() {
       levelId:    id,
       levelTitle: level?.title || `Level ${id}`,
       date:       new Date().toISOString(),
+      // Unique per submission, generated once and reused across every retry below.
+      // The backend dedupes on this so genuine retakes are always saved, while a
+      // retried (timed-out) POST never creates a duplicate.
+      clientAttemptId: (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `${user.id}-${id}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       questions:  questions.map(compactQ),
       answers:    { ...answers },
       score,
