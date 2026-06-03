@@ -35,6 +35,7 @@ export const getSidebarItems = (role) => {
       { label: 'Students / Trainers', path: '/admin/students', icon: 'Users' },
       { label: 'Exam Levels',   path: '/admin/levels',        icon: 'Layers' },
       { label: 'Content',       path: '/admin/content',       icon: 'FileText' },
+      { label: 'Help & Support', path: '/admin/help',         icon: 'HelpCircle'  },
       { label: 'Settings',      path: '/admin/settings',      icon: 'Settings'    },
     ];
   }
