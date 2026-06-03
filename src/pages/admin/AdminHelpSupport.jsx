@@ -1,5 +1,9 @@
-import { useState } from 'react';
-import { HelpCircle, ChevronDown, BookOpen, Users, Database, Settings, Shield, Mail } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import {
+  HelpCircle, ChevronDown, BookOpen, Users, Database, Settings, Shield, Mail,
+  Plus, Pencil, Trash2, Save, X, GraduationCap, Briefcase, Loader2, MessagesSquare,
+} from 'lucide-react';
+import { api } from '../../utils/api';
 
 const FAQ_SECTIONS = [
   {
@@ -180,6 +184,209 @@ function FAQSection({ section }) {
   );
 }
 
+/* ── Admin-editable FAQs (shown to students & trainers on their Help page) ── */
+const AUDIENCE_META = {
+  student: { label: 'Student', color: '#3BC0EF', Icon: GraduationCap },
+  trainer: { label: 'Trainer', color: '#FAAB34', Icon: Briefcase },
+  both:    { label: 'Both',    color: '#10B981', Icon: Users },
+};
+const EMPTY_DRAFT = { question: '', answer: '', audience: 'student', active: true };
+
+function AudienceBadge({ audience }) {
+  const m = AUDIENCE_META[audience] || AUDIENCE_META.both;
+  const { Icon } = m;
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+      style={{ background: `${m.color}18`, color: m.color }}>
+      <Icon size={11} /> {m.label}
+    </span>
+  );
+}
+
+function FaqForm({ value, onChange, onSubmit, onCancel, saving, submitLabel }) {
+  return (
+    <div className="space-y-2.5">
+      <input
+        type="text" placeholder="Question"
+        value={value.question}
+        onChange={e => onChange({ ...value, question: e.target.value })}
+        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-indigo-400"
+      />
+      <textarea
+        placeholder="Answer" rows={3}
+        value={value.answer}
+        onChange={e => onChange({ ...value, answer: e.target.value })}
+        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 leading-relaxed focus:outline-none focus:border-indigo-400 resize-y"
+      />
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="text-xs font-semibold text-slate-500">Audience</label>
+        <select
+          value={value.audience}
+          onChange={e => onChange({ ...value, audience: e.target.value })}
+          className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:border-indigo-400"
+        >
+          <option value="student">Student</option>
+          <option value="trainer">Trainer</option>
+          <option value="both">Both</option>
+        </select>
+        <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 cursor-pointer">
+          <input type="checkbox" checked={value.active}
+            onChange={e => onChange({ ...value, active: e.target.checked })} />
+          Visible
+        </label>
+        <div className="ml-auto flex items-center gap-2">
+          {onCancel && (
+            <button onClick={onCancel} disabled={saving}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 px-3 py-1.5 rounded-lg hover:bg-slate-100">
+              <X size={14} /> Cancel
+            </button>
+          )}
+          <button onClick={onSubmit} disabled={saving}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {submitLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FaqManager() {
+  const [faqs, setFaqs]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState('');
+  const [saving, setSaving]   = useState(false);
+  const [filter, setFilter]   = useState('all');
+  const [draft, setDraft]     = useState(EMPTY_DRAFT);
+  const [editId, setEditId]   = useState(null);
+  const [editDraft, setEditDraft] = useState(EMPTY_DRAFT);
+
+  const load = () => {
+    setLoading(true);
+    api.getAllFaqs()
+      .then(rows => setFaqs(Array.isArray(rows) ? rows : []))
+      .catch(e => setError(e.message || 'Failed to load FAQs.'))
+      .finally(() => setLoading(false));
+  };
+  useEffect(load, []);
+
+  const addFaq = async () => {
+    if (!draft.question.trim() || !draft.answer.trim()) { setError('Question and answer are required.'); return; }
+    setSaving(true); setError('');
+    try { await api.createFaq(draft); setDraft(EMPTY_DRAFT); load(); }
+    catch (e) { setError(e.message || 'Failed to add FAQ.'); }
+    finally { setSaving(false); }
+  };
+
+  const saveEdit = async (id) => {
+    if (!editDraft.question.trim() || !editDraft.answer.trim()) { setError('Question and answer are required.'); return; }
+    setSaving(true); setError('');
+    try { await api.updateFaq(id, editDraft); setEditId(null); load(); }
+    catch (e) { setError(e.message || 'Failed to update FAQ.'); }
+    finally { setSaving(false); }
+  };
+
+  const removeFaq = async (id) => {
+    if (!window.confirm('Delete this FAQ? This cannot be undone.')) return;
+    setError('');
+    try { await api.deleteFaq(id); load(); }
+    catch (e) { setError(e.message || 'Failed to delete FAQ.'); }
+  };
+
+  const shown   = faqs.filter(f => filter === 'all' || f.audience === filter);
+  const counts  = faqs.reduce((acc, f) => { acc[f.audience] = (acc[f.audience] || 0) + 1; return acc; }, {});
+  const filters = [
+    { key: 'all',     label: `All (${faqs.length})` },
+    { key: 'student', label: `Student (${counts.student || 0})` },
+    { key: 'trainer', label: `Trainer (${counts.trainer || 0})` },
+    { key: 'both',    label: `Both (${counts.both || 0})` },
+  ];
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-50" style={{ background: '#4F46E508' }}>
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-indigo-50 text-indigo-600">
+          <MessagesSquare size={17} />
+        </div>
+        <div>
+          <h2 className="font-bold text-slate-800 text-sm" style={{ fontFamily: 'Space Grotesk' }}>
+            Manage Student &amp; Trainer FAQs
+          </h2>
+          <p className="text-[11px] text-slate-400">These appear on the student &amp; trainer Help &amp; Support pages.</p>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {error && (
+          <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</div>
+        )}
+
+        {/* Add new */}
+        <div className="rounded-xl border border-dashed border-slate-200 p-4 bg-slate-50/50">
+          <p className="text-xs font-bold text-slate-600 mb-2.5 flex items-center gap-1.5">
+            <Plus size={14} className="text-indigo-600" /> Add a new FAQ
+          </p>
+          <FaqForm value={draft} onChange={setDraft} onSubmit={addFaq} saving={saving} submitLabel="Add FAQ" />
+        </div>
+
+        {/* Filter */}
+        <div className="flex flex-wrap gap-1.5">
+          {filters.map(f => (
+            <button key={f.key} onClick={() => setFilter(f.key)}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                filter === f.key ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {/* List */}
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-slate-400 text-sm">
+            <Loader2 size={16} className="animate-spin" /> Loading FAQs…
+          </div>
+        ) : shown.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-6">No FAQs yet. Add one above.</p>
+        ) : (
+          <div className="space-y-2">
+            {shown.map(f => (
+              <div key={f.id} className="rounded-xl border border-slate-100 p-3.5">
+                {editId === f.id ? (
+                  <FaqForm value={editDraft} onChange={setEditDraft} onSubmit={() => saveEdit(f.id)}
+                    onCancel={() => setEditId(null)} saving={saving} submitLabel="Save" />
+                ) : (
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <AudienceBadge audience={f.audience} />
+                        {!f.active && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-400">Hidden</span>
+                        )}
+                      </div>
+                      <p className="text-sm font-semibold text-slate-800 leading-snug">{f.question}</p>
+                      <p className="text-xs text-slate-500 leading-relaxed mt-1">{f.answer}</p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button onClick={() => { setEditId(f.id); setEditDraft({ question: f.question, answer: f.answer, audience: f.audience, active: f.active }); }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50" title="Edit">
+                        <Pencil size={15} />
+                      </button>
+                      <button onClick={() => removeFaq(f.id)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50" title="Delete">
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminHelpSupport() {
   return (
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-6 max-w-4xl mx-auto">
@@ -214,7 +421,16 @@ export default function AdminHelpSupport() {
         })}
       </div>
 
-      {/* FAQ sections */}
+      {/* Admin-editable FAQs for students & trainers */}
+      <FaqManager />
+
+      {/* Admin guide (static reference for administrators) */}
+      <div className="flex items-center gap-2 pt-2">
+        <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider" style={{ fontFamily: 'Space Grotesk' }}>
+          Admin Guide
+        </h2>
+        <div className="flex-1 h-px bg-slate-200" />
+      </div>
       {FAQ_SECTIONS.map((section, i) => (
         <FAQSection key={i} section={section} />
       ))}

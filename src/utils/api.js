@@ -164,6 +164,13 @@ export const api = {
   getSettings:  () => request('GET', '/api/settings'),
   saveSettings: (settings) => request('PUT', '/api/settings', settings),
 
+  // FAQs — audience: 'student' | 'trainer'. Admin uses getAllFaqs() to manage.
+  getFaqs:    (audience) => request('GET', `/api/faqs${audience ? `?audience=${encodeURIComponent(audience)}` : ''}`),
+  getAllFaqs: () => request('GET', '/api/faqs?manage=true'),
+  createFaq:  (data)      => request('POST', '/api/faqs', data),
+  updateFaq:  (id, data)  => request('PUT', `/api/faqs/${id}`, data),
+  deleteFaq:  (id)        => request('DELETE', `/api/faqs/${id}`),
+
   // Monitoring
   getMonitoringSessions: () => request('GET', '/api/monitoring/sessions'),
 

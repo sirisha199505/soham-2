@@ -1,39 +1,88 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { HelpCircle, Mail, BookOpen, MessageCircle, ChevronDown } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
+import { api } from '../../utils/api';
 
-const FAQS = [
+const STUDENT_FAQS = [
   {
-    q: 'How do I access the Exam Levels?',
-    a: 'Go to your Dashboard and click "Start" on any unlocked level card. Level 1 is always available. Higher levels unlock after completing the previous one.',
+    q: 'How do I log in to my account?',
+    a: 'On the login screen, choose the Student tab and sign in with your registered mobile number, email address, or Student ID, along with your password.',
   },
   {
-    q: 'What is my unique Student ID?',
-    a: 'Your Student ID was generated when you registered. It is your only login credential. You can view it in your Profile page. Keep it safe — it cannot be recovered if lost.',
+    q: 'I forgot my password — how do I reset it?',
+    a: 'On the login screen tap "Forgot password?". As a student, enter your registered 10-digit mobile number and we will send a 6-digit OTP by SMS. Enter the OTP, then set a new password. (If SMS is not yet enabled by your school, ask your administrator to reset it for you.)',
+  },
+  {
+    q: 'How do I access the Exam Levels?',
+    a: 'Go to your Dashboard and click "Start" on any unlocked level card. Level 1 is always available. Higher levels unlock after you complete the previous one and, where required, after administrator approval.',
+  },
+  {
+    q: 'How many times can I retake a level?',
+    a: 'Each level can be attempted up to the limit set by your administrator (3 by default). Your best score is kept, and every attempt — including retakes — is recorded in your Quiz History.',
   },
   {
     q: 'How are quiz scores calculated?',
-    a: 'Your score is the percentage of correct answers: (Correct answers ÷ Total questions) × 100. Scores are saved automatically after each quiz.',
+    a: 'Your score is the percentage of correct answers: (Correct answers ÷ Total questions) × 100. Scores are saved automatically when you submit the quiz.',
   },
   {
-    q: 'Can I retake a quiz level?',
-    a: 'Each level can be attempted multiple times up to the limit set by your administrator. Your best score is shown on the dashboard.',
+    q: 'Where can I review my past attempts?',
+    a: 'Open the Quiz History page from the sidebar. It lists all your attempts with the score, date, and a question-by-question answer analysis with explanations.',
   },
   {
-    q: 'How do I download study content as PDF?',
-    a: 'Go to the Study Content page, select a level, and click the "Download PDF" button in the top right corner.',
-  },
-  {
-    q: 'Why is a level locked?',
-    a: 'Levels unlock sequentially — complete the previous level first. Some levels may also require administrator approval. Contact your school admin if you believe a level should be unlocked for you.',
+    q: 'How do I study and download content as a PDF?',
+    a: 'Go to the Content page, select a level, and use the "Download PDF" button to save the study material for offline reading.',
   },
   {
     q: 'What happens if I run out of attempts?',
-    a: 'Once you have used all attempts for a level, you will see "No Attempts Remaining". Contact your administrator to request additional attempts.',
+    a: 'Once you have used all attempts for a level, you will see "No Attempts Remaining". Contact your administrator if you need additional attempts.',
+  },
+  {
+    q: 'Why is a level locked?',
+    a: 'Levels unlock in order — finish the previous level first. Some levels also require administrator approval. Contact your school administrator if you believe a level should be open for you.',
   },
   {
     q: 'My score was not saved — what should I do?',
-    a: 'Ensure you have a stable internet connection during the quiz. If the issue persists, your answers are backed up locally and will retry automatically on next load. Contact your administrator if scores are still missing.',
+    a: 'Make sure you have a stable internet connection while taking the quiz. The app automatically retries saving if the connection drops. If a score is still missing from Quiz History, contact your administrator.',
+  },
+];
+
+const TRAINER_FAQS = [
+  {
+    q: 'How do I log in as a trainer?',
+    a: 'On the login screen, choose the Trainer tab and sign in with your registered email address (or phone number) and your password.',
+  },
+  {
+    q: 'I forgot my password — how do I reset it?',
+    a: 'On the login screen tap "Forgot password?". As a trainer, enter your registered email address and we will send a 6-digit OTP to your inbox (check the spam folder too). Enter the OTP, then set a new password.',
+  },
+  {
+    q: 'What can I do in the app as a trainer?',
+    a: 'You can view your Dashboard, study the Content, take your trainer-level quizzes, and review your Quiz History. Question banks, exam levels, and study content are configured by your administrator.',
+  },
+  {
+    q: 'How do I take a quiz?',
+    a: 'From your Dashboard, click "Start" on an available level. Trainers are served questions from the trainer question set (and shared questions), so your quiz may differ from a student\'s.',
+  },
+  {
+    q: 'How many times can I retake a level?',
+    a: 'Each level can be attempted up to the limit set by the administrator (3 by default). Your best score is kept, and every attempt is recorded in your Quiz History.',
+  },
+  {
+    q: 'How are scores calculated?',
+    a: 'Your score is the percentage of correct answers: (Correct answers ÷ Total questions) × 100, saved automatically when you submit.',
+  },
+  {
+    q: 'Where can I review my attempts?',
+    a: 'Open the Quiz History page from the sidebar to see all your attempts with scores, dates, and a question-by-question answer analysis with explanations.',
+  },
+  {
+    q: 'How do I update my profile or change my password?',
+    a: 'Go to the My Profile page from the sidebar to update your details and change your password.',
+  },
+  {
+    q: 'Who do I contact to add levels, questions, or unlock content?',
+    a: 'Exam levels, question banks, and content are managed by the administrator. Contact your administrator for any additions or changes.',
   },
 ];
 
@@ -79,6 +128,28 @@ function FAQItem({ item, isOpen, onToggle }) {
 
 export default function HelpSupport() {
   const { colors } = useTheme();
+  const { user } = useAuth();
+  // Trainers (coach role) get trainer FAQs; everyone else gets the student set.
+  const isTrainer = user?.role === 'coach';
+  const audience  = isTrainer ? 'trainer' : 'student';
+  const fallback  = isTrainer ? TRAINER_FAQS : STUDENT_FAQS;
+
+  // FAQs are managed by admins in the DB; the hardcoded set is the fallback
+  // shown if the API is empty or unreachable.
+  const [faqs, setFaqs] = useState(fallback);
+
+  useEffect(() => {
+    let alive = true;
+    api.getFaqs(audience)
+      .then(rows => {
+        if (!alive) return;
+        const mapped = (Array.isArray(rows) ? rows : []).map(f => ({ q: f.question, a: f.answer }));
+        setFaqs(mapped.length ? mapped : fallback);
+      })
+      .catch(() => { if (alive) setFaqs(fallback); });
+    return () => { alive = false; };
+  }, [audience]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // null = all closed; number = index of the open item
   const [openIndex, setOpenIndex] = useState(null);
 
@@ -125,7 +196,7 @@ export default function HelpSupport() {
           Frequently Asked Questions
         </h2>
         <div className="space-y-2">
-          {FAQS.map((item, i) => (
+          {faqs.map((item, i) => (
             <FAQItem
               key={i}
               item={item}
@@ -142,7 +213,9 @@ export default function HelpSupport() {
           Still need help?
         </h2>
         <p className="text-sm text-slate-500 mb-4">
-          Contact your school administrator or Trainer for assistance with your account or exam access.
+          {isTrainer
+            ? 'Contact your administrator for assistance with your account, exam levels, or question banks.'
+            : 'Contact your school administrator or Trainer for assistance with your account or exam access.'}
         </p>
         <div className="flex items-center gap-2 text-sm text-slate-500">
           <Mail size={14} style={{ color: colors.primary }} />
