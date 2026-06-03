@@ -203,7 +203,7 @@ export default function Login() {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Password</label>
-            <Link to="/forgot-password" className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+            <Link to={`/forgot-password?role=${tab === 'student' ? 'student' : 'trainer'}`} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
               Forgot password?
             </Link>
           </div>

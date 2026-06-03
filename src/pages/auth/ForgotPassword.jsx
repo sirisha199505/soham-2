@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Mail, Phone, Lock, Eye, EyeOff, ArrowLeft, CheckCircle,
   AlertCircle, Loader2, ShieldCheck, RefreshCw, Clock,
@@ -133,8 +133,18 @@ function PasswordStrength({ password }) {
 export default function ForgotPassword() {
   const { colors } = useTheme();
 
+  // Role comes from the login tab the user was on (?role=student|trainer).
+  // When present, the page is locked to that role — no tab switcher is shown.
+  const [searchParams] = useSearchParams();
+  const roleParam = searchParams.get('role');
+  const lockedRole =
+    roleParam === 'student' ? 'student'
+    : (roleParam === 'trainer' || roleParam === 'coach' || roleParam === 'admin') ? 'trainer'
+    : null;
+  const isLocked = lockedRole !== null;
+
   // role: 'student' | 'trainer'
-  const [role,        setRole]        = useState('student');
+  const [role,        setRole]        = useState(lockedRole || 'student');
   // step: 'contact' | 'otp' | 'password' | 'success'
   const [step,        setStep]        = useState('contact');
   const [contact,     setContact]     = useState('');
@@ -283,20 +293,33 @@ export default function ForgotPassword() {
       {/* ── STEP 1: contact ───────────────────────────────────────────────── */}
       {step === 'contact' && (
         <>
-          {/* Role tabs */}
-          <div className="flex p-1 rounded-2xl mb-6" style={{ background: 'rgba(255,255,255,0.06)' }}>
-            {[
-              { key: 'student', label: 'Student',        Icon: GraduationCap },
-              { key: 'trainer', label: 'Trainer / Admin', Icon: Briefcase     },
-            ].map(t => (
-              <button key={t.key} onClick={() => switchRole(t.key)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold transition-all
-                  ${role === t.key ? 'text-white shadow-lg' : 'text-slate-500 hover:text-slate-400'}`}
-                style={role === t.key ? { background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})` } : {}}>
-                <t.Icon size={13}/> {t.label}
-              </button>
-            ))}
-          </div>
+          {/* Role selector — locked badge when arriving from a login tab, tabs otherwise */}
+          {isLocked ? (
+            <div className="flex items-center justify-between gap-2 mb-6">
+              <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold text-white"
+                style={{ background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})` }}>
+                {isStudent ? <GraduationCap size={13}/> : <Briefcase size={13}/>}
+                {isStudent ? 'Student account' : 'Trainer / Admin account'}
+              </div>
+              <Link to="/login" className="text-[11px] text-white/40 hover:text-white/70 transition-colors">
+                Not a {isStudent ? 'student' : 'trainer / admin'}?
+              </Link>
+            </div>
+          ) : (
+            <div className="flex p-1 rounded-2xl mb-6" style={{ background: 'rgba(255,255,255,0.06)' }}>
+              {[
+                { key: 'student', label: 'Student',        Icon: GraduationCap },
+                { key: 'trainer', label: 'Trainer / Admin', Icon: Briefcase     },
+              ].map(t => (
+                <button key={t.key} onClick={() => switchRole(t.key)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold transition-all
+                    ${role === t.key ? 'text-white shadow-lg' : 'text-slate-500 hover:text-slate-400'}`}
+                  style={role === t.key ? { background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})` } : {}}>
+                  <t.Icon size={13}/> {t.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="mb-6">
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4"
