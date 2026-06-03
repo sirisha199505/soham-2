@@ -186,7 +186,7 @@ export default function ForgotPassword() {
     // Basic validation
     if (isStudent) {
       const digits = contact.replace(/\D/g, '');
-      if (digits.length < 10) { setError('Please enter a valid 10-digit mobile number.'); return; }
+      if (digits.length !== 10) { setError('Mobile number must be exactly 10 digits.'); return; }
     } else {
       if (!contact.includes('@')) { setError('Please enter a valid email address.'); return; }
     }
@@ -348,9 +348,13 @@ export default function ForgotPassword() {
                 <input
                   key={role}
                   type={isStudent ? 'tel' : 'email'}
+                  inputMode={isStudent ? 'numeric' : 'email'}
+                  maxLength={isStudent ? 10 : undefined}
                   placeholder={isStudent ? '9876543210' : 'trainer@example.com'}
                   value={contact}
-                  onChange={e => setContact(e.target.value)}
+                  onChange={e => setContact(
+                    isStudent ? e.target.value.replace(/\D/g, '').slice(0, 10) : e.target.value
+                  )}
                   required
                   autoFocus
                   className={`${inputCls} pl-11 pr-4`}
