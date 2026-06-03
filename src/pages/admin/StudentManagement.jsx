@@ -46,14 +46,14 @@ function StudentModal({ student, levelList, onClose, onPhoneUpdated }) {
     : [1, 2, 3].map((n, i) => ({ id: n, label: `Level ${n}`, idx: i }));
 
   const [editingPhone, setEditingPhone] = useState(false);
-  const [phoneVal,     setPhoneVal]     = useState(student.phoneNumber === '—' ? '' : (student.phoneNumber || ''));
+  const [phoneVal,     setPhoneVal]     = useState(student.phoneNumber && student.phoneNumber !== '—' ? student.phoneNumber : (student.phone_number || ''));
   const [phoneSaving,  setPhoneSaving]  = useState(false);
 
   const savePhone = async () => {
     setPhoneSaving(true);
     try {
       const result = await api.updateStudentPhone(student.uniqueId, phoneVal.replace(/\D/g, ''));
-      onPhoneUpdated?.(student.uniqueId, result.phoneNumber);
+      onPhoneUpdated?.(student.uniqueId, result.phoneNumber || result.phone_number);
       setEditingPhone(false);
     } catch { /* ignore */ }
     setPhoneSaving(false);
@@ -240,14 +240,14 @@ export default function StudentManagement() {
         id:          s.id,
         name:        s.name || '—',
         email:       s.email || '—',
-        phoneNumber: s.phoneNumber || '—',
+        phoneNumber: s.phoneNumber || s.phone_number || '',
         role:        s.role || 'student',
-        uniqueId:   s.uniqueId,
-        schoolName: s.schoolName || '—',
-        className:  s.className  || '—',
-        disabled:   s.disabled || localDisabled.includes(s.uniqueId),
-        levels:     s.levels || {},
-        overrides:  s.overrideIds || [],
+        uniqueId:    s.uniqueId   || s.unique_id,
+        schoolName:  s.schoolName || s.school_name || '—',
+        className:   s.className  || s.class_name  || '—',
+        disabled:    s.disabled || localDisabled.includes(s.uniqueId || s.unique_id),
+        levels:      s.levels || {},
+        overrides:   s.overrideIds || s.override_ids || [],
       })));
     } catch {}
   };
@@ -490,7 +490,7 @@ export default function StudentManagement() {
                   </td>
                   {/* Mobile */}
                   <td className="px-4 py-3.5">
-                    {s.phoneNumber && s.phoneNumber !== '—'
+                    {s.phoneNumber
                       ? <span className="text-xs font-medium text-slate-700">{s.phoneNumber}</span>
                       : <span className="text-xs text-slate-300">—</span>}
                   </td>
