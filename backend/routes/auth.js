@@ -13,10 +13,16 @@ const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 // ── Send email OTP ─────────────────────────────────────────────────────────────
 async function sendEmailOtp(toEmail, name, otp) {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    throw new Error('Email is not configured (EMAIL_USER / EMAIL_PASS missing in .env).');
+  }
   const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
   });
+  // Verify the SMTP login up front so a bad/expired App Password fails loudly
+  // (Gmail rejects plain passwords with "535 Username and Password not accepted").
+  await transporter.verify();
   await transporter.sendMail({
     from:    `"RoboQuiz" <${process.env.EMAIL_USER}>`,
     to:      toEmail,
@@ -34,24 +40,45 @@ async function sendEmailOtp(toEmail, name, otp) {
   });
 }
 
-// ── Send SMS OTP (MSG91 — set SMS_API_KEY + SMS_SENDER_ID in .env) ─────────────
+// ── Send SMS OTP (MSG91 v5 OTP API) ────────────────────────────────────────────
+// Requires SMS_API_KEY (authkey) + SMS_TEMPLATE_ID (DLT-approved template) in .env.
+// The template must contain an OTP variable (##OTP##). Sender ID is configured on
+// the template in the MSG91 dashboard, so SMS_SENDER_ID is no longer used here.
 async function sendSmsOtp(phone, otp) {
-  const apiKey = process.env.SMS_API_KEY;
-  if (!apiKey) {
-    // Dev fallback — log to console when no SMS credentials are configured
-    console.log(`[SMS-DEV] OTP for ${phone}: ${otp}`);
+  const apiKey     = process.env.SMS_API_KEY;
+  const templateId = process.env.SMS_TEMPLATE_ID;
+
+  // Dev fallback — when SMS isn't configured, surface the OTP instead of failing silently.
+  if (!apiKey || !templateId) {
+    console.log(`[SMS-DEV] OTP for ${phone}: ${otp}  (set SMS_API_KEY + SMS_TEMPLATE_ID in .env to send real SMS)`);
     return;
   }
-  const sender  = process.env.SMS_SENDER_ID || 'ROBQIZ';
-  const message = encodeURIComponent(`Your RoboQuiz OTP is ${otp}. Valid for 5 minutes. Do not share with anyone.`);
-  const url = `https://api.msg91.com/api/sendotp.php?authkey=${apiKey}&mobile=91${phone}&message=${message}&sender=${sender}&otp=${otp}`;
+
   const https = require('https');
-  await new Promise((resolve, reject) => {
-    https.get(url, res => {
-      res.on('data', () => {});
-      res.on('end', resolve);
-    }).on('error', reject);
+  const path  = `/api/v5/otp?template_id=${encodeURIComponent(templateId)}`
+              + `&mobile=91${phone}&otp=${otp}&authkey=${encodeURIComponent(apiKey)}`;
+
+  const body = await new Promise((resolve, reject) => {
+    const apiReq = https.request(
+      { hostname: 'control.msg91.com', path, method: 'POST',
+        headers: { 'Content-Type': 'application/json' } },
+      apiRes => {
+        let data = '';
+        apiRes.on('data', c => { data += c; });
+        apiRes.on('end', () => resolve(data));
+      }
+    );
+    apiReq.on('error', reject);
+    apiReq.write(JSON.stringify({ otp }));
+    apiReq.end();
   });
+
+  // MSG91 returns HTTP 200 even on errors — the real status is in the JSON `type`.
+  let parsed;
+  try { parsed = JSON.parse(body); } catch { parsed = { type: 'error', message: body }; }
+  if (parsed.type !== 'success') {
+    throw new Error(`SMS provider error: ${parsed.message || body || 'unknown error'}`);
+  }
 }
 
 // ── POST /api/auth/forgot-password ─────────────────────────────────────────────
@@ -119,7 +146,9 @@ router.post('/forgot-password', async (req, res) => {
     }
   } catch (err) {
     console.error('Forgot password error:', err.message);
-    res.status(500).json({ error: 'Failed to send OTP. Please try again later.' });
+    // In dev, return the real reason (bad App Password, SMS template, etc.) to speed up debugging.
+    const detail = process.env.NODE_ENV === 'production' ? '' : ` (${err.message})`;
+    res.status(500).json({ error: `Failed to send OTP. Please try again later.${detail}` });
   }
 });
 
