@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Mail, Lock, Eye, EyeOff, ArrowLeft, CheckCircle,
+  Mail, Phone, Lock, Eye, EyeOff, ArrowLeft, CheckCircle,
   AlertCircle, Loader2, ShieldCheck, RefreshCw, Clock,
+  GraduationCap, Briefcase,
 } from 'lucide-react';
 import { api } from '../../utils/api';
 import { useTheme } from '../../context/ThemeContext';
@@ -60,11 +61,8 @@ function OtpInput({ value, onChange, disabled }) {
         const next = [...value]; next[i] = '';
         onChange(next);
       }
-    } else if (e.key === 'ArrowLeft' && i > 0) {
-      refs.current[i - 1]?.current?.focus();
-    } else if (e.key === 'ArrowRight' && i < 5) {
-      refs.current[i + 1]?.current?.focus();
-    }
+    } else if (e.key === 'ArrowLeft'  && i > 0) refs.current[i - 1]?.current?.focus();
+      else if (e.key === 'ArrowRight' && i < 5) refs.current[i + 1]?.current?.focus();
   };
 
   const handlePaste = (e) => {
@@ -73,8 +71,7 @@ function OtpInput({ value, onChange, disabled }) {
     if (!paste) return;
     const next = [...Array(6)].map((_, i) => paste[i] || '');
     onChange(next);
-    const focusIdx = Math.min(paste.length, 5);
-    refs.current[focusIdx]?.current?.focus();
+    refs.current[Math.min(paste.length, 5)]?.current?.focus();
   };
 
   return (
@@ -83,11 +80,8 @@ function OtpInput({ value, onChange, disabled }) {
         <input
           key={i}
           ref={el => { refs.current[i] = { current: el }; }}
-          type="text"
-          inputMode="numeric"
-          maxLength={1}
-          value={digit}
-          disabled={disabled}
+          type="text" inputMode="numeric" maxLength={1}
+          value={digit} disabled={disabled}
           onChange={e => handleChange(i, e.target.value)}
           onKeyDown={e => handleKeyDown(i, e)}
           onFocus={e => e.target.select()}
@@ -95,8 +89,7 @@ function OtpInput({ value, onChange, disabled }) {
           style={{
             background:  digit ? 'rgba(59,192,239,0.12)' : 'rgba(255,255,255,0.06)',
             border:      digit ? '2px solid rgba(59,192,239,0.5)' : '1px solid rgba(255,255,255,0.12)',
-            color:       '#fff',
-            caretColor:  'transparent',
+            color: '#fff', caretColor: 'transparent',
           }}
         />
       ))}
@@ -140,21 +133,28 @@ function PasswordStrength({ password }) {
 export default function ForgotPassword() {
   const { colors } = useTheme();
 
-  // step: 'email' | 'otp' | 'password' | 'success'
-  const [step,        setStep]       = useState('email');
-  const [contact,     setContact]    = useState(''); // phone number or email
-  const [otp,         setOtp]        = useState(['', '', '', '', '', '']);
-  const [otpSentAt,   setOtpSentAt]  = useState(null);
-  const [otpExpired,  setOtpExpired] = useState(false);
-  const [resetToken,  setResetToken] = useState('');
-  const [newPassword, setNewPass]    = useState('');
-  const [confirmPass, setConfirmPass]= useState('');
-  const [showPass,    setShowPass]   = useState(false);
-  const [loading,     setLoading]    = useState(false);
-  const [error,       setError]      = useState('');
+  // role: 'student' | 'trainer'
+  const [role,        setRole]        = useState('student');
+  // step: 'contact' | 'otp' | 'password' | 'success'
+  const [step,        setStep]        = useState('contact');
+  const [contact,     setContact]     = useState('');
+  const [otp,         setOtp]         = useState(['', '', '', '', '', '']);
+  const [otpSentAt,   setOtpSentAt]   = useState(null);
+  const [otpExpired,  setOtpExpired]  = useState(false);
+  const [resetToken,  setResetToken]  = useState('');
+  const [newPassword, setNewPass]     = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [showPass,    setShowPass]    = useState(false);
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Resend cooldown countdown
+  const isStudent = role === 'student';
+
+  // Reset contact when role switches
+  const switchRole = (r) => { setRole(r); setContact(''); setError(''); };
+
+  // Resend cooldown
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const id = setInterval(() => setResendCooldown(p => Math.max(0, p - 1)), 1000);
@@ -163,21 +163,27 @@ export default function ForgotPassword() {
 
   const inputCls  = `w-full rounded-xl py-3 text-sm text-white placeholder:text-white/30 transition-all duration-200 focus:outline-none`;
   const inputBase = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)' };
-
-  const gradBtn = {
-    background:  `linear-gradient(135deg, ${colors.primary}, ${colors.accent})`,
-    boxShadow:   `0 10px 32px ${colors.primary}50`,
+  const gradBtn   = {
+    background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})`,
+    boxShadow:  `0 10px 32px ${colors.primary}50`,
   };
 
   // ── Step 1: send OTP ──────────────────────────────────────────────────────
-  const isPhone = /^\d{10,}$/.test(contact.replace(/\D/g, '')) && !contact.includes('@');
-
   const handleSendOtp = useCallback(async (e) => {
     e?.preventDefault();
     setError('');
+
+    // Basic validation
+    if (isStudent) {
+      const digits = contact.replace(/\D/g, '');
+      if (digits.length < 10) { setError('Please enter a valid 10-digit mobile number.'); return; }
+    } else {
+      if (!contact.includes('@')) { setError('Please enter a valid email address.'); return; }
+    }
+
     setLoading(true);
     try {
-      await api.forgotPassword(contact.trim());
+      await api.forgotPassword(contact.trim(), role);
       setOtp(['', '', '', '', '', '']);
       setOtpExpired(false);
       setOtpSentAt(Date.now());
@@ -188,7 +194,7 @@ export default function ForgotPassword() {
     } finally {
       setLoading(false);
     }
-  }, [contact]);
+  }, [contact, role, isStudent]);
 
   // ── Step 2: verify OTP ────────────────────────────────────────────────────
   const handleVerifyOtp = useCallback(async (e) => {
@@ -212,8 +218,8 @@ export default function ForgotPassword() {
   const handleResetPassword = useCallback(async (e) => {
     e?.preventDefault();
     setError('');
-    if (newPassword.length < 6)    { setError('Password must be at least 6 characters.'); return; }
-    if (newPassword !== confirmPass){ setError('Passwords do not match.'); return; }
+    if (newPassword.length < 6)     { setError('Password must be at least 6 characters.'); return; }
+    if (newPassword !== confirmPass) { setError('Passwords do not match.'); return; }
     setLoading(true);
     try {
       await api.resetPasswordWithToken(resetToken, newPassword);
@@ -225,13 +231,15 @@ export default function ForgotPassword() {
     }
   }, [resetToken, newPassword, confirmPass]);
 
+  const goBackToContact = () => {
+    setStep('contact');
+    setOtp(['', '', '', '', '', '']);
+    setError('');
+  };
+
   // ── Step indicator ────────────────────────────────────────────────────────
-  const STEPS = [
-    { id: 'email',    label: 'Email' },
-    { id: 'otp',      label: 'Verify' },
-    { id: 'password', label: 'Reset' },
-  ];
-  const stepIdx = { email: 0, otp: 1, password: 2, success: 2 }[step];
+  const STEPS   = [{ label: isStudent ? 'Mobile' : 'Email' }, { label: 'Verify' }, { label: 'Reset' }];
+  const stepIdx = { contact: 0, otp: 1, password: 2, success: 2 }[step];
 
   return (
     <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 border border-white/20 shadow-2xl">
@@ -240,16 +248,18 @@ export default function ForgotPassword() {
         <ArrowLeft size={15}/> Back to login
       </Link>
 
-      {/* Step indicator (hidden on success) */}
+      {/* Step indicator */}
       {step !== 'success' && (
         <div className="flex items-center gap-2 mb-6">
           {STEPS.map((s, i) => (
-            <div key={s.id} className="flex items-center gap-2 flex-1">
+            <div key={i} className="flex items-center gap-2 flex-1">
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-all ${
-                i < stepIdx  ? 'text-white'
+                i < stepIdx   ? 'text-white'
                 : i === stepIdx ? 'text-white ring-2 ring-white/30'
                 : 'text-white/30'
-              }`} style={i <= stepIdx ? { background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})` } : { background: 'rgba(255,255,255,0.08)' }}>
+              }`} style={i <= stepIdx
+                  ? { background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})` }
+                  : { background: 'rgba(255,255,255,0.08)' }}>
                 {i < stepIdx ? <CheckCircle size={14}/> : i + 1}
               </div>
               <span className={`text-xs font-semibold transition-colors ${i <= stepIdx ? 'text-white/80' : 'text-white/25'}`}>{s.label}</span>
@@ -270,42 +280,79 @@ export default function ForgotPassword() {
         </div>
       )}
 
-      {/* ── STEP 1: email ──────────────────────────────────────────────────── */}
-      {step === 'email' && (
+      {/* ── STEP 1: contact ───────────────────────────────────────────────── */}
+      {step === 'contact' && (
         <>
+          {/* Role tabs */}
+          <div className="flex p-1 rounded-2xl mb-6" style={{ background: 'rgba(255,255,255,0.06)' }}>
+            {[
+              { key: 'student', label: 'Student',        Icon: GraduationCap },
+              { key: 'trainer', label: 'Trainer / Admin', Icon: Briefcase     },
+            ].map(t => (
+              <button key={t.key} onClick={() => switchRole(t.key)}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold transition-all
+                  ${role === t.key ? 'text-white shadow-lg' : 'text-slate-500 hover:text-slate-400'}`}
+                style={role === t.key ? { background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})` } : {}}>
+                <t.Icon size={13}/> {t.label}
+              </button>
+            ))}
+          </div>
+
           <div className="mb-6">
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4"
               style={{ background: `${colors.primary}25`, border: `1px solid ${colors.primary}35` }}>
-              <Mail size={22} style={{ color: colors.primary }}/>
+              {isStudent
+                ? <Phone size={22} style={{ color: colors.primary }}/>
+                : <Mail  size={22} style={{ color: colors.primary }}/>}
             </div>
             <h2 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: 'Space Grotesk' }}>Forgot Password</h2>
             <p className="text-white/60 text-sm">
-              Enter your registered email address. We'll send a 6-digit OTP to reset your password.
+              {isStudent
+                ? "Enter your registered mobile number. We'll send a 6-digit OTP via SMS."
+                : "Enter your registered email address. We'll send a 6-digit OTP to your inbox."}
             </p>
           </div>
+
           <form onSubmit={handleSendOtp} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Email Address</label>
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                {isStudent ? 'Mobile Number' : 'Email Address'}
+              </label>
               <div className="relative">
-                <Mail size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"/>
-                <input type="email" placeholder="your@email.com"
-                  value={contact} onChange={e => setContact(e.target.value)} required
-                  className={`${inputCls} pl-11 pr-4`} style={inputBase}/>
+                {isStudent
+                  ? <Phone size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"/>
+                  : <Mail  size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"/>}
+                <input
+                  key={role}
+                  type={isStudent ? 'tel' : 'email'}
+                  placeholder={isStudent ? '9876543210' : 'trainer@example.com'}
+                  value={contact}
+                  onChange={e => setContact(e.target.value)}
+                  required
+                  autoFocus
+                  className={`${inputCls} pl-11 pr-4`}
+                  style={inputBase}
+                />
               </div>
               <p className="text-[11px] text-slate-500 pl-1">
-                OTP will be sent to your registered email address.
+                {isStudent
+                  ? 'OTP will be sent to your registered mobile number via SMS.'
+                  : 'OTP will be sent to your registered email address.'}
               </p>
             </div>
+
             <button type="submit" disabled={loading}
               className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3.5 rounded-2xl transition-all disabled:opacity-60 hover:scale-[1.02] active:scale-[0.98]"
               style={gradBtn}>
-              {loading ? <><Loader2 size={16} className="animate-spin"/> Sending OTP…</> : 'Send OTP'}
+              {loading
+                ? <><Loader2 size={16} className="animate-spin"/> Sending OTP…</>
+                : `Send OTP via ${isStudent ? 'SMS' : 'Email'}`}
             </button>
           </form>
         </>
       )}
 
-      {/* ── STEP 2: OTP entry ──────────────────────────────────────────────── */}
+      {/* ── STEP 2: OTP entry ─────────────────────────────────────────────── */}
       {step === 'otp' && (
         <>
           <div className="mb-6">
@@ -315,20 +362,19 @@ export default function ForgotPassword() {
             </div>
             <h2 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: 'Space Grotesk' }}>Enter OTP</h2>
             <p className="text-white/60 text-sm">
-              We sent a 6-digit code to <span className="text-white font-semibold">{contact}</span>.
-              {' '}Check your inbox (and spam folder).
+              A 6-digit code was sent to{' '}
+              <span className="text-white font-semibold">{contact}</span>{' '}
+              via {isStudent ? 'SMS' : 'email'}.
+              {!isStudent && ' Check your inbox and spam folder.'}
             </p>
           </div>
 
           <form onSubmit={handleVerifyOtp} className="space-y-5">
             <OtpInput value={otp} onChange={v => { setOtp(v); setError(''); }} disabled={loading}/>
 
-            {/* Timer + expiry */}
             <div className="flex items-center justify-between text-xs">
               <span className="text-white/40">OTP expires in:</span>
-              {otpSentAt && (
-                <Countdown startedAt={otpSentAt} onExpire={() => setOtpExpired(true)}/>
-              )}
+              {otpSentAt && <Countdown startedAt={otpSentAt} onExpire={() => setOtpExpired(true)}/>}
             </div>
 
             <button type="submit" disabled={loading || otpExpired}
@@ -337,11 +383,13 @@ export default function ForgotPassword() {
               {loading ? <><Loader2 size={16} className="animate-spin"/> Verifying…</> : 'Verify OTP'}
             </button>
 
-            {/* Resend */}
-            <div className="flex items-center justify-center gap-2 text-sm">
-              <span className="text-white/40">Didn't receive it?</span>
+            <div className="flex items-center justify-between text-sm">
+              <button type="button" onClick={goBackToContact}
+                className="flex items-center gap-1 text-white/40 hover:text-white/70 transition-colors text-xs">
+                <ArrowLeft size={12}/> Wrong {isStudent ? 'number' : 'email'}?
+              </button>
               {resendCooldown > 0 ? (
-                <span className="text-white/30 font-semibold">Resend in {resendCooldown}s</span>
+                <span className="text-white/30 font-semibold text-xs">Resend in {resendCooldown}s</span>
               ) : (
                 <button type="button" onClick={handleSendOtp} disabled={loading}
                   className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-semibold transition-colors disabled:opacity-50">
@@ -353,7 +401,7 @@ export default function ForgotPassword() {
         </>
       )}
 
-      {/* ── STEP 3: new password ───────────────────────────────────────────── */}
+      {/* ── STEP 3: new password ──────────────────────────────────────────── */}
       {step === 'password' && (
         <>
           <div className="mb-6">
@@ -362,9 +410,7 @@ export default function ForgotPassword() {
               <Lock size={22} style={{ color: colors.primary }}/>
             </div>
             <h2 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: 'Space Grotesk' }}>Set New Password</h2>
-            <p className="text-white/60 text-sm">
-              OTP verified! Enter a strong new password for your account.
-            </p>
+            <p className="text-white/60 text-sm">OTP verified! Enter a strong new password for your account.</p>
           </div>
 
           <form onSubmit={handleResetPassword} className="space-y-4">
@@ -411,19 +457,15 @@ export default function ForgotPassword() {
         </>
       )}
 
-      {/* ── SUCCESS ────────────────────────────────────────────────────────── */}
+      {/* ── SUCCESS ───────────────────────────────────────────────────────── */}
       {step === 'success' && (
         <div className="text-center py-4">
-          <div className="w-20 h-20 rounded-full bg-green-500/15 flex items-center justify-center mx-auto mb-5
-                          ring-4 ring-green-500/20">
+          <div className="w-20 h-20 rounded-full bg-green-500/15 flex items-center justify-center mx-auto mb-5 ring-4 ring-green-500/20">
             <CheckCircle size={40} className="text-green-400"/>
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2" style={{ fontFamily: 'Space Grotesk' }}>
-            Password Reset!
-          </h2>
+          <h2 className="text-2xl font-bold text-white mb-2" style={{ fontFamily: 'Space Grotesk' }}>Password Reset!</h2>
           <p className="text-white/60 text-sm mb-8">
-            Your password has been updated successfully.
-            You can now log in with your new password.
+            Your password has been updated successfully. You can now log in with your new password.
           </p>
           <Link to="/login"
             className="inline-flex items-center gap-2 px-8 py-3.5 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02]"

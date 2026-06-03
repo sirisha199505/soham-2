@@ -102,10 +102,10 @@ export const api = {
 
   // Auth — Forgot password OTP flow (3-step)
   // contact = phone number (10 digits) OR email address
-  forgotPassword: (contact) =>
-    request('POST', '/api/auth/forgot-password', { email: contact }),
+  forgotPassword: (contact, role = 'trainer') =>
+    request('POST', '/api/auth/forgot-password', { contact, email: contact, role }),
   verifyResetOtp: (contact, otp) =>
-    request('POST', '/api/auth/verify-reset-otp', { email: contact, otp }),
+    request('POST', '/api/auth/verify-reset-otp', { contact, email: contact, otp }),
   resetPasswordWithToken: (token, newPassword) =>
     request('POST', '/api/auth/reset-password-token', { token, newPassword }),
 

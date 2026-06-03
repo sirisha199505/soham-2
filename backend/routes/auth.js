@@ -57,11 +57,18 @@ async function sendSmsOtp(phone, otp) {
 // ── POST /api/auth/forgot-password ─────────────────────────────────────────────
 // Body: { contact }  — contact is a phone number (10 digits) OR an email address
 router.post('/forgot-password', async (req, res) => {
-  const contact = req.body.contact || req.body.email || '';
+  const contact = (req.body.contact || req.body.email || '').trim();
+  const role    = req.body.role || 'trainer'; // 'student' | 'trainer'
   if (!contact) return res.status(400).json({ error: 'Phone number or email is required.' });
 
   const cleanPhone = contact.replace(/\D/g, '');
   const isPhone    = cleanPhone.length >= 10 && !contact.includes('@');
+
+  // Students must use mobile; trainers/admins must use email
+  if (role === 'student' && !isPhone)
+    return res.status(400).json({ error: 'Students must use their registered mobile number.' });
+  if (role === 'trainer' && isPhone)
+    return res.status(400).json({ error: 'Trainers and admins must use their registered email address.' });
 
   try {
     let user;
@@ -69,21 +76,20 @@ router.post('/forgot-password', async (req, res) => {
     let deliveryPhone = null;
 
     if (isPhone) {
+      // Student lookup by phone
       const r = await pool.query(
-        'SELECT id, name, email, phone_number FROM users WHERE phone_number=$1', [cleanPhone]
+        "SELECT id, name, email, phone_number FROM users WHERE phone_number=$1 AND role='student'",
+        [cleanPhone]
       );
       if (r.rowCount > 0) {
         user          = r.rows[0];
         deliveryPhone = cleanPhone;
-        // Fall back to email if SMS not configured
-        if (!process.env.SMS_API_KEY && user.email) {
-          deliveryPhone = null;
-          deliveryEmail = user.email;
-        }
       }
     } else {
+      // Trainer / admin lookup by email
       const r = await pool.query(
-        'SELECT id, name, email FROM users WHERE LOWER(email)=$1', [contact.trim().toLowerCase()]
+        "SELECT id, name, email FROM users WHERE LOWER(email)=$1 AND role IN ('coach','teacher','admin','trainer')",
+        [contact.toLowerCase()]
       );
       if (r.rowCount > 0) {
         user          = r.rows[0];
@@ -91,11 +97,14 @@ router.post('/forgot-password', async (req, res) => {
       }
     }
 
-    // Always return success to avoid contact enumeration
-    if (!user) return res.json({ success: true });
-    if (!deliveryPhone && !deliveryEmail) return res.json({ success: true });
+    if (!user) {
+      const msg = isPhone
+        ? 'No student account found with this mobile number.'
+        : 'No account found with this email address.';
+      return res.status(404).json({ error: msg });
+    }
 
-    const otp    = String(Math.floor(100000 + Math.random() * 900000));
+    const otp      = String(Math.floor(100000 + Math.random() * 900000));
     const storeKey = deliveryPhone
       ? `phone:${deliveryPhone}`
       : `email:${deliveryEmail.toLowerCase()}`;
@@ -110,7 +119,7 @@ router.post('/forgot-password', async (req, res) => {
     }
   } catch (err) {
     console.error('Forgot password error:', err.message);
-    res.status(500).json({ error: 'Failed to send OTP. Please try again.' });
+    res.status(500).json({ error: 'Failed to send OTP. Please try again later.' });
   }
 });
 
@@ -229,6 +238,42 @@ router.post('/register', async (req, res) => {
       if (err.constraint?.includes('email'))
         return res.status(400).json({ error: 'This email is already registered.' });
     }
+    res.status(500).json({ error: 'Registration failed.' });
+  }
+});
+
+// POST /api/auth/register-coach — trainer registration
+router.post('/register-coach', async (req, res) => {
+  const { coachName, organizationName, phoneNumber, email, password } = req.body;
+  if (!email || !email.includes('@'))
+    return res.status(400).json({ error: 'A valid email address is required.' });
+  if (!password || password.length < 6)
+    return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+
+  const cleanPhone = (phoneNumber || '').replace(/\D/g, '') || null;
+
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      `INSERT INTO users (name, role, school_name, email, phone_number, password_hash)
+       VALUES ($1,'coach',$2,$3,$4,$5) RETURNING id, role, name, email`,
+      [coachName || '', organizationName || '', email.trim().toLowerCase(), cleanPhone, hash]
+    );
+    const user = result.rows[0];
+    res.status(201).json({
+      token:   makeToken(user),
+      message: 'Trainer registration successful! You can now log in.',
+      user: {
+        id:    String(user.id),
+        name:  user.name,
+        role:  user.role,
+        email: user.email,
+      },
+    });
+  } catch (err) {
+    console.error('Register coach error:', err.message);
+    if (err.code === '23505')
+      return res.status(400).json({ error: 'This email is already registered.' });
     res.status(500).json({ error: 'Registration failed.' });
   }
 });
