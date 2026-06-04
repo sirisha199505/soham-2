@@ -64,6 +64,24 @@ export const isValidEmail = (email) => {
   return /[a-zA-Z]/.test(local);
 };
 
+// Canonical form of a name for uniqueness checks and Exam-Level ↔ QB-Level
+// matching. Lowercases and strips everything except letters/digits so
+// "Science Quiz", "science-quiz", "SCIENCE  QUIZ" all collapse to "sciencequiz".
+// Must mirror the backend's normalize_name (base.rb).
+export const normalizeName = (str) =>
+  String(str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+// Deterministic, stable ordering for exam levels everywhere they're listed.
+// Sorts by order_index (0 is a valid order, unlike the old `order || id`), then
+// breaks ties by id so the sequence is ALWAYS the same (Level 1, 2, 3 …).
+export const compareLevels = (a, b) => {
+  const ao = Number(a?.order);
+  const bo = Number(b?.order);
+  const ak = Number.isFinite(ao) ? ao : Number(a?.id);
+  const bk = Number.isFinite(bo) ? bo : Number(b?.id);
+  return (ak - bk) || (Number(a?.id) - Number(b?.id));
+};
+
 export const debounce = (fn, delay = 300) => {
   let t;
   return (...args) => {

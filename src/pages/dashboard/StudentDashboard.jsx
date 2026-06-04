@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import {
   Lock, CheckCircle, ArrowRight, Trophy, Clock,
-  BookOpen, Star, ChevronRight, Zap, RotateCcw, Hash, Target,
+  BookOpen, Star, ChevronRight, Zap, RotateCcw, Hash, Target, AlertCircle,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -9,7 +9,7 @@ import { useLevel } from '../../context/LevelContext';
 import { useTheme } from '../../context/ThemeContext';
 import { api } from '../../utils/api';
 import { LEVELS } from '../../utils/levelData';
-import { getPerformanceLabel } from '../../utils/helpers';
+import { getPerformanceLabel, compareLevels } from '../../utils/helpers';
 
 const FALLBACK_COLORS = [
   { from: '#3BC0EF', to: '#1E3A8A' },
@@ -22,7 +22,7 @@ const FALLBACK_COLORS = [
 
 function buildLevelList(levelSettingsMap) {
   return Object.values(levelSettingsMap)
-    .sort((a, b) => (a.order || a.id) - (b.order || b.id))
+    .sort(compareLevels)
     .map((dbLevel, idx) => {
       const staticLevel = LEVELS.find(l => l.id === dbLevel.id);
       if (staticLevel) return staticLevel;
@@ -194,6 +194,13 @@ function LevelCard({ level, status, levelData, levelSettings, attemptCount }) {
   const attemptLimit = levelSettings?.[level.id]?.attemptLimit ?? 3;
   const remaining    = Math.max(0, attemptLimit - attemptCount);
 
+  // Each exam level draws exclusively from its mapped Question Bank level. If that
+  // level cannot supply the configured number of questions, the attempt must be
+  // blocked. Fail-open if the count is unknown (e.g. settings not yet loaded).
+  const requiredQ  = Number(levelSettings?.[level.id]?.questionCount) || 0;
+  const rawAvail   = levelSettings?.[level.id]?.availableQuestions;
+  const insufficientQuestions = requiredQ > 0 && rawAvail != null && Number(rawAvail) < requiredQ;
+
   const timeLimit  = Number(levelSettings?.[level.id]?.timeLimit) || 10;
   const score      = levelData?.score;
   const lastScore  = levelData?.lastScore;
@@ -357,7 +364,18 @@ function LevelCard({ level, status, levelData, levelSettings, attemptCount }) {
           </div>
         )}
 
-        {isCompleted && remaining > 0 && (
+        {!isLocked && insufficientQuestions && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 w-full py-3 rounded-xl text-amber-700 text-sm font-semibold bg-amber-50 border border-amber-200 justify-center cursor-not-allowed select-none">
+              <AlertCircle size={14} /> Unavailable
+            </div>
+            <p className="text-[11px] text-amber-600 text-center leading-snug px-1">
+              Insufficient questions available for this level. Please contact the administrator.
+            </p>
+          </div>
+        )}
+
+        {isCompleted && remaining > 0 && !insufficientQuestions && (
           <div className="space-y-2">
             <Link
               to={`/level/${level.id}/quiz`}
@@ -373,13 +391,13 @@ function LevelCard({ level, status, levelData, levelSettings, attemptCount }) {
           </div>
         )}
 
-        {isCompleted && remaining === 0 && (
+        {isCompleted && remaining === 0 && !insufficientQuestions && (
           <div className="flex items-center gap-2 w-full py-3 rounded-xl text-sm font-semibold bg-slate-50 border border-slate-200 text-slate-400 justify-center cursor-not-allowed select-none">
             <CheckCircle size={14} /> All Attempts Used
           </div>
         )}
 
-        {isUnlocked && remaining > 0 && (
+        {isUnlocked && remaining > 0 && !insufficientQuestions && (
           <Link
             to={`/level/${level.id}/quiz`}
             className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-white font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
@@ -392,7 +410,7 @@ function LevelCard({ level, status, levelData, levelSettings, attemptCount }) {
           </Link>
         )}
 
-        {isUnlocked && remaining === 0 && (
+        {isUnlocked && remaining === 0 && !insufficientQuestions && (
           <div className="flex items-center gap-2 w-full py-3 rounded-xl text-sm font-semibold bg-slate-50 border border-slate-200 text-slate-400 justify-center cursor-not-allowed select-none">
             <Lock size={14} /> No Attempts Remaining
           </div>
@@ -431,16 +449,35 @@ export default function StudentDashboard() {
 
   // Fetch all attempts so we can compute per-level counts
   const [attempts,       setAttempts]      = useState([]);
-  const [, setAttemptsLoaded] = useState(false);
+  const [attemptsLoaded, setAttemptsLoaded] = useState(false);
 
   useEffect(() => { refreshLevelSettings(); }, []);
 
+  // Load the student's attempt history. A transient backend failure (Render
+  // cold-start 503 / timeout) must NOT be treated as "zero attempts used" — that
+  // would make every level's counter jump back to its full limit, looking exactly
+  // like the attempt count had reset. Retry with backoff so the real DB count is
+  // restored automatically instead of silently wiped on screen.
   useEffect(() => {
     if (!user?.id) return;
-    api.getAttempts(user.id)
-      .then(data => setAttempts(Array.isArray(data) ? data : []))
-      .catch(() => {})
-      .finally(() => setAttemptsLoaded(true));
+    let cancelled = false;
+    let tries = 0;
+    const load = () => {
+      api.getAttempts(user.id)
+        .then(data => {
+          if (cancelled) return;
+          setAttempts(Array.isArray(data) ? data : []);
+          setAttemptsLoaded(true);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          tries += 1;
+          if (tries <= 5) setTimeout(load, Math.min(1000 * tries, 5000));
+          else setAttemptsLoaded(true); // give up — fall back to last-known state
+        });
+    };
+    load();
+    return () => { cancelled = true; };
   }, [user?.id]);
 
   // Map: levelId → attempt count
@@ -457,7 +494,10 @@ export default function StudentDashboard() {
   const greeting = hours < 12 ? 'Good morning' : hours < 17 ? 'Good afternoon' : 'Good evening';
   const userId   = user?.id;
 
-  const isProgressLoading = userId ? !progressFetched[userId] : false;
+  // Keep cards in their skeleton state until BOTH progress and attempt counts have
+  // loaded — otherwise the attempt meter briefly shows the full limit (e.g. "3 of 3
+  // left") before the real count arrives, which reads as the count resetting.
+  const isProgressLoading = userId ? (!progressFetched[userId] || !attemptsLoaded) : false;
   const visibleLevels = levelSettingsLoaded ? buildLevelList(levelSettings) : [];
 
   const statuses = isProgressLoading

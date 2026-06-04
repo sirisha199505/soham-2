@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../utils/api';
+import { compareLevels } from '../../utils/helpers';
 
 function computeStats(users) {
   // api.getStudents() returns role-0 (students) AND role-2 (coaches) together
@@ -100,7 +101,7 @@ export default function AdminDashboard() {
     Promise.all([api.getStudents(), api.getLevelSettings()])
       .then(([students, levelsData]) => {
         const sorted = Array.isArray(levelsData)
-          ? levelsData.sort((a, b) => (a.order || a.id) - (b.order || b.id))
+          ? levelsData.sort(compareLevels)
           : [];
         setLevelsList(sorted);
         setStats(computeStats(students));
@@ -194,12 +195,11 @@ export default function AdminDashboard() {
       </div>
 
       {/* ── Second stat row ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Trainers"            value={stats.coachCount}              icon={<UserCheck size={18} />}  color="#8B5CF6" sub="Registered trainers" />
         <StatCard label="Pass Rate"          value={`${stats.passRate}%`}          icon={<TrendingUp size={18} />} color="#10B981" sub="Across all levels" />
         <StatCard label="Avg Score"          value={`${stats.avgScore}%`}          icon={<BarChart2 size={18} />}  color="#F59E0B" sub="All attempts" />
         <StatCard label="Total Attempts"     value={stats.totalAttempts}           icon={<BookOpen size={18} />}   color="#3BC0EF" sub="Exam submissions" />
-        <StatCard label="Pass / Fail"        value={`${stats.passCount}/${stats.failCount}`} icon={<Activity size={18} />} color="#EF4444" sub="Count breakdown" />
       </div>
 
       {/* ── Charts row ── */}
@@ -342,8 +342,8 @@ export default function AdminDashboard() {
           <div className="space-y-2">
             <QuickAction icon={<Users size={15} />}     label="Manage Students"   to="/admin/students"      color="#4F46E5" />
             <QuickAction icon={<BookOpen size={15} />}  label="Exam Levels"       to="/admin/levels"        color="#3BC0EF" />
-            <QuickAction icon={<Activity size={15} />}  label="Live Monitoring"   to="/admin/monitoring"    color="#10B981" />
-            <QuickAction icon={<BarChart2 size={15} />} label="View Reports"      to="/admin/reports"       color="#F59E0B" />
+            {/* <QuickAction icon={<Activity size={15} />}  label="Live Monitoring"   to="/admin/monitoring"    color="#10B981" />
+            <QuickAction icon={<BarChart2 size={15} />} label="View Reports"      to="/admin/reports"       color="#F59E0B" /> */}
             <QuickAction icon={<Settings size={15} />}  label="System Settings"   to="/admin/settings"      color="#8B5CF6" />
           </div>
         </div>

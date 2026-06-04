@@ -96,6 +96,10 @@ export default function StudentProfile() {
       setPwMsg({ type: 'err', text: 'New password must be at least 6 characters.' });
       return;
     }
+    if (newPw === current) {
+      setPwMsg({ type: 'err', text: 'New password must be different from your current password.' });
+      return;
+    }
     setPwLoading(true);
     setPwMsg(null);
     try {

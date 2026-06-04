@@ -8,6 +8,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
+import { compareLevels } from '../../utils/helpers';
 
 const LEVEL_COLORS = ['#3BC0EF', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899'];
 const DISABLED_KEY = 'rqa_disabled_students';
@@ -232,7 +233,7 @@ export default function StudentManagement() {
     try {
       const [students, levelsData] = await Promise.all([api.getStudents(), api.getLevelSettings()]);
       const sorted = Array.isArray(levelsData)
-        ? levelsData.sort((a, b) => (a.order || a.id) - (b.order || b.id))
+        ? levelsData.sort(compareLevels)
         : [];
       setLevelList(sorted);
 

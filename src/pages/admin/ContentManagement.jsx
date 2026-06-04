@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
+import { compareLevels } from '../../utils/helpers';
 import RichTextEditor from '../../components/ui/RichTextEditor';
 
 const PALETTE = [
@@ -386,7 +387,7 @@ export default function ContentManagement() {
 
   // Sorted levels from LevelContext
   const sortedLevels = Object.values(levelSettings)
-    .sort((a, b) => (a.order || a.id) - (b.order || b.id));
+    .sort(compareLevels);
 
   useEffect(() => {
     if (!user?.id || !levelSettingsLoaded) return;

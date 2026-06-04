@@ -34,23 +34,42 @@ export function LevelProvider({ children }) {
   /* ── Fetch progress for a specific student ── */
   const fetchProgress = useCallback(async (userId) => {
     if (!userId || fetchedUsers.current.has(userId)) return;
+    // Hold the in-flight guard across all retries so concurrent renders don't
+    // kick off a duplicate fetch.
     fetchedUsers.current.add(userId);
-    try {
-      const data = await api.getLevelProgress(userId);
-      const map = {};
-      const userApprovals = {};
-      Object.entries(data || {}).forEach(([k, v]) => {
-        const levelId = Number(k);
-        map[levelId] = v;
-        if (v.approvalStatus) userApprovals[levelId] = v.approvalStatus;
-      });
-      setProgress(prev => ({ ...prev, [userId]: map }));
-      if (Object.keys(userApprovals).length > 0) {
-        setApprovals(prev => ({ ...prev, [userId]: userApprovals }));
+
+    // A transient backend failure (e.g. Render cold-start 503 / timeout) must NOT
+    // be treated as "no progress" — that would make every admin-unlocked level fall
+    // back to 'locked' (getLevelStatus), i.e. the student's unlock state would
+    // appear to reset on screen even though the DB row is intact. Retry with backoff
+    // so the real state is always restored; keep showing the loading skeleton
+    // (progressFetched stays false) rather than a wrong "locked" state meanwhile.
+    for (let attempt = 1; attempt <= 6; attempt++) {
+      try {
+        const data = await api.getLevelProgress(userId);
+        const map = {};
+        const userApprovals = {};
+        Object.entries(data || {}).forEach(([k, v]) => {
+          const levelId = Number(k);
+          map[levelId] = v;
+          if (v.approvalStatus) userApprovals[levelId] = v.approvalStatus;
+        });
+        setProgress(prev => ({ ...prev, [userId]: map }));
+        if (Object.keys(userApprovals).length > 0) {
+          setApprovals(prev => ({ ...prev, [userId]: userApprovals }));
+        }
+        setProgressFetched(prev => ({ ...prev, [userId]: true }));
+        return;
+      } catch {
+        if (attempt < 6) {
+          await new Promise(res => setTimeout(res, Math.min(1000 * attempt, 5000)));
+        }
       }
-    } catch { /* ignore — progress marked fetched below regardless */ }
-    // Mark as fetched regardless of success/failure to avoid showing stale
-    // "loading" state forever if the API is temporarily unavailable.
+    }
+
+    // All retries failed — release the guard so a later trigger can retry again,
+    // and stop the skeleton so the dashboard isn't stuck loading forever.
+    fetchedUsers.current.delete(userId);
     setProgressFetched(prev => ({ ...prev, [userId]: true }));
   }, []);
 
@@ -131,8 +150,10 @@ export function LevelProvider({ children }) {
       return progress[userId]?.[levelId]?.status ?? 'unlocked';
     }
 
-    // 3. Per-student override granted by admin
-    if (overrides[userId]?.includes(levelId)) {
+    // 3. Per-student override granted by admin. For the admin UI this comes from
+    //    the overrides map; for the student themselves it arrives on their own
+    //    progress payload (overridden flag) since students don't load all overrides.
+    if (overrides[userId]?.includes(levelId) || progress[userId]?.[levelId]?.overridden === true) {
       return progress[userId]?.[levelId]?.status ?? 'unlocked';
     }
 

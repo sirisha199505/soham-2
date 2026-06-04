@@ -10,6 +10,7 @@ function ScrollToTop() {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { SettingsProvider } from './context/SettingsContext';
 import { ToastProvider } from './context/ToastContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { LevelProvider } from './context/LevelContext';
@@ -58,6 +59,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
       <AuthProvider>
+        <SettingsProvider>
         <LevelProvider>
         <ToastProvider>
           <BrowserRouter>
@@ -132,6 +134,7 @@ export default function App() {
           </BrowserRouter>
         </ToastProvider>
         </LevelProvider>
+        </SettingsProvider>
       </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

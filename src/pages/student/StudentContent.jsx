@@ -9,6 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { LEVELS } from '../../utils/levelData';
 import { api } from '../../utils/api';
+import { compareLevels } from '../../utils/helpers';
 
 // ── Color palette ─────────────────────────────────────────────────────────
 const FALLBACK_COLORS = [
@@ -645,7 +646,7 @@ export default function StudentContent() {
 
   const sortedLevels = useMemo(() =>
     Object.values(levelSettings)
-      .sort((a, b) => (a.order || a.id) - (b.order || b.id))
+      .sort(compareLevels)
       .map((dbLevel, idx) => {
         const staticLevel = LEVELS.find(l => l.id === dbLevel.id);
         if (staticLevel) return staticLevel;

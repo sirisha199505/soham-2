@@ -14,6 +14,7 @@ const NO_AUTH_PATHS = [
   '/api/auth/forgot-password',
   '/api/auth/verify-reset-otp',
   '/api/auth/reset-password-token',
+  '/api/registration-status',
 ];
 
 function getToken() {
@@ -163,6 +164,8 @@ export const api = {
   // Settings
   getSettings:  () => request('GET', '/api/settings'),
   saveSettings: (settings) => request('PUT', '/api/settings', settings),
+  // Public — whether new registrations are currently accepted (no auth required)
+  getRegistrationStatus: () => request('GET', '/api/registration-status'),
 
   // FAQs — audience: 'student' | 'trainer'. Admin uses getAllFaqs() to manage.
   getFaqs:    (audience) => request('GET', `/api/faqs${audience ? `?audience=${encodeURIComponent(audience)}` : ''}`),

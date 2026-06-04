@@ -7,6 +7,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { isValidEmail } from '../../utils/helpers';
+import { api } from '../../utils/api';
 
 const CLASS_OPTIONS = ['VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'Other'];
 const EMAIL_ERROR = 'Enter a valid email address (the part before @ must contain a letter, e.g. name@gmail.com).';
@@ -106,6 +107,15 @@ export default function Register() {
   const [waitSec,           setWaitSec]           = useState(0);
   const [error,             setError]             = useState('');
   const [success,           setSuccess]           = useState(null);
+  const [registrationClosed, setRegistrationClosed] = useState(false);
+
+  // Check whether new registrations are currently accepted (public endpoint).
+  // Fail-open: if the check errors, the form stays available.
+  useEffect(() => {
+    api.getRegistrationStatus()
+      .then(d => { if (d && d.registrationOpen === false) setRegistrationClosed(true); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!loading) { setWaitSec(0); return; }
@@ -208,6 +218,32 @@ export default function Register() {
   };
 
   const inputFocus = { borderColor: `${colors.primary}60`, boxShadow: `0 0 0 3px ${colors.primary}18` };
+
+  /* ── Registration closed screen ── */
+  if (registrationClosed) {
+    return (
+      <div className="fade-in-up space-y-6 text-center">
+        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-2"
+          style={{ background: 'rgba(245,158,11,0.18)', border: '1px solid rgba(245,158,11,0.35)' }}>
+          <Lock size={26} className="text-amber-300" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold text-white mb-2" style={{ fontFamily: 'Space Grotesk' }}>
+            Registration Closed
+          </h2>
+          <p className="text-slate-300 text-sm max-w-xs mx-auto">
+            New registrations are currently disabled. Please contact your administrator,
+            or check back later.
+          </p>
+        </div>
+        <Link to="/login"
+          className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-sm text-white transition-all"
+          style={{ background: colors.primary }}>
+          Back to Login <ArrowRight size={16} />
+        </Link>
+      </div>
+    );
+  }
 
   /* ── Success screen ── */
   if (success) {

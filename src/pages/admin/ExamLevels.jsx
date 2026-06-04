@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
+import { normalizeName, compareLevels } from '../../utils/helpers';
 
 const DEFAULT_COLORS = [
   { from: '#3BC0EF', to: '#1E3A8A' },
@@ -19,13 +20,19 @@ const DEFAULT_COLORS = [
 const levelColor = (order) => DEFAULT_COLORS[(order - 1) % DEFAULT_COLORS.length];
 
 /* ── Add Level Modal ── */
-function AddLevelModal({ onSave, onClose }) {
+function AddLevelModal({ onSave, onClose, existingTitles = [] }) {
   const [form, setForm] = useState({ title: '', subtitle: '', description: '', timeLimit: 10, questionCount: 20 });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const handleSave = async () => {
     if (!form.title.trim()) { setError('Title is required'); return; }
+    // Exam names must be globally unique (case/space/punctuation-insensitive).
+    const norm = normalizeName(form.title);
+    if (existingTitles.some(t => normalizeName(t) === norm)) {
+      setError('An exam with this name already exists. Please use a unique exam name.');
+      return;
+    }
     if (!form.questionCount || Number(form.questionCount) < 1) { setError('Question count must be at least 1'); return; }
     setSaving(true);
     try {
@@ -132,7 +139,7 @@ function DeleteModal({ level, onConfirm, onClose }) {
 }
 
 /* ── Edit Modal ── */
-function EditModal({ levelId, settings, onSave, onClose }) {
+function EditModal({ levelId, settings, onSave, onClose, otherTitles = [] }) {
   const s = settings[levelId] || {};
   const [form, setForm] = useState({
     title:         s.title         || '',
@@ -142,7 +149,18 @@ function EditModal({ levelId, settings, onSave, onClose }) {
     questionCount: s.questionCount ?? 20,
     active:        s.active        ?? true,
   });
+  const [error, setError] = useState('');
   const f = v => e => setForm(p => ({ ...p, [v]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+
+  const submit = () => {
+    if (!form.title.trim()) { setError('Title is required'); return; }
+    const norm = normalizeName(form.title);
+    if (otherTitles.some(t => normalizeName(t) === norm)) {
+      setError('An exam with this name already exists. Please use a unique exam name.');
+      return;
+    }
+    onSave(levelId, form);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -193,9 +211,14 @@ function EditModal({ levelId, settings, onSave, onClose }) {
             </button>
           </label>
         </div>
+        {error && (
+          <div className="mx-6 mb-1 flex items-center gap-2 px-3 py-2 bg-red-50 rounded-xl border border-red-100 text-sm text-red-600">
+            <AlertCircle size={14} />{error}
+          </div>
+        )}
         <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button onClick={() => onSave(levelId, form)}
+          <button onClick={submit}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors">
             <Save size={14} /> Save Changes
           </button>
@@ -261,6 +284,34 @@ function LevelCard({ levelId, isFirst, settings, stats, onEdit, onDelete }) {
           ))}
         </div>
 
+        {/* Question Bank mapping + availability (each exam level pulls ONLY from
+            the QB level of the same name in the single Question Bank) */}
+        {(() => {
+          const required  = Number(s.questionCount ?? 20);
+          const available = Number(s.availableQuestions ?? 0);
+          const mapped    = s.mappedQbLevel;
+          const ok = mapped && available >= required;
+          return (
+            <div className={`rounded-xl px-3 py-2.5 border text-xs ${ok ? 'bg-emerald-50 border-emerald-100' : 'bg-amber-50 border-amber-100'}`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-slate-600 flex items-center gap-1.5"><Layers size={12} /> Question Bank Level</span>
+                <span className={`font-bold ${mapped ? 'text-slate-700' : 'text-amber-600'}`}>{mapped || 'Not mapped'}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2 mt-1">
+                <span className="text-slate-500">Questions available</span>
+                <span className={`font-bold ${ok ? 'text-emerald-600' : 'text-amber-600'}`}>{available} / {required}</span>
+              </div>
+              {!ok && (
+                <p className="text-[11px] text-amber-600 mt-1 leading-snug">
+                  {mapped
+                    ? 'Insufficient questions — students cannot attempt this level until enough are added to this QB level.'
+                    : 'No Question Bank level with this exact name. Add a QB level named the same to map it.'}
+                </p>
+              )}
+            </div>
+          );
+        })()}
+
         <div className="flex gap-2">
           <button onClick={() => onEdit(levelId)}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:border-indigo-200 hover:text-indigo-600 transition-all">
@@ -289,7 +340,7 @@ export default function ExamLevels() {
 
   // Sorted level IDs from levelSettings
   const levelIds = Object.values(levelSettings)
-    .sort((a, b) => (a.order || a.id) - (b.order || b.id))
+    .sort(compareLevels)
     .map(l => l.id);
 
   useEffect(() => {
@@ -423,6 +474,7 @@ export default function ExamLevels() {
           settings={levelSettings}
           onSave={handleSave}
           onClose={() => setEditing(null)}
+          otherTitles={levelIds.filter(id => id !== editing).map(id => levelSettings[id]?.title || '')}
         />
       )}
 
@@ -430,6 +482,7 @@ export default function ExamLevels() {
         <AddLevelModal
           onSave={handleCreate}
           onClose={() => setShowAdd(false)}
+          existingTitles={levelIds.map(id => levelSettings[id]?.title || '')}
         />
       )}
 

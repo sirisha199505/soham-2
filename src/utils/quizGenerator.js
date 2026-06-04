@@ -41,7 +41,9 @@ export async function generateLevelQuiz(studentId, levelId) {
     // then shuffle the answer options of each individual question.
     return fisherYates(raw).map(shuffleOptions);
   } catch (err) {
-    if (err?.status === 403) throw err;
+    // 403 = locked / no attempts left, 422 = insufficient questions in the mapped
+    // QB level. Both carry a user-facing message the quiz screen must surface.
+    if (err?.status === 403 || err?.status === 422) throw err;
     console.error('generateLevelQuiz failed:', err.message);
     return [];
   }
