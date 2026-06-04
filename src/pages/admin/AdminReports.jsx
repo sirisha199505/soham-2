@@ -127,7 +127,7 @@ export default function AdminReports() {
     loadData();
     const timer = setInterval(loadData, 30_000);
     return () => clearInterval(timer);
-  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id]);  
 
   const refresh = loadData;
 

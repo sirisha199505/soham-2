@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { scrollToTop } from '../../utils/scroll';
 import * as XLSX from 'xlsx';
 import {
@@ -271,7 +271,7 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
     setImporting(true);
     try {
       await onImport(parsed, catId === '__new__' ? null : catId, catId === '__new__' ? newCatName.trim() || 'Imported' : null);
-    } catch {}
+    } catch { /* ignore — UI advances to done step regardless */ }
     setImporting(false);
     setStep('done');
   };
@@ -629,9 +629,9 @@ function QuestionRow({ q, index, onEdit, onDelete }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Category Section — loads questions from API by cat.id
 // ═══════════════════════════════════════════════════════════════════════════
-function CategorySection({ cat, levelId, levelName, bankId, pal, onRenamed, onDeleted, showToast }) {
+function CategorySection({ cat, levelId, levelName, pal, onRenamed, onDeleted, showToast }) {
   const [questions,  setQuestions]  = useState([]);
-  const [loaded,     setLoaded]     = useState(false);
+  const [, setLoaded]               = useState(false);
   const [loading,    setLoading]    = useState(false);
   const [collapsed,  setCollapsed]  = useState(false);
   const [qModal,     setQModal]     = useState(null);
@@ -894,8 +894,6 @@ function LevelSection({ level, bankId, index, onRenamed, onDeleted, showToast })
     setImportOpen(false);
   };
 
-  const totalQs = categories.reduce((s, c) => s + (c.questionCount || 0), 0);
-
   return (
     <div className="rounded-2xl overflow-hidden shadow-sm border border-slate-100">
       <div className={`bg-gradient-to-r ${pal.bg} px-5 py-4`}>
@@ -999,7 +997,6 @@ function BankDetail({ bank, bankIndex, onBack, onBankRenamed, showToast }) {
   const [newLevelName, setNewLevelName]= useState('');
   const [renamingBank, setRenamingBank]= useState(false);
   const [saving,       setSaving]      = useState(false);
-  const pal = bankPal(bankIndex);
 
   useEffect(() => {
     api.getQbLevels(bank.id)
@@ -1030,7 +1027,6 @@ function BankDetail({ bank, bankIndex, onBack, onBankRenamed, showToast }) {
     } catch (err) { showToast?.(`Failed: ${err.message}`, 'red'); }
   };
 
-  const totalCats = levels.length; // approximate
   const pal2 = bankPal(bankIndex);
 
   return (

@@ -258,7 +258,7 @@ export default function StudentManagement() {
     fetchStudents();
     const timer = setInterval(fetchStudents, 30_000);
     return () => clearInterval(timer);
-  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id]);  
 
   const refresh = () => fetchStudents();
 

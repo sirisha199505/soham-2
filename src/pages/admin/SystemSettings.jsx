@@ -240,7 +240,7 @@ export default function SystemSettings() {
       })
       .catch(err => console.error('Failed to load settings:', err))
       .finally(() => setLoading(false));
-  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id]);  
 
   const updateLevel = (id, cfg) => setLevelCfgs(p => ({ ...p, [id]: cfg }));
 

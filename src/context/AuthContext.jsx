@@ -58,7 +58,7 @@ export function AuthProvider({ children }) {
         }
       })
       .finally(() => setInitializing(false));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);  
 
   useEffect(() => {
     const handle = () => setUser(null);
@@ -99,7 +99,7 @@ export function AuthProvider({ children }) {
     }
     setUser(normalized);
     return getDashboardRoute(normalized.role);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);  
 
   /* ── Login ── */
   // expectedTab: 'student' | 'coach' | 'admin' — must match the actual account role
@@ -128,7 +128,7 @@ export function AuthProvider({ children }) {
     }
     setUser(normalized);
     return getDashboardRoute(normalized.role);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);  
 
   const logout = useCallback(async () => {
     try { await api.logout(); } catch { /* ignore */ }

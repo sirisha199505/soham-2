@@ -4,18 +4,6 @@ import { api } from '../utils/api';
 
 const LevelContext = createContext(null);
 
-// Helper: backend returns plain objects (not arrays) — normalise both formats
-function toMap(data, keyFn, valFn) {
-  const map = {};
-  if (!data) return map;
-  if (Array.isArray(data)) {
-    data.forEach(item => { map[keyFn(item)] = valFn ? valFn(item) : item; });
-  } else if (typeof data === 'object') {
-    Object.entries(data).forEach(([k, v]) => { map[keyFn(k, v)] = valFn ? valFn(k, v) : v; });
-  }
-  return map;
-}
-
 export function LevelProvider({ children }) {
   const { user } = useAuth();
   const [progress,            setProgress]           = useState({});
@@ -114,7 +102,7 @@ export function LevelProvider({ children }) {
       if (Object.keys(userApprovals).length > 0) {
         setApprovals(prev => ({ ...prev, [userId]: userApprovals }));
       }
-    } catch {}
+    } catch { /* ignore — progress marked fetched below regardless */ }
     // Mark as fetched regardless of success/failure to avoid showing stale
     // "loading" state forever if the API is temporarily unavailable.
     setProgressFetched(prev => ({ ...prev, [userId]: true }));
@@ -168,7 +156,7 @@ export function LevelProvider({ children }) {
           [levelId]: { ...prev[userId]?.[levelId], contentRead: true },
         },
       }));
-    } catch {}
+    } catch { /* ignore */ }
   }, []);
 
   const markLevelComplete = useCallback(async (userId, levelId, score) => {

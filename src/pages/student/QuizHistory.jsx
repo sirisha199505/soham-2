@@ -297,7 +297,7 @@ export default function QuizHistory() {
       });
   };
 
-  useEffect(load, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(load, [user?.id]);  
 
   // Total attempts used per level (for computing remaining)
   const attemptsCountByLevel = useMemo(() => {

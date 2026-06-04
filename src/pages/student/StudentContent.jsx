@@ -311,7 +311,7 @@ function ContentReader({ pages, startIndex, levelId, level, onBack, onReadStateC
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [currentIdx, pdfPage, pdfPages, page?.type, goTo, onBack, toggleBookmark]); // eslint-disable-line
+  }, [currentIdx, pdfPage, pdfPages, page?.type, goTo, onBack, toggleBookmark]);  
 
   if (!page) return null;
 

@@ -285,7 +285,7 @@ export default function ExamLevels() {
   const [showAdd,     setShowAdd]    = useState(false);
   const [saved,       setSaved]      = useState(false);
   const [levelStats,  setLevelStats] = useState({});
-  const [loading,     setLoading]    = useState(false);
+  const [, setLoading]               = useState(false);
 
   // Sorted level IDs from levelSettings
   const levelIds = Object.values(levelSettings)
@@ -312,7 +312,7 @@ export default function ExamLevels() {
       });
       setLevelStats(stats);
     }).catch(() => {});
-  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id]);  
 
   const handleSave = async (levelId, form) => {
     await setLevelActive(levelId, {
@@ -365,7 +365,7 @@ export default function ExamLevels() {
       await deleteLevel(levelId);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch {}
+    } catch { /* ignore */ }
     setDeletingId(null);
   };
 
