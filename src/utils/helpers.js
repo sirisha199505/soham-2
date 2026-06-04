@@ -53,6 +53,17 @@ export const capitalize = (str) =>
 export const generateId = () =>
   Math.random().toString(36).slice(2, 10);
 
+// An email is accepted only when it is well-formed AND the local part (before
+// the @) contains at least one letter. This rejects all-numeric addresses like
+// 123344454@gmail.com while still accepting admin@gmail.com or admin123@gmail.com.
+export const isValidEmail = (email) => {
+  if (!email) return false;
+  const value = String(email).trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return false;
+  const local = value.slice(0, value.indexOf('@'));
+  return /[a-zA-Z]/.test(local);
+};
+
 export const debounce = (fn, delay = 300) => {
   let t;
   return (...args) => {

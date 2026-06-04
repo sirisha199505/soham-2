@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../utils/api';
 import { useTheme } from '../../context/ThemeContext';
+import { isValidEmail } from '../../utils/helpers';
 
 // ── OTP Countdown (5 minutes) ────────────────────────────────────────────────
 function Countdown({ startedAt, onExpire }) {
@@ -188,7 +189,7 @@ export default function ForgotPassword() {
       const digits = contact.replace(/\D/g, '');
       if (digits.length !== 10) { setError('Mobile number must be exactly 10 digits.'); return; }
     } else {
-      if (!contact.includes('@')) { setError('Please enter a valid email address.'); return; }
+      if (!isValidEmail(contact)) { setError('Enter a valid email address (the part before @ must contain a letter, e.g. name@gmail.com).'); return; }
     }
 
     setLoading(true);

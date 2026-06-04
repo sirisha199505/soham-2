@@ -6,8 +6,10 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { isValidEmail } from '../../utils/helpers';
 
 const CLASS_OPTIONS = ['VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'Other'];
+const EMAIL_ERROR = 'Enter a valid email address (the part before @ must contain a letter, e.g. name@gmail.com).';
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 const inputCls = `w-full rounded-xl py-3 text-sm text-white placeholder:text-white/30 transition-all duration-200 focus:outline-none`;
@@ -156,6 +158,8 @@ export default function Register() {
     if (!effectiveClass)                                           { setError('Please select or enter your class / college.'); return; }
     const cleanPhone = studentForm.phoneNumber.replace(/\D/g, '');
     if (cleanPhone.length !== 10 || cleanPhone.startsWith('0'))    { setError('Enter a valid 10-digit mobile number (no leading 0).'); return; }
+    const studentEmail = studentForm.email.trim();
+    if (studentEmail && !isValidEmail(studentEmail))               { setError(EMAIL_ERROR); return; }
     if (studentForm.password.length < 6)                           { setError('Password must be at least 6 characters.'); return; }
     if (studentForm.password !== studentForm.confirmPassword)      { setError('Passwords do not match.'); return; }
 
@@ -182,6 +186,7 @@ export default function Register() {
     setError('');
     const cleanPhone = coachForm.phoneNumber.replace(/\D/g, '');
     if (cleanPhone.length !== 10 || cleanPhone.startsWith('0')) { setError('Enter a valid 10-digit mobile number (no leading 0).'); return; }
+    if (!isValidEmail(coachForm.email.trim()))                { setError(EMAIL_ERROR); return; }
     if (coachForm.password.length < 6)                        { setError('Password must be at least 6 characters.'); return; }
     if (coachForm.password !== coachForm.confirmPassword)     { setError('Passwords do not match.'); return; }
 
