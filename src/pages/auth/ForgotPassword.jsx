@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../utils/api';
 import { useTheme } from '../../context/ThemeContext';
-import { isValidEmail } from '../../utils/helpers';
+import { isValidEmail, validatePassword } from '../../utils/helpers';
 
 // ── OTP Countdown (5 minutes) ────────────────────────────────────────────────
 function Countdown({ startedAt, onExpire }) {
@@ -228,7 +228,8 @@ export default function ForgotPassword() {
   const handleResetPassword = useCallback(async (e) => {
     e?.preventDefault();
     setError('');
-    if (newPassword.length < 6)     { setError('Password must be at least 6 characters.'); return; }
+    const pwErr = validatePassword(newPassword);
+    if (pwErr)                       { setError(pwErr); return; }
     if (newPassword !== confirmPass) { setError('Passwords do not match.'); return; }
     setLoading(true);
     try {

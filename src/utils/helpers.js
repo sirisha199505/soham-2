@@ -64,6 +64,20 @@ export const isValidEmail = (email) => {
   return /[a-zA-Z]/.test(local);
 };
 
+// Password length policy — keep in sync with the backend (users.rb / session.rb).
+// Used by every form that sets a password (register, change password, reset).
+export const PASSWORD_MIN = 6;
+export const PASSWORD_MAX = 64;
+
+// Returns a human-readable error string if the password is out of bounds, else
+// null. Centralised so every form shows the SAME min/max validation message.
+export const validatePassword = (pw) => {
+  const len = String(pw ?? '').length;
+  if (len < PASSWORD_MIN) return `Password must be at least ${PASSWORD_MIN} characters.`;
+  if (len > PASSWORD_MAX) return `Password must be ${PASSWORD_MAX} characters or fewer.`;
+  return null;
+};
+
 // Canonical form of a name for uniqueness checks and Exam-Level ↔ QB-Level
 // matching. Lowercases and strips everything except letters/digits so
 // "Science Quiz", "science-quiz", "SCIENCE  QUIZ" all collapse to "sciencequiz".

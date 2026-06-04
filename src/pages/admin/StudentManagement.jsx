@@ -222,6 +222,13 @@ export default function StudentManagement() {
   const [tab,       setTab]       = useState('students'); // 'students' | 'coaches'
   const [viewStudent, setViewStudent] = useState(null);
   const [toast,     setToast]     = useState(null);
+  // Tell "still loading the first fetch" apart from "loaded, no users". Without
+  // this the table showed "No users found" during the ~20s Render cold start, so
+  // freshly-registered students looked like they were missing. `loaded` flips
+  // true after the first successful fetch; `error` surfaces only when we have no
+  // data to show.
+  const [loaded,    setLoaded]    = useState(false);
+  const [error,     setError]     = useState(false);
   const PER_PAGE = 10;
 
   const showToast = (msg, type = 'success') => {
@@ -229,29 +236,40 @@ export default function StudentManagement() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const fetchStudents = async () => {
-    try {
-      const [students, levelsData] = await Promise.all([api.getStudents(), api.getLevelSettings()]);
-      const sorted = Array.isArray(levelsData)
-        ? levelsData.sort(compareLevels)
-        : [];
-      setLevelList(sorted);
+  // The periodic 30s refresh never flashes the loading/error screens: once
+  // `loaded` is true those screens are gated off, and a failed background refresh
+  // keeps the last good list on screen.
+  const fetchStudents = () => {
+    return Promise.all([api.getStudents(), api.getLevelSettings()])
+      .then(([students, levelsData]) => {
+        const sorted = Array.isArray(levelsData)
+          ? levelsData.sort(compareLevels)
+          : [];
+        setLevelList(sorted);
 
-      const localDisabled = JSON.parse(localStorage.getItem(DISABLED_KEY) || '[]');
-      setData(students.map(s => ({
-        id:          s.id,
-        name:        s.name || '—',
-        email:       s.email || '—',
-        phoneNumber: s.phoneNumber || s.phone_number || '',
-        role:        s.role || 'student',
-        uniqueId:    s.uniqueId   || s.unique_id,
-        schoolName:  s.schoolName || s.school_name || '—',
-        className:   s.className  || s.class_name  || '—',
-        disabled:    s.disabled || localDisabled.includes(s.uniqueId || s.unique_id),
-        levels:      s.levels || {},
-        overrides:   s.overrideIds || s.override_ids || [],
-      })));
-    } catch { /* ignore — keep previous student list on fetch failure */ }
+        const localDisabled = JSON.parse(localStorage.getItem(DISABLED_KEY) || '[]');
+        setData(students.map(s => ({
+          id:          s.id,
+          name:        s.name || '—',
+          email:       s.email || '—',
+          phoneNumber: s.phoneNumber || s.phone_number || '',
+          role:        s.role || 'student',
+          uniqueId:    s.uniqueId   || s.unique_id,
+          schoolName:  s.schoolName || s.school_name || '—',
+          className:   s.className  || s.class_name  || '—',
+          disabled:    s.disabled || localDisabled.includes(s.uniqueId || s.unique_id),
+          levels:      s.levels || {},
+          overrides:   s.overrideIds || s.override_ids || [],
+        })));
+        setLoaded(true);
+        setError(false);
+      })
+      .catch(() => {
+        // api.request already retries network errors/503s; reaching here means the
+        // backend is still unreachable. Keep any previously-loaded list on screen
+        // and only show the error state when we have nothing to display yet.
+        setError(prev => prev || !loaded);
+      });
   };
 
   useEffect(() => {
@@ -259,7 +277,7 @@ export default function StudentManagement() {
     fetchStudents();
     const timer = setInterval(fetchStudents, 30_000);
     return () => clearInterval(timer);
-  }, [user?.id]);  
+  }, [user?.id]);
 
   const refresh = () => fetchStudents();
 
@@ -480,7 +498,23 @@ export default function StudentManagement() {
           <p className="text-sm font-semibold text-slate-700">{filtered.length} {tab === 'coaches' ? 'trainer' : 'student'}{filtered.length !== 1 ? 's' : ''}</p>
           <p className="text-xs text-slate-400">Page {page} of {Math.max(totalPages, 1)}</p>
         </div>
-        {paginated.length === 0 ? (
+        {!loaded && !error ? (
+          <div className="py-16 text-center">
+            <RefreshCw size={28} className="mx-auto text-indigo-400 animate-spin mb-3" />
+            <p className="text-slate-500 text-sm font-semibold">Loading users…</p>
+            <p className="text-slate-400 text-xs mt-1">This can take a few seconds while the server wakes up.</p>
+          </div>
+        ) : !loaded && error ? (
+          <div className="py-16 text-center">
+            <AlertTriangle size={32} className="mx-auto text-red-400 mb-3" />
+            <p className="text-slate-700 text-sm font-semibold">Couldn't load users</p>
+            <p className="text-slate-400 text-xs mt-1 mb-3">The server may be starting up or temporarily unavailable.</p>
+            <button onClick={() => { setError(false); fetchStudents(); }}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors">
+              <RefreshCw size={14} /> Retry
+            </button>
+          </div>
+        ) : paginated.length === 0 ? (
           <div className="py-16 text-center">
             <Users size={40} className="mx-auto text-slate-200 mb-2" />
             <p className="text-slate-400 text-sm">No users found</p>

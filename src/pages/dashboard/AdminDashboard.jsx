@@ -96,9 +96,19 @@ export default function AdminDashboard() {
   const [recent,     setRecent]     = useState([]);
   const [refreshed,  setRefreshed]  = useState(false);
   const [levelsList, setLevelsList] = useState([]); // sorted levels from DB
+  // Distinguish "still loading the first response" from "loaded, genuinely empty".
+  // Without this the dashboard rendered EMPTY_STATS (all zeros / blank charts)
+  // during the ~20s Render cold start, which read as a broken/blank page until the
+  // 30s interval happened to repaint it. `loaded` flips true after the first OK
+  // fetch; `error` only surfaces when we have nothing to show yet.
+  const [loaded,  setLoaded]  = useState(false);
+  const [error,   setError]   = useState(false);
 
+  // The periodic 30s refresh keeps the current data on screen and never flashes
+  // the loading/error screens: once `loaded` is true those screens are gated off,
+  // and a failed background refresh leaves the last good data untouched.
   const fetchData = () => {
-    Promise.all([api.getStudents(), api.getLevelSettings()])
+    return Promise.all([api.getStudents(), api.getLevelSettings()])
       .then(([students, levelsData]) => {
         const sorted = Array.isArray(levelsData)
           ? levelsData.sort(compareLevels)
@@ -124,7 +134,15 @@ export default function AdminDashboard() {
         setRecent(withCompletion.length > 0 ? withCompletion : students.slice(0, 5).map(s => ({
           id: s.uniqueId, school: s.schoolName || '—', class: s.className || '—', latestTs: '', completedCount: 0,
         })));
-      }).catch(() => {});
+        setLoaded(true);
+        setError(false);
+      })
+      .catch(() => {
+        // api.request already retries network errors/503s; reaching here means the
+        // backend is still unreachable. Only show the error screen if we have no
+        // data yet — a failed background refresh keeps the last good data visible.
+        setError(prev => prev || !loaded);
+      });
   };
 
   useEffect(() => {
@@ -132,13 +150,41 @@ export default function AdminDashboard() {
     fetchData();
     const timer = setInterval(fetchData, 30_000);
     return () => clearInterval(timer);
-  }, [user?.id]);  
+  }, [user?.id]);
 
   const refresh = () => {
     fetchData();
     setRefreshed(true);
     setTimeout(() => setRefreshed(false), 1500);
   };
+
+  // First-load gate: a clear loading state instead of a blank zeroed dashboard.
+  if (!loaded && !error) {
+    return (
+      <div className="min-h-full bg-slate-50 flex flex-col items-center justify-center gap-3 py-32">
+        <RefreshCw size={28} className="text-indigo-500 animate-spin" />
+        <p className="text-sm font-semibold text-slate-500">Loading dashboard…</p>
+        <p className="text-xs text-slate-400">This can take a few seconds while the server wakes up.</p>
+      </div>
+    );
+  }
+
+  // Hard failure with nothing to show — offer a manual retry.
+  if (!loaded && error) {
+    return (
+      <div className="min-h-full bg-slate-50 flex flex-col items-center justify-center gap-3 py-32 px-6 text-center">
+        <AlertCircle size={32} className="text-red-400" />
+        <p className="text-sm font-semibold text-slate-700">Couldn't load the dashboard</p>
+        <p className="text-xs text-slate-400 max-w-xs">The server may be starting up or temporarily unavailable. Please try again.</p>
+        <button
+          onClick={() => { setError(false); fetchData(); }}
+          className="mt-1 flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors"
+        >
+          <RefreshCw size={14} /> Retry
+        </button>
+      </div>
+    );
+  }
 
   const now = new Date();
   const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 17 ? 'Good afternoon' : 'Good evening';

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { isValidEmail } from '../../utils/helpers';
+import { isValidEmail, validatePassword, PASSWORD_MAX } from '../../utils/helpers';
 import { api } from '../../utils/api';
 
 const CLASS_OPTIONS = ['VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'Other'];
@@ -36,7 +36,7 @@ function Field({ label, icon: Icon, value, onChange, type = 'text', placeholder,
   );
 }
 
-function PasswordField({ label, value, onChange, show, onToggle, placeholder = 'Min. 6 characters', required = true, primaryColor, mismatch }) {
+function PasswordField({ label, value, onChange, show, onToggle, placeholder = 'Min. 6 characters', required = true, primaryColor, mismatch, maxLength }) {
   const focus  = { borderColor: `${primaryColor}60`, boxShadow: `0 0 0 3px ${primaryColor}18` };
   const border = mismatch ? { borderColor: 'rgba(239,68,68,0.6)' } : (value ? focus : {});
   return (
@@ -46,7 +46,7 @@ function PasswordField({ label, value, onChange, show, onToggle, placeholder = '
         <Lock size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
         <input
           type={show ? 'text' : 'password'} placeholder={placeholder}
-          value={value} onChange={onChange} required={required}
+          value={value} onChange={onChange} required={required} maxLength={maxLength}
           className={`${inputCls} pl-11 pr-12`}
           style={{ ...inputStyle, ...border }}
         />
@@ -88,7 +88,12 @@ export default function Register() {
   const { colors } = useTheme();
   const navigate   = useNavigate();
 
-  const [tab, setTab] = useState('student');
+  // Pre-select the tab from ?role= so "Register as Trainer" (from the login page)
+  // opens the Trainer form rather than always defaulting to Student.
+  const [tab, setTab] = useState(() => {
+    const r = new URLSearchParams(window.location.search).get('role');
+    return (r === 'coach' || r === 'trainer' || r === 'teacher') ? 'coach' : 'student';
+  });
 
   const [studentForm, setStudentForm] = useState({
     studentName: '', schoolName: '', className: '', customClass: '',
@@ -170,7 +175,8 @@ export default function Register() {
     if (cleanPhone.length !== 10 || cleanPhone.startsWith('0'))    { setError('Enter a valid 10-digit mobile number (no leading 0).'); return; }
     const studentEmail = studentForm.email.trim();
     if (studentEmail && !isValidEmail(studentEmail))               { setError(EMAIL_ERROR); return; }
-    if (studentForm.password.length < 6)                           { setError('Password must be at least 6 characters.'); return; }
+    const studentPwErr = validatePassword(studentForm.password);
+    if (studentPwErr)                                              { setError(studentPwErr); return; }
     if (studentForm.password !== studentForm.confirmPassword)      { setError('Passwords do not match.'); return; }
 
     setLoading(true);
@@ -197,7 +203,8 @@ export default function Register() {
     const cleanPhone = coachForm.phoneNumber.replace(/\D/g, '');
     if (cleanPhone.length !== 10 || cleanPhone.startsWith('0')) { setError('Enter a valid 10-digit mobile number (no leading 0).'); return; }
     if (!isValidEmail(coachForm.email.trim()))                { setError(EMAIL_ERROR); return; }
-    if (coachForm.password.length < 6)                        { setError('Password must be at least 6 characters.'); return; }
+    const coachPwErr = validatePassword(coachForm.password);
+    if (coachPwErr)                                           { setError(coachPwErr); return; }
     if (coachForm.password !== coachForm.confirmPassword)     { setError('Passwords do not match.'); return; }
 
     setLoading(true);
@@ -302,7 +309,7 @@ export default function Register() {
           <p className="text-[11px] text-slate-500 pt-1">Save these details — use any one to sign in with your password.</p>
         </div>
 
-        <button onClick={() => navigate('/login')}
+        <button onClick={() => navigate(`/login?role=${tab === 'coach' ? 'trainer' : 'student'}`)}
           className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3.5 rounded-2xl transition-all hover:scale-[1.02]"
           style={{ background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.accent} 100%)`, boxShadow: `0 10px 32px ${colors.primary}50` }}>
           Go to Sign In <ArrowRight size={16} />
@@ -382,10 +389,10 @@ export default function Register() {
           <Field primaryColor={colors.primary} label="Email ID (Optional)" icon={Mail} value={studentForm.email} onChange={sS('email')} placeholder="your@email.com" type="email" required={false}
              />
 
-          <PasswordField primaryColor={colors.primary}
+          <PasswordField primaryColor={colors.primary} maxLength={PASSWORD_MAX}
             label="Password" value={studentForm.password} onChange={sS('password')}
             show={showStudentPass} onToggle={() => setShowStudentPass(p => !p)} />
-          <PasswordField primaryColor={colors.primary}
+          <PasswordField primaryColor={colors.primary} maxLength={PASSWORD_MAX}
             label="Confirm Password" value={studentForm.confirmPassword} onChange={sS('confirmPassword')}
             show={showStudentConf} onToggle={() => setShowStudentConf(p => !p)}
             placeholder="Re-enter password"
@@ -410,10 +417,10 @@ export default function Register() {
           <Field primaryColor={colors.primary} label="Email ID"                   icon={Mail}     value={coachForm.email}            onChange={sC('email')}            placeholder="trainer@email.com" type="email"
              />
 
-          <PasswordField primaryColor={colors.primary}
+          <PasswordField primaryColor={colors.primary} maxLength={PASSWORD_MAX}
             label="Password" value={coachForm.password} onChange={sC('password')}
             show={showCoachPass} onToggle={() => setShowCoachPass(p => !p)} />
-          <PasswordField primaryColor={colors.primary}
+          <PasswordField primaryColor={colors.primary} maxLength={PASSWORD_MAX}
             label="Confirm Password" value={coachForm.confirmPassword} onChange={sC('confirmPassword')}
             show={showCoachConf} onToggle={() => setShowCoachConf(p => !p)}
             placeholder="Re-enter password"

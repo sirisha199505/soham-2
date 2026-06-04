@@ -455,8 +455,29 @@ export default function StudentDashboard() {
   // Fetch all attempts so we can compute per-level counts
   const [attempts,       setAttempts]      = useState([]);
   const [attemptsLoaded, setAttemptsLoaded] = useState(false);
+  // Safety net for the loading skeleton: refreshLevelSettings swallows its errors,
+  // so a permanent backend failure (server down after all retries) would otherwise
+  // leave this dashboard stuck showing skeletons forever. If settings still haven't
+  // arrived after a generous wait, surface a clear retry instead.
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
+  // Bumped by the retry button to restart the timeout window below. (No need to
+  // reset loadTimedOut once settings load — `isSettingsLoading` goes false then,
+  // which gates the timeout UI off regardless.)
+  const [retryNonce, setRetryNonce] = useState(0);
 
   useEffect(() => { refreshLevelSettings(); }, []);
+
+  useEffect(() => {
+    if (levelSettingsLoaded) return;
+    const t = setTimeout(() => setLoadTimedOut(true), 25_000);
+    return () => clearTimeout(t);
+  }, [levelSettingsLoaded, retryNonce]);
+
+  const retryLoad = () => {
+    setLoadTimedOut(false);
+    setRetryNonce(n => n + 1);
+    refreshLevelSettings();
+  };
 
   // Load the student's attempt history. A transient backend failure (Render
   // cold-start 503 / timeout) must NOT be treated as "zero attempts used" — that
@@ -526,8 +547,28 @@ export default function StudentDashboard() {
         totalLevels={visibleLevels.length}
       />
 
-      {isSettingsLoading ? (
+      {isSettingsLoading && loadTimedOut ? (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-6 py-16 flex flex-col items-center gap-4 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center">
+            <AlertCircle size={28} className="text-red-400" />
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-lg font-bold text-slate-700" style={{ fontFamily: 'Space Grotesk' }}>
+              Couldn't load your levels
+            </h3>
+            <p className="text-sm text-slate-400 max-w-xs">
+              The server may be starting up or temporarily unavailable. Please try again.
+            </p>
+          </div>
+          <button onClick={retryLoad}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors">
+            <RotateCcw size={14} /> Retry
+          </button>
+        </div>
+      ) : isSettingsLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <LevelCardSkeleton />
+          <LevelCardSkeleton />
           <LevelCardSkeleton />
         </div>
       ) : noLevels ? (

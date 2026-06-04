@@ -14,7 +14,15 @@ export default function Login() {
   const { colors } = useTheme();
   const navigate = useNavigate();
 
-  const [tab,      setTab]     = useState('student'); // 'student' | 'coach' | 'admin'
+  // Pre-select the tab from ?role= so arriving from "Register as Trainer" or a
+  // post-registration redirect lands on the matching login tab (the tab-vs-role
+  // guard would otherwise reject a trainer signing in on the default Student tab).
+  const [tab,      setTab]     = useState(() => {
+    const r = new URLSearchParams(window.location.search).get('role');
+    if (r === 'admin') return 'admin';
+    if (r === 'coach' || r === 'trainer' || r === 'teacher') return 'coach';
+    return 'student';
+  }); // 'student' | 'coach' | 'admin'
   const [form,     setForm]    = useState({ identifier: '', password: '' });
   const [showPass, setShowPass] = useState(false);
   const [loading,  setLoading] = useState(false);
@@ -229,7 +237,7 @@ export default function Login() {
             <span className="text-slate-600 text-xs font-medium px-2">New here?</span>
             <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
           </div>
-          <Link to="/register"
+          <Link to={`/register?role=${isCoach ? 'trainer' : 'student'}`}
             className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-semibold transition-all hover:scale-[1.01]"
             style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${colors.primary}35`, color: colors.primary }}>
             {isCoach ? 'Register as Trainer' : 'Create your Student Account'}

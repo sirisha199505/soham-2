@@ -136,6 +136,15 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
+  /* ── Refresh the cached user from the server (after a profile edit) ── */
+  const refreshUser = useCallback(async () => {
+    const fresh = await api.me();
+    const normalized = normalizeStoredUser(fresh);
+    localStorage.setItem(USER_KEY, JSON.stringify(normalized));
+    setUser(normalized);
+    return normalized;
+  }, []);
+
   const getStudentList = useCallback(async () => {
     return api.getStudents();
   }, []);
@@ -154,6 +163,7 @@ export function AuthProvider({ children }) {
     logout,
     register,
     registerCoach,
+    refreshUser,
     googleLogin,
     isAuthenticated: !!user,
     initializing,
