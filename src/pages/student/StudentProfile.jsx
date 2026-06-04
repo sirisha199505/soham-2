@@ -16,7 +16,7 @@ function InfoRow({ icon: Icon, label, value, color }) {
     <div className="flex items-center gap-4 py-3.5 border-b border-slate-50 last:border-0">
       <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
         style={{ background: `${color}12` }}>
-        <Icon size={15} style={{ color }} />
+        {Icon && <Icon size={15} style={{ color }} />}
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{label}</p>
@@ -165,7 +165,7 @@ export default function StudentProfile() {
           </div>
           <div className="px-5 py-1">
             <InfoRow icon={User}       label="Full Name"            value={user?.name}             color={roleColor} />
-            {!isCoach && <InfoRow icon={null} label="Student ID"    value={studentId}              color={roleColor} />}
+            {!isCoach && <InfoRow icon={Hash} label="Student ID"    value={studentId}              color={roleColor} />}
             <InfoRow icon={Mail}       label="Email Address"        value={displayEmail}           color={roleColor} />
             <InfoRow icon={Phone}      label="Phone Number"         value={user?.phoneNumber}       color={roleColor} />
             {!isCoach && (
