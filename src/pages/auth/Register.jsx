@@ -339,7 +339,7 @@ export default function Register() {
 
           <Field primaryColor={colors.primary} label="Phone Number" icon={Phone} value={studentForm.phoneNumber} onChange={sSPhone} placeholder="10-digit mobile number" type="tel" maxLength={10} inputMode="numeric" />
           <Field primaryColor={colors.primary} label="Email ID (Optional)" icon={Mail} value={studentForm.email} onChange={sS('email')} placeholder="your@email.com" type="email" required={false}
-            hint="Required for forgot password — a 6-digit OTP will be sent here" />
+             />
 
           <PasswordField primaryColor={colors.primary}
             label="Password" value={studentForm.password} onChange={sS('password')}

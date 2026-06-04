@@ -40,14 +40,15 @@ function LevelBadge({ data, levelId, overrideIds }) {
 
 /* ── Detail Modal ── */
 function StudentModal({ student, levelList, onClose, onPhoneUpdated }) {
+  // Hooks must run before any early return (React rules of hooks).
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [phoneVal,     setPhoneVal]     = useState(student?.phoneNumber && student.phoneNumber !== '—' ? student.phoneNumber : (student?.phone_number || ''));
+  const [phoneSaving,  setPhoneSaving]  = useState(false);
+
   if (!student) return null;
   const levels = levelList.length > 0
     ? levelList.map((lvl, i) => ({ id: lvl.id, label: lvl.title || `Level ${i + 1}`, idx: i }))
     : [1, 2, 3].map((n, i) => ({ id: n, label: `Level ${n}`, idx: i }));
-
-  const [editingPhone, setEditingPhone] = useState(false);
-  const [phoneVal,     setPhoneVal]     = useState(student.phoneNumber && student.phoneNumber !== '—' ? student.phoneNumber : (student.phone_number || ''));
-  const [phoneSaving,  setPhoneSaving]  = useState(false);
 
   const savePhone = async () => {
     setPhoneSaving(true);

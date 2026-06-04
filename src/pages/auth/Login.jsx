@@ -195,7 +195,6 @@ export default function Login() {
           </div>
           {isStudent && (
             <p className="text-[11px] text-slate-600 pl-1">
-              Use your email address
             </p>
           )}
         </div>
