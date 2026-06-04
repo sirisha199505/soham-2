@@ -10,7 +10,7 @@ import { useLevel } from '../../context/LevelContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useSettings } from '../../context/SettingsContext';
 import { LEVELS } from '../../utils/levelData';
-import { formatDuration } from '../../utils/helpers';
+import { formatDuration, matchSelectedIndex, isMatchAllCorrect } from '../../utils/helpers';
 import { generateLevelQuiz, recordUsedQuestions, saveQuizAttempt } from '../../utils/quizGenerator';
 import { api } from '../../utils/api';
 import { CATEGORY_META, CATEGORIES } from '../../utils/questionBank';
@@ -30,7 +30,7 @@ function ResultQuestionCard({ q, answer, index }) {
   let isCorrect = false;
   if (!isSkipped) {
     if (q.type === 'match') {
-      isCorrect = typeof answer === 'object' && q.pairs?.every((_, i) => answer[i] === i);
+      isCorrect = isMatchAllCorrect(q.pairs, answer);
     } else {
       isCorrect = answer === q.correct;
     }
@@ -62,10 +62,15 @@ function ResultQuestionCard({ q, answer, index }) {
 
       {/* Options / pairs */}
       <div className="px-4 py-3 space-y-2">
+        {q.imageUrl && (
+          <img src={q.imageUrl} alt="question" className="w-full max-h-40 object-contain bg-slate-50 rounded-xl border border-slate-100"/>
+        )}
+
         {(q.type === 'mcq' || q.type === 'image' || q.type === 'label' || q.type === 'tf') && Array.isArray(q.options) && (
           <div className="grid gap-1.5">
             {q.options.map((opt, i) => {
-              const text = typeof opt === 'string' ? opt : (opt?.text || '');
+              const text = getOptText(opt);
+              const img  = getOptImage(opt);
               const isSelected = answer === i;
               const isCor = i === q.correct;
               let cls = 'border-slate-200 bg-slate-50 text-slate-500';
@@ -76,7 +81,8 @@ function ResultQuestionCard({ q, answer, index }) {
                   <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
                     isCor ? 'bg-green-500 text-white' : isSelected ? 'bg-red-500 text-white' : 'bg-slate-200 text-slate-500'
                   }`}>{String.fromCharCode(65 + i)}</span>
-                  <span className="flex-1">{text}</span>
+                  {img && <img src={img} alt="" className="w-10 h-10 object-cover rounded-md border border-slate-200 shrink-0"/>}
+                  {text && <span className="flex-1">{text}</span>}
                   {isSelected && !isCor && <span className="text-[10px] text-red-400 italic">(your answer)</span>}
                   {isCor && <CheckCircle size={12} className="text-green-500 shrink-0"/>}
                   {isSelected && !isCor && <XCircle size={12} className="text-red-500 shrink-0"/>}
@@ -89,21 +95,26 @@ function ResultQuestionCard({ q, answer, index }) {
         {q.type === 'match' && q.pairs && (
           <div className="space-y-1.5">
             {q.pairs.map((pair, i) => {
-              const selIdx = answer ? answer[i] : undefined;
+              const selIdx = matchSelectedIndex(answer, i);
               const isCor  = selIdx === i;
-              const selRight = selIdx !== undefined ? (q.pairs[selIdx]?.right || '?') : null;
+              const selPair  = selIdx !== undefined ? q.pairs[selIdx] : null;
+              const selRight = selPair ? (selPair.right || (selPair.rightImage ? '🖼' : '?')) : null;
               return (
                 <div key={i} className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 border ${
                   selIdx === undefined ? 'border-slate-200 bg-slate-50' :
                   isCor ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
                 }`}>
-                  <span className="flex-1 font-medium text-slate-700">{pair.left}</span>
+                  <span className="flex-1 flex items-center gap-1.5 font-medium text-slate-700">
+                    {pair.leftImage && <img src={pair.leftImage} alt="" className="w-8 h-8 object-cover rounded-md border border-slate-200 shrink-0"/>}
+                    {pair.left}
+                  </span>
                   <span className="text-slate-400 shrink-0">→</span>
-                  <span className={`flex-1 font-semibold ${
+                  <span className={`flex-1 flex items-center gap-1.5 font-semibold ${
                     selIdx === undefined ? 'text-slate-400' : isCor ? 'text-green-700' : 'text-red-700'
                   }`}>
+                    {selPair?.rightImage && <img src={selPair.rightImage} alt="" className="w-8 h-8 object-cover rounded-md border border-slate-200 shrink-0"/>}
                     {selRight || <span className="text-slate-400 italic">Not answered</span>}
-                    {!isCor && selIdx !== undefined && <span className="text-green-700 ml-1 font-normal">(correct: {pair.right})</span>}
+                    {!isCor && selIdx !== undefined && <span className="text-green-700 ml-1 font-normal">(correct: {pair.right || '🖼'})</span>}
                   </span>
                   {selIdx !== undefined && (isCor
                     ? <CheckCircle size={11} className="text-green-500 shrink-0"/>
@@ -422,15 +433,10 @@ function DragLabelQuestion({ q, answer, onChange }) {
 }
 
 // ─── Score helper for match questions ─────────────────────────────────────
+// Delegates to the shared, coercion-proof matcher so a correct pairing is never
+// scored wrong because a value round-tripped as a string ("2" vs 2).
 function isMatchCorrect(q, answer) {
-  if (!answer) return false;
-  for (let i = 0; i < q.pairs.length; i++) {
-    const selectedRightIdx = answer[i];
-    if (selectedRightIdx === undefined) return false;
-    // selectedRightIdx is the original pairs index, so pairs[selectedRightIdx].right should == pairs[i].right
-    if (selectedRightIdx !== i) return false;
-  }
-  return true;
+  return isMatchAllCorrect(q.pairs, answer);
 }
 
 function isAnswered(q, answer) {
@@ -693,16 +699,30 @@ export default function LevelQuiz() {
 
     const score = computeScore();
 
-    // Strip base64 images — prevents quota overflow that would silently break Quiz History
+    // Persist questions for review. Strip ONLY base64 data: URIs (they overflow the
+    // localStorage recovery buffer and bloat the payload); keep S3/https image URLs
+    // so image-based questions, options and match pairs still render in Quiz History.
+    const keepImg = (url) => {
+      const u = (url || '').toString();
+      return u.startsWith('data:') ? '' : u;
+    };
     const compactQ = (q) => ({
       id:          q.id,
       category:    q.category,
       type:        q.type,
       text:        q.text || '',
-      imageUrl:    (q.imageUrl || '').startsWith('data:') ? '' : (q.imageUrl || ''),
-      options:     (Array.isArray(q.options) ? q.options : []).map(o => (typeof o === 'string' ? o : (o?.text || ''))),
+      imageUrl:    keepImg(q.imageUrl),
+      options:     (Array.isArray(q.options) ? q.options : []).map(o =>
+                     typeof o === 'string'
+                       ? { text: o, imageUrl: '' }
+                       : { text: o?.text || '', imageUrl: keepImg(o?.imageUrl) }),
       correct:     q.correct,
-      pairs:       q.pairs?.map(p => ({ left: p.left || '', right: p.right || '' })),
+      pairs:       q.pairs?.map(p => ({
+                     left:       p.left  || '',
+                     right:      p.right || '',
+                     leftImage:  keepImg(p.leftImage),
+                     rightImage: keepImg(p.rightImage),
+                   })),
       explanation: q.explanation || '',
     });
 

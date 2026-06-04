@@ -32,7 +32,16 @@ async function fetchReportData() {
   students.forEach(s => {
     Object.keys(s.levels || {}).forEach(k => allLevelIds.add(Number(k)));
   });
-  const levelIds = Array.from(allLevelIds).sort((a, b) => a - b);
+  // Order by order_index (mirrors compareLevels used everywhere else) so report
+  // columns follow the canonical Level 1, 2, 3 … sequence rather than raw id order,
+  // which can diverge once levels are deleted/recreated.
+  const orderById = {};
+  settingsArr.forEach(l => { if (l?.id != null) orderById[l.id] = Number(l.order); });
+  const levelIds = Array.from(allLevelIds).sort((a, b) => {
+    const ao = Number.isFinite(orderById[a]) ? orderById[a] : a;
+    const bo = Number.isFinite(orderById[b]) ? orderById[b] : b;
+    return (ao - bo) || (a - b);
+  });
 
   // Build dynamic per-level stats
   const levelStats = {};

@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
 import { CATEGORY_META, CATEGORIES } from '../../utils/questionBank';
-import { formatDuration, getPerformanceLabel } from '../../utils/helpers';
+import { formatDuration, getPerformanceLabel, matchSelectedIndex, isMatchAllCorrect } from '../../utils/helpers';
 
 // ─── Score badge ──────────────────────────────────────────────────────────────
 function ScoreBadge({ pct }) {
@@ -25,7 +25,8 @@ function ScoreBadge({ pct }) {
 }
 
 // ─── Option text helper ───────────────────────────────────────────────────────
-const optText = (o) => (typeof o === 'string' ? o : (o?.text || ''));
+const optText  = (o) => (typeof o === 'string' ? o : (o?.text || ''));
+const optImage = (o) => (typeof o === 'string' ? '' : (o?.imageUrl || ''));
 
 // ─── Single question review ───────────────────────────────────────────────────
 function QuestionReview({ q, answer, index }) {
@@ -35,7 +36,7 @@ function QuestionReview({ q, answer, index }) {
   let isCorrect = false;
   if (!isSkipped) {
     if (q.type === 'match') {
-      isCorrect = typeof answer === 'object' && (q.pairs || []).every((_, i) => answer[i] === i);
+      isCorrect = isMatchAllCorrect(q.pairs, answer);
     } else {
       isCorrect = answer === correctIdx;
     }
@@ -68,15 +69,17 @@ function QuestionReview({ q, answer, index }) {
       </div>
 
       <div className="px-4 py-3 space-y-2">
-        {q.type === 'image' && q.imageUrl && (
-          <img src={q.imageUrl} alt="question" className="w-full h-32 object-cover rounded-xl border border-slate-100 mb-2"/>
+        {q.imageUrl && (
+          <img src={q.imageUrl} alt="question" className="w-full max-h-40 object-contain bg-slate-50 rounded-xl border border-slate-100 mb-2"/>
         )}
 
-        {(q.type === 'mcq' || q.type === 'image' || q.type === 'tf') && Array.isArray(q.options) && (
+        {(q.type === 'mcq' || q.type === 'image' || q.type === 'label' || q.type === 'tf') && Array.isArray(q.options) && (
           <div className="grid gap-1.5">
             {q.options.map((opt, i) => {
               const isSelected        = answer === i;
               const isActuallyCorrect = i === correctIdx;
+              const oImg              = optImage(opt);
+              const oTxt              = optText(opt);
               let cls = 'border-slate-200 bg-slate-50 text-slate-500';
               if (isActuallyCorrect)             cls = 'border-green-300 bg-green-50 text-green-700 font-semibold';
               if (isSelected && !isActuallyCorrect) cls = 'border-red-300 bg-red-50 text-red-700 font-semibold';
@@ -85,7 +88,8 @@ function QuestionReview({ q, answer, index }) {
                   <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
                     isActuallyCorrect ? 'bg-green-500 text-white' : isSelected ? 'bg-red-500 text-white' : 'bg-slate-200 text-slate-500'
                   }`}>{String.fromCharCode(65 + i)}</span>
-                  <span className="flex-1">{optText(opt)}</span>
+                  {oImg && <img src={oImg} alt="" className="w-10 h-10 object-cover rounded-md border border-slate-200 shrink-0"/>}
+                  {oTxt && <span className="flex-1">{oTxt}</span>}
                   {isSelected && !isActuallyCorrect && <span className="text-[10px] text-red-400 italic">(your answer)</span>}
                   {isActuallyCorrect && <CheckCircle size={12} className="text-green-500 shrink-0"/>}
                   {isSelected && !isActuallyCorrect && <XCircle size={12} className="text-red-500 shrink-0"/>}
@@ -98,22 +102,27 @@ function QuestionReview({ q, answer, index }) {
         {q.type === 'match' && q.pairs && (
           <div className="space-y-1.5">
             {q.pairs.map((pair, i) => {
-              const selIdx        = answer ? answer[i] : undefined;
+              const selIdx        = matchSelectedIndex(answer, i);
               const isCorrectPair = selIdx === i;
-              const selRight      = selIdx !== undefined ? (q.pairs[selIdx]?.right || '?') : null;
+              const selPair       = selIdx !== undefined ? q.pairs[selIdx] : null;
+              const selRight      = selPair ? (selPair.right || (selPair.rightImage ? '🖼' : '?')) : null;
               return (
                 <div key={i} className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 border ${
                   selIdx === undefined ? 'border-slate-200 bg-slate-50' :
                   isCorrectPair ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
                 }`}>
-                  <span className="flex-1 font-medium text-slate-700">{pair.left}</span>
+                  <span className="flex-1 flex items-center gap-1.5 font-medium text-slate-700">
+                    {pair.leftImage && <img src={pair.leftImage} alt="" className="w-8 h-8 object-cover rounded-md border border-slate-200 shrink-0"/>}
+                    {pair.left}
+                  </span>
                   <span className="text-slate-400 shrink-0">→</span>
-                  <span className={`flex-1 font-semibold ${
+                  <span className={`flex-1 flex items-center gap-1.5 font-semibold ${
                     selIdx === undefined ? 'text-slate-400' : isCorrectPair ? 'text-green-700' : 'text-red-700'
                   }`}>
+                    {selPair?.rightImage && <img src={selPair.rightImage} alt="" className="w-8 h-8 object-cover rounded-md border border-slate-200 shrink-0"/>}
                     {selRight || <span className="text-slate-400 italic">Not answered</span>}
                     {!isCorrectPair && selIdx !== undefined && (
-                      <span className="text-green-700 ml-1 font-normal">(correct: {pair.right})</span>
+                      <span className="text-green-700 ml-1 font-normal">(correct: {pair.right || '🖼'})</span>
                     )}
                   </span>
                   {selIdx !== undefined && (isCorrectPair
@@ -154,7 +163,7 @@ function AttemptCard({ attempt, attemptLimit, usedCount, isBest }) {
       const correct = catQs.filter(q => {
         const a = ans[q.id] ?? ans[String(q.id)];
         if (a == null) return false;
-        if (q.type === 'match') return typeof a === 'object' && (q.pairs || []).every((_, i) => a[i] === i);
+        if (q.type === 'match') return isMatchAllCorrect(q.pairs, a);
         return a === q.correct;
       }).length;
       return { cat, meta: CATEGORY_META[cat] || { label: cat, color: '#64748b', bg: '#f8fafc' }, total: catQs.length, correct };

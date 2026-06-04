@@ -82,6 +82,27 @@ export const compareLevels = (a, b) => {
   return (ak - bk) || (Number(a?.id) - Number(b?.id));
 };
 
+// ── Match-the-following scoring ──────────────────────────────────────────────
+// A match answer is stored as { leftIdx: rightIdx }. Pairs are persisted in
+// correct positional order, so a pair is correct when the right card placed in
+// slot i has original index i. Keys AND values can round-trip through JSON,
+// sessionStorage, or the backend as STRINGS ("2" instead of 2), so a strict
+// `answer[i] === i` wrongly scores a correct pair as wrong. These helpers coerce
+// both the key lookup and the value before comparing.
+export const matchSelectedIndex = (answer, i) => {
+  if (!answer || typeof answer !== 'object') return undefined;
+  const v = answer[i] ?? answer[String(i)];
+  if (v === undefined || v === null || v === '') return undefined;
+  const n = Number(v);
+  return Number.isNaN(n) ? undefined : n;
+};
+
+export const isMatchPairCorrect = (answer, i) => matchSelectedIndex(answer, i) === i;
+
+export const isMatchAllCorrect = (pairs, answer) =>
+  Array.isArray(pairs) && pairs.length > 0 &&
+  pairs.every((_, i) => isMatchPairCorrect(answer, i));
+
 export const debounce = (fn, delay = 300) => {
   let t;
   return (...args) => {

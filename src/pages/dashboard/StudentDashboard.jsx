@@ -21,17 +21,22 @@ const FALLBACK_COLORS = [
 ];
 
 function buildLevelList(levelSettingsMap) {
+  // The DB (levelSettings) is the source of truth for title/subtitle/description and
+  // ordering — NOT the hardcoded LEVELS table. Previously any level whose id was 1/2/3
+  // returned the static entry verbatim, which ignored admin-renamed titles and showed
+  // stale "Level 2 / Sensors & Actuators" text. We keep the curated static colors (and
+  // fall back to them only for fields the admin left blank), but always render in the
+  // canonical order_index sequence with the admin's own content.
   return Object.values(levelSettingsMap)
     .sort(compareLevels)
     .map((dbLevel, idx) => {
       const staticLevel = LEVELS.find(l => l.id === dbLevel.id);
-      if (staticLevel) return staticLevel;
       return {
         id:          dbLevel.id,
-        title:       dbLevel.title       || `Level ${dbLevel.id}`,
-        subtitle:    dbLevel.subtitle    || '',
-        description: dbLevel.description || '',
-        color:       FALLBACK_COLORS[idx % FALLBACK_COLORS.length],
+        title:       dbLevel.title       || staticLevel?.title       || `Level ${dbLevel.id}`,
+        subtitle:    dbLevel.subtitle    || staticLevel?.subtitle    || '',
+        description: dbLevel.description || staticLevel?.description || '',
+        color:       staticLevel?.color  || FALLBACK_COLORS[idx % FALLBACK_COLORS.length],
       };
     });
 }

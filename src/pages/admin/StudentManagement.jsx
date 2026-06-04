@@ -295,19 +295,38 @@ export default function StudentManagement() {
   const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
 
-  const handleBulkUnlock = (levelId, levelTitle) => {
+  // Optimistically mark a level as overridden on the local student row so the ★
+  // badge appears immediately, before the next getStudents refetch confirms it.
+  const markOverrideLocally = (studentId, levelId) => {
+    setData(prev => prev.map(s => {
+      if (s.id !== studentId) return s;
+      const next = Array.isArray(s.overrides) ? [...s.overrides] : [];
+      if (!next.includes(levelId)) next.push(levelId);
+      return { ...s, overrides: next };
+    }));
+  };
+
+  const handleBulkUnlock = async (levelId, levelTitle) => {
     if (filtered.length === 0) return;
-    filtered.forEach(s => setStudentOverride(s.uniqueId, levelId));
+    // Identify by DB id, not uniqueId: uniqueId is empty for email-registered
+    // students (resolve_user_id maps a numeric DB id to itself). Await every
+    // override so the follow-up refresh reflects the new state instead of racing
+    // the in-flight POSTs.
+    await Promise.all(filtered.map(s => {
+      markOverrideLocally(s.id, levelId);
+      return setStudentOverride(s.id, levelId);
+    }));
     showToast(`${levelTitle || `Level ${levelId}`} unlocked for ${filtered.length} student${filtered.length > 1 ? 's' : ''}`);
     refresh();
   };
 
-  const handleAction = (action, student, lvl) => {
+  const handleAction = async (action, student, lvl) => {
     if (action === 'view') { setViewStudent(student); scrollToTop(); return; }
 
     if (action === 'unlock') {
-      setStudentOverride(student.uniqueId, lvl);
-      showToast(`Level ${lvl} unlocked for ${student.uniqueId}`);
+      markOverrideLocally(student.id, lvl);
+      await setStudentOverride(student.id, lvl);
+      showToast(`Level ${lvl} unlocked for ${student.name || student.uniqueId || student.id}`);
       refresh();
     }
     if (action === 'reset') {

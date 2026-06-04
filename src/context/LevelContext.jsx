@@ -9,8 +9,10 @@ export function LevelProvider({ children }) {
   const [progress,            setProgress]           = useState({});
   const [approvals,           setApprovals]          = useState({});
   const [overrides,           setOverrides]          = useState({});
+  // levelSettings is the SINGLE source of truth for level access. The backend
+  // stores one `open` flag per level (exposed as both open + active); there is no
+  // separate "global access" state to drift out of sync with it.
   const [levelSettings,       setLevelSettings]      = useState({});
-  const [globalAccess,        setGlobalAccess]       = useState({});
   // true once the first successful /api/levels/settings response arrives
   const [levelSettingsLoaded, setLevelSettingsLoaded] = useState(false);
   // tracks which userIds have had their progress fully fetched from DB
@@ -94,34 +96,38 @@ export function LevelProvider({ children }) {
       fetchProgress(user.id);
     }
 
-    // Level settings: backend returns [{id, title, open, ...}, ...]
+    // Level settings: backend returns [{id, title, open, active, ...}, ...].
+    // This is the only access-control source — `open`/`active` come from the same
+    // DB column, so there's no separate global-access fetch to reconcile.
     refreshLevelSettings();
-
-    // Global access: backend returns [{levelId, open}, ...]
-    api.getGlobalAccess()
-      .then(data => {
-        const arr = Array.isArray(data) ? data : Object.entries(data || {});
-        const map = {};
-        arr.forEach(item => {
-          if (Array.isArray(item)) map[Number(item[0])] = item[1];
-          else if (item?.levelId != null) map[item.levelId] = item.open;
-        });
-        setGlobalAccess(map);
-      })
-      .catch(() => {});
 
     // Admin-only calls — only fetch for admin roles to avoid 401/403 for students
     const ADMIN_ROLES = ['admin', 'super_admin', 'school_admin', 'district_admin', 'teacher'];
     if (ADMIN_ROLES.includes(user.role)) {
+      // Backend returns FLAT ARRAYS ([{userId, levelId, status}, …]) but the rest of
+      // this context reads approvals as { userId: { levelId: status } } and overrides
+      // as { userId: [levelId, …] }. Without this reshaping the maps stay array-shaped
+      // and `overrides[userId]` / `approvals[userId]` are always undefined after a
+      // reload — i.e. a previously-granted unlock silently stops being recognised.
       api.getApprovals()
         .then(data => {
-          setApprovals(typeof data === 'object' && data ? data : {});
+          const map = {};
+          (Array.isArray(data) ? data : []).forEach(a => {
+            if (a?.userId == null) return;
+            (map[a.userId] ||= {})[a.levelId] = a.status;
+          });
+          setApprovals(map);
         })
         .catch(() => {});
 
       api.getOverrides()
         .then(data => {
-          setOverrides(typeof data === 'object' && data ? data : {});
+          const map = {};
+          (Array.isArray(data) ? data : []).forEach(o => {
+            if (o?.userId == null) return;
+            (map[o.userId] ||= []).push(o.levelId);
+          });
+          setOverrides(map);
         })
         .catch(() => {});
     }
@@ -143,10 +149,12 @@ export function LevelProvider({ children }) {
     // 1b. Admin deactivated → locked
     if (levelSettings[levelId]?.active === false) return 'locked';
 
-    // 2. Level is open — read from levelSettings (already loaded with its own
+    // 2. Level is open/active — read from levelSettings (already loaded with its own
     //    "loaded" flag) to avoid the race condition where globalAccess arrives
     //    after the first render and leaves every non-ID-1 level stuck as locked.
-    if (levelSettings[levelId]?.open === true) {
+    //    `open` and `active` are the same backend flag; accept either being true so a
+    //    just-re-enabled level unlocks even if one field briefly lags the other.
+    if (levelSettings[levelId]?.open === true || levelSettings[levelId]?.active === true) {
       return progress[userId]?.[levelId]?.status ?? 'unlocked';
     }
 
@@ -165,7 +173,7 @@ export function LevelProvider({ children }) {
     // 5. All other levels stay locked until admin explicitly opens them.
     //    Completing a previous level does NOT auto-unlock the next one.
     return 'locked';
-  }, [progress, overrides, levelSettings, globalAccess, fetchProgress, levelSettingsLoaded]);
+  }, [progress, overrides, levelSettings, fetchProgress, levelSettingsLoaded]);
 
   const markContentRead = useCallback(async (userId, levelId) => {
     try {
@@ -216,9 +224,16 @@ export function LevelProvider({ children }) {
     try {
       const current = levelSettings[levelId] || {};
       // settings may be a plain { active } boolean call (legacy) or a full form object
-      const payload = typeof settings === 'boolean'
-        ? { ...current, active: settings }
-        : { ...current, ...settings };
+      const incoming = typeof settings === 'boolean' ? { active: settings } : settings;
+      const payload  = { ...current, ...incoming };
+      // The backend stores a SINGLE availability flag (DB column `open`) and exposes
+      // it as both `open` and `active`; save_setting derives `open` from the incoming
+      // `active`. So whenever `active` changes we must move `open` in lockstep here too
+      // — otherwise the optimistic local state drifts to {active:true, open:false} and
+      // getLevelStatus (which unlocks on open===true) leaves a re-enabled level stuck
+      // locked until a hard refresh.
+      if ('active' in incoming) payload.open = incoming.active;
+      else if ('open' in incoming) payload.active = incoming.open;
       await api.saveLevelSettings(levelId, payload);
       setLevelSettings(prev => ({
         ...prev,
@@ -229,12 +244,12 @@ export function LevelProvider({ children }) {
     }
   }, [levelSettings]);
 
-  // Admin: toggle global access for a level
+  // Admin: toggle global access for a level. `open` and `active` are the same DB
+  // flag, so this writes through the single source (levelSettings) exactly like
+  // setLevelActive — keeping every access toggle on one code path.
   const setGlobalAccessFn = useCallback(async (levelId, open) => {
     try {
       await api.setGlobalAccess(levelId, open);
-      setGlobalAccess(prev => ({ ...prev, [levelId]: open }));
-      // Keep levelSettings.open in sync so getLevelStatus reflects the change immediately
       setLevelSettings(prev => ({
         ...prev,
         [levelId]: { ...(prev[levelId] || {}), open, active: open },
@@ -305,7 +320,7 @@ export function LevelProvider({ children }) {
     <LevelContext.Provider value={{
       getLevel, getLevelStatus, markContentRead, markLevelComplete, isContentRead,
       setApproval, approvals, setStudentOverride, setLevelActive,
-      setGlobalAccess: setGlobalAccessFn, levelSettings, levelSettingsLoaded, globalAccess,
+      setGlobalAccess: setGlobalAccessFn, levelSettings, levelSettingsLoaded,
       refreshLevelSettings, createLevel, deleteLevel, progressFetched,
     }}>
       {children}
