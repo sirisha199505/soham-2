@@ -60,18 +60,6 @@ export default function Login() {
     }
   }, [tab, googleLogin, navigate]);
 
-  const handleGoogleClick = () => {
-    if (!GOOGLE_CLIENT_ID) {
-      setError('Google Sign-In is not configured. Set VITE_GOOGLE_CLIENT_ID in your .env file to enable it.');
-      return;
-    }
-    if (!window.google?.accounts?.id) {
-      setError('Google Sign-In is loading. Please wait a moment and try again.');
-      return;
-    }
-    window.google.accounts.id.prompt();
-  };
-
   const switchTab = (t) => {
     setTab(t);
     setForm({ identifier: '', password: '' });

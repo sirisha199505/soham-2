@@ -49,7 +49,7 @@ async function request(method, path, body, attempt = 0) {
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
-  } catch (err) {
+  } catch {
     clearTimeout(timeoutId);
     if (attempt < 2) {
       await new Promise(r => setTimeout(r, 5000));

@@ -250,7 +250,7 @@ export default function StudentManagement() {
         levels:      s.levels || {},
         overrides:   s.overrideIds || s.override_ids || [],
       })));
-    } catch {}
+    } catch { /* ignore — keep previous student list on fetch failure */ }
   };
 
   useEffect(() => {

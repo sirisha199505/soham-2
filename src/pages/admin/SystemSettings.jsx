@@ -279,7 +279,7 @@ export default function SystemSettings() {
     setLevelCfgs(resetCfgs);
     try {
       await api.saveSettings({ ...DEFAULT_GLOBAL, levels: resetCfgs });
-    } catch {}
+    } catch { /* ignore — local reset already applied */ }
     setShowReset(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);

@@ -23,7 +23,7 @@ function timerState(t) {
 }
 
 // ─── Inline question review (shown on result screen) ─────────────────────
-function ResultQuestionCard({ q, answer, index, levelColor }) {
+function ResultQuestionCard({ q, answer, index }) {
   const catMeta = CATEGORY_META[q.category] || { label: q.category, color: '#64748b', bg: '#f8fafc' };
   const isSkipped = answer === undefined || answer === null;
   let isCorrect = false;
@@ -128,7 +128,7 @@ function getOptText(opt)  { return typeof opt === 'string' ? opt : (opt?.text ||
 function getOptImage(opt) { return typeof opt === 'string' ? '' : (opt?.imageUrl || ''); }
 
 // ─── Drag-and-Drop Match Question ────────────────────────────────────────
-function DragMatchQuestion({ q, answer, onChange, levelColor }) {
+function DragMatchQuestion({ q, answer, onChange }) {
   const placed = answer || {};
   const [shuffledRight] = useState(() => {
     const arr = q.pairs.map((_, i) => i);
@@ -319,7 +319,7 @@ function DragMatchQuestion({ q, answer, onChange, levelColor }) {
 }
 
 // ─── Drag-and-Drop Label Question ─────────────────────────────────────────
-function DragLabelQuestion({ q, answer, onChange, levelColor }) {
+function DragLabelQuestion({ q, answer, onChange }) {
   const opts = q.options || [];
   const [shuffledOpts] = useState(() => {
     const arr = opts.map((_, i) => i);
@@ -478,7 +478,7 @@ export default function LevelQuiz() {
         const { expiresAt } = JSON.parse(saved);
         return (expiresAt - Date.now()) / 1000 > 0;
       }
-    } catch {}
+    } catch { /* ignore corrupt session storage */ }
     return false;
   });
   const [current,         setCurrent]         = useState(0);
@@ -498,7 +498,6 @@ export default function LevelQuiz() {
   const [noAttemptsError,      setNoAttemptsError]      = useState(null);
 
   const quizDuration  = useRef(600);
-  const startRef      = useRef(new Date());
   const submittingRef = useRef(false);
 
   // Session key for timer/answer persistence across refresh and back navigation

@@ -23,7 +23,7 @@ export const hasPermission = (role, permission) => {
   return PERMISSIONS[permission]?.includes(normalizedRole) ?? false;
 };
 
-export const getDashboardRoute = (role) => '/dashboard';
+export const getDashboardRoute = () => '/dashboard';
 
 export const getSidebarItems = (role) => {
   const normalizedRole = role === 'teacher' ? 'coach' : role;

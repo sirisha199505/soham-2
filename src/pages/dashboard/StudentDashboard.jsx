@@ -431,7 +431,7 @@ export default function StudentDashboard() {
 
   // Fetch all attempts so we can compute per-level counts
   const [attempts,       setAttempts]      = useState([]);
-  const [attemptsLoaded, setAttemptsLoaded] = useState(false);
+  const [, setAttemptsLoaded] = useState(false);
 
   useEffect(() => { refreshLevelSettings(); }, []);
 

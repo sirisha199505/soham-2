@@ -31,6 +31,29 @@ export function LevelProvider({ children }) {
       .catch(() => {});
   }, []);
 
+  /* ── Fetch progress for a specific student ── */
+  const fetchProgress = useCallback(async (userId) => {
+    if (!userId || fetchedUsers.current.has(userId)) return;
+    fetchedUsers.current.add(userId);
+    try {
+      const data = await api.getLevelProgress(userId);
+      const map = {};
+      const userApprovals = {};
+      Object.entries(data || {}).forEach(([k, v]) => {
+        const levelId = Number(k);
+        map[levelId] = v;
+        if (v.approvalStatus) userApprovals[levelId] = v.approvalStatus;
+      });
+      setProgress(prev => ({ ...prev, [userId]: map }));
+      if (Object.keys(userApprovals).length > 0) {
+        setApprovals(prev => ({ ...prev, [userId]: userApprovals }));
+      }
+    } catch { /* ignore — progress marked fetched below regardless */ }
+    // Mark as fetched regardless of success/failure to avoid showing stale
+    // "loading" state forever if the API is temporarily unavailable.
+    setProgressFetched(prev => ({ ...prev, [userId]: true }));
+  }, []);
+
   // Reload whenever the logged-in user changes (login / logout)
   useEffect(() => {
     if (!user) {
@@ -84,29 +107,6 @@ export function LevelProvider({ children }) {
         .catch(() => {});
     }
   }, [user?.id]);
-
-  /* ── Fetch progress for a specific student ── */
-  const fetchProgress = useCallback(async (userId) => {
-    if (!userId || fetchedUsers.current.has(userId)) return;
-    fetchedUsers.current.add(userId);
-    try {
-      const data = await api.getLevelProgress(userId);
-      const map = {};
-      const userApprovals = {};
-      Object.entries(data || {}).forEach(([k, v]) => {
-        const levelId = Number(k);
-        map[levelId] = v;
-        if (v.approvalStatus) userApprovals[levelId] = v.approvalStatus;
-      });
-      setProgress(prev => ({ ...prev, [userId]: map }));
-      if (Object.keys(userApprovals).length > 0) {
-        setApprovals(prev => ({ ...prev, [userId]: userApprovals }));
-      }
-    } catch { /* ignore — progress marked fetched below regardless */ }
-    // Mark as fetched regardless of success/failure to avoid showing stale
-    // "loading" state forever if the API is temporarily unavailable.
-    setProgressFetched(prev => ({ ...prev, [userId]: true }));
-  }, []);
 
   const getLevel = useCallback((userId, levelId) => {
     if (userId && !fetchedUsers.current.has(userId)) fetchProgress(userId);

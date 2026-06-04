@@ -55,7 +55,7 @@ function timeAgo(ts) {
 // ── localStorage helpers ──────────────────────────────────────────────────
 const ls = {
   get: (k, def) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; } },
-  set: (k, v)   => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  set: (k, v)   => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore quota errors */ } },
 };
 
 function markRead(lid, idx) {
@@ -69,7 +69,6 @@ function getReadList(lid)   { return ls.get(`cr_read_${lid}`,    []); }
 function getLastRead(lid)   { const i = ls.get(`cr_last_${lid}`, null); const t = ls.get(`cr_last_ts_${lid}`, null); return (i !== null && t) ? { idx: i, ts: t } : null; }
 function getBookmarks(lid)  { return ls.get(`cr_bm_${lid}`,      []); }
 function setBookmarks(lid, b) { ls.set(`cr_bm_${lid}`, b); }
-function getSavedPage(lid)  { return ls.get(`cr_pos_${lid}`,     0); }
 function savePage(lid, idx) { ls.set(`cr_pos_${lid}`, idx); }
 
 // ── PDF.js CDN loader ─────────────────────────────────────────────────────
@@ -554,7 +553,7 @@ function ContentReader({ pages, startIndex, levelId, level, onBack, onReadStateC
 // ══════════════════════════════════════════════════════════════════════════
 // Material Card — clean LMS style
 // ══════════════════════════════════════════════════════════════════════════
-function MaterialCard({ page, index, levelId, level, totalCards, onRead }) {
+function MaterialCard({ page, index, levelId, level, onRead }) {
   const readList   = getReadList(levelId);
   const lastRead   = getLastRead(levelId);
   const bookmarks  = getBookmarks(levelId);

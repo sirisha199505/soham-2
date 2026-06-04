@@ -8,6 +8,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { LEVELS } from '../../utils/levelData';
 import { downloadLevelContentAsPDF } from '../../utils/pdfExport';
 import { api } from '../../utils/api';
+import DOMPurify from 'dompurify';
 
 export default function LevelContent() {
   const { levelId }  = useParams();
@@ -76,10 +77,6 @@ export default function LevelContent() {
   useEffect(() => {
     return () => { if (pdfBlobUrl?.startsWith('blob:')) URL.revokeObjectURL(pdfBlobUrl); };
   }, [pdfBlobUrl]);
-
-  const openPdf = () => {
-    if (pdfBlobUrl) window.open(pdfBlobUrl, '_blank');
-  };
 
   const current = pages[pageIndex];
   const isLast  = pageIndex === total - 1;
@@ -277,7 +274,7 @@ export default function LevelContent() {
                 </h2>
               </div>
               <div className="px-5 py-4 rich-content text-sm md:text-base text-slate-600 leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: sec.body || '' }} />
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sec.body || '') }} />
             </div>
           ))
         )}

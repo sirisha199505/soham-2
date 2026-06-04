@@ -12,8 +12,7 @@ import { isValidEmail } from '../../utils/helpers';
 // ── OTP Countdown (5 minutes) ────────────────────────────────────────────────
 function Countdown({ startedAt, onExpire }) {
   const OTP_SECONDS = 5 * 60;
-  const elapsed = Math.floor((Date.now() - startedAt) / 1000);
-  const [left, setLeft] = useState(Math.max(0, OTP_SECONDS - elapsed));
+  const [left, setLeft] = useState(() => Math.max(0, OTP_SECONDS - Math.floor((Date.now() - startedAt) / 1000)));
 
   useEffect(() => {
     if (left <= 0) { onExpire?.(); return; }

@@ -625,7 +625,7 @@ export async function ensureQuestionBankSeeded() {
   try {
     const allDefaults = CATEGORIES.flatMap(cat => DEFAULTS[cat].map(q => ({ ...q })));
     await api.seedQuestions(allDefaults);
-  } catch {}
+  } catch { /* ignore — seeding is best-effort */ }
 }
 
 export async function getCategoryQuestions(category) {
