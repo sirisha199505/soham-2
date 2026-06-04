@@ -367,7 +367,7 @@ export default function Register() {
           <Field primaryColor={colors.primary} label="Organization / Institution" icon={Briefcase} value={coachForm.organizationName} onChange={sC('organizationName')} placeholder="e.g. Soham Robotics Academy" />
           <Field primaryColor={colors.primary} label="Phone Number"               icon={Phone}    value={coachForm.phoneNumber}      onChange={sCPhone}                placeholder="10-digit mobile number" type="tel" maxLength={10} inputMode="numeric" />
           <Field primaryColor={colors.primary} label="Email ID"                   icon={Mail}     value={coachForm.email}            onChange={sC('email')}            placeholder="trainer@email.com" type="email"
-            hint="Required for forgot password — a 6-digit OTP will be sent here." />
+             />
 
           <PasswordField primaryColor={colors.primary}
             label="Password" value={coachForm.password} onChange={sC('password')}
