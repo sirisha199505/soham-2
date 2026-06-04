@@ -153,7 +153,7 @@ export default function Register() {
     e.preventDefault();
     setError('');
     const effectiveClass = studentForm.className === 'Other' ? studentForm.customClass.trim() : studentForm.className;
-    if (!effectiveClass)                                           { setError('Please select or enter your class.'); return; }
+    if (!effectiveClass)                                           { setError('Please select or enter your class / college.'); return; }
     const cleanPhone = studentForm.phoneNumber.replace(/\D/g, '');
     if (cleanPhone.length !== 10 || cleanPhone.startsWith('0'))    { setError('Enter a valid 10-digit mobile number (no leading 0).'); return; }
     if (studentForm.password.length < 6)                           { setError('Password must be at least 6 characters.'); return; }
@@ -312,15 +312,15 @@ export default function Register() {
           <Field primaryColor={colors.primary} label="Student Name" icon={User}   value={studentForm.studentName} onChange={sS('studentName')} placeholder="Full name" />
           <Field primaryColor={colors.primary} label="School Name"  icon={School} value={studentForm.schoolName}  onChange={sS('schoolName')}  placeholder="e.g. Delhi Public School" />
 
-          {/* Class */}
+          {/* Class / College */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Class</label>
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Class / College</label>
             <div className="relative">
               <BookOpen size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
               <select value={studentForm.className} onChange={sS('className')} required
                 className={`${inputCls} pl-11 pr-4 appearance-none cursor-pointer`}
                 style={{ ...inputStyle, color: studentForm.className ? 'white' : 'rgba(255,255,255,0.35)' }}>
-                <option value="">Select your Class</option>
+                <option value="">Select your Class / College</option>
                 {CLASS_OPTIONS.map(c => (
                   <option key={c} value={c} style={{ color: 'white', background: '#1e293b' }}>{c}</option>
                 ))}
