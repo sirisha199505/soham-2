@@ -111,7 +111,6 @@ export default function StudentProfile() {
   };
 
   const displayEmail = user?.email?.includes('@student.rq') ? null : user?.email;
-  const studentId    = user?.id ? `#${String(user.id).padStart(6, '0')}` : null;
 
   return (
     <div className="min-h-full bg-slate-50 pb-10">
@@ -139,12 +138,6 @@ export default function StudentProfile() {
                   style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.25)' }}>
                   <RoleIcon size={11} /> {roleLabel}
                 </span>
-                {!isCoach && studentId && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white"
-                    style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.18)' }}>
-                    ID: {studentId}
-                  </span>
-                )}
               </div>
             </div>
           </div>
@@ -165,7 +158,6 @@ export default function StudentProfile() {
           </div>
           <div className="px-5 py-1">
             <InfoRow icon={User}       label="Full Name"            value={user?.name}             color={roleColor} />
-            {!isCoach && <InfoRow icon={Hash} label="Student ID"    value={studentId}              color={roleColor} />}
             <InfoRow icon={Mail}       label="Email Address"        value={displayEmail}           color={roleColor} />
             <InfoRow icon={Phone}      label="Phone Number"         value={user?.phoneNumber}       color={roleColor} />
             {!isCoach && (
