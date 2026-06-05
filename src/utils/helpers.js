@@ -85,6 +85,29 @@ export const validatePassword = (pw) => {
 export const normalizeName = (str) =>
   String(str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
+// ── Exam-Level Access Control (audience) ─────────────────────────────────────
+// A level can be restricted to one account type. Options shown in the admin UI:
+export const LEVEL_AUDIENCES = [
+  { value: 'both',    label: 'Both Students & Trainers', desc: 'Visible to students and trainers' },
+  { value: 'student', label: 'Students Only',            desc: 'Visible to students only' },
+  { value: 'trainer', label: 'Trainers Only',            desc: 'Visible to trainers only' },
+];
+
+// Map a user role to the audience key it matches. Coach/teacher → 'trainer'.
+export const roleAudienceKey = (role) =>
+  (role === 'coach' || role === 'teacher') ? 'trainer'
+    : role === 'student' ? 'student'
+    : 'admin';
+
+// Whether a user of the given role may see/take a level with this audience.
+// Admins (and any non-student/trainer) always pass; unknown/blank audience = 'both'.
+export const levelAudienceAllows = (audience, role) => {
+  const aud = audience || 'both';
+  const key = roleAudienceKey(role);
+  if (key === 'admin') return true;
+  return aud === 'both' || aud === key;
+};
+
 // Deterministic, stable ordering for exam levels everywhere they're listed.
 // Sorts by order_index (0 is a valid order, unlike the old `order || id`), then
 // breaks ties by id so the sequence is ALWAYS the same (Level 1, 2, 3 …).

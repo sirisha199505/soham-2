@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
-import { normalizeName, compareLevels } from '../../utils/helpers';
+import { normalizeName, compareLevels, LEVEL_AUDIENCES } from '../../utils/helpers';
 
 const DEFAULT_COLORS = [
   { from: '#3BC0EF', to: '#1E3A8A' },
@@ -148,6 +148,7 @@ function EditModal({ levelId, settings, onSave, onClose, otherTitles = [] }) {
     timeLimit:     s.timeLimit     ?? 10,
     questionCount: s.questionCount ?? 20,
     active:        s.active        ?? true,
+    audience:      s.audience      || 'both',
   });
   const [error, setError] = useState('');
   const f = v => e => setForm(p => ({ ...p, [v]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
@@ -200,10 +201,33 @@ function EditModal({ levelId, settings, onSave, onClose, otherTitles = [] }) {
                 className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
             </div>
           </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Access Control — who can take this level</label>
+            <div className="grid grid-cols-1 gap-2">
+              {LEVEL_AUDIENCES.map(opt => {
+                const selected = (form.audience || 'both') === opt.value;
+                return (
+                  <button key={opt.value} type="button" onClick={() => setForm(p => ({ ...p, audience: opt.value }))}
+                    className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl border-2 text-left transition-all ${
+                      selected ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-indigo-200 hover:bg-slate-50'}`}>
+                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      selected ? 'border-indigo-500' : 'border-slate-300'}`}>
+                      {selected && <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />}
+                    </span>
+                    <span className="min-w-0">
+                      <span className={`block text-sm font-semibold ${selected ? 'text-indigo-700' : 'text-slate-700'}`}>{opt.label}</span>
+                      <span className="block text-[11px] text-slate-400">{opt.desc}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <label className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3 cursor-pointer">
             <div>
               <p className="text-sm font-semibold text-slate-700">Level Active</p>
-              <p className="text-xs text-slate-400">Students can access and take this level</p>
+              <p className="text-xs text-slate-400">When off, no one can access this level</p>
             </div>
             <button onClick={() => setForm(p => ({ ...p, active: !p.active }))}
               className={`transition-colors ${form.active ? 'text-indigo-500' : 'text-slate-300'}`}>
@@ -256,9 +280,9 @@ function LevelCard({ levelId, isFirst, settings, stats, onEdit, onDelete }) {
         </div>
         <div className="relative z-10 flex items-center gap-1.5 mt-3">
           {isFirst ? (
-            <><Zap size={12} className="text-white/70" /><span className="text-white/60 text-xs">Unlocked by default</span></>
+            <><Zap size={12} className="text-white/70" /><span className="text-white/60 text-xs">Admin must unlock for students/Trainers</span></>
           ) : (
-            <><Lock size={12} className="text-white/70" /><span className="text-white/60 text-xs">Admin must unlock for students</span></>
+            <><Lock size={12} className="text-white/70" /><span className="text-white/60 text-xs">Admin must unlock for students/Trainers</span></>
           )}
         </div>
       </div>

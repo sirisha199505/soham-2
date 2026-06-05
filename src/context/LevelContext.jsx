@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { api } from '../utils/api';
+import { levelAudienceAllows } from '../utils/helpers';
 
 const LevelContext = createContext(null);
 
@@ -148,6 +149,12 @@ export function LevelProvider({ children }) {
 
     // 1b. Admin deactivated → locked
     if (levelSettings[levelId]?.active === false) return 'locked';
+
+    // 1c. Access Control (audience): a level restricted to Students Only /
+    //     Trainers Only is locked for the other account type. Admins always pass.
+    if (levelSettings[levelId] && !levelAudienceAllows(levelSettings[levelId]?.audience, user?.role)) {
+      return 'locked';
+    }
 
     // 2. Level is open/active — read from levelSettings (already loaded with its own
     //    "loaded" flag) to avoid the race condition where globalAccess arrives
