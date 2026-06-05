@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { scrollToTop } from '../../utils/scroll';
 import {
   Users, Search, RefreshCw, CheckCircle,
-  ChevronDown, Eye, Unlock, RotateCcw, UserX, UserCheck,
+  ChevronDown, Eye, Unlock, UserX, UserCheck,
   X, AlertTriangle, Info, Zap,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -123,14 +123,10 @@ function StudentModal({ student, levelList, onClose }) {
 }
 
 /* ── Actions dropdown ── */
-function ActionsMenu({ student, levelList, onAction }) {
+function ActionsMenu({ student, onAction }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null);
   const [pos, setPos] = useState({ top: 0, left: 0 });
-  // Levels that can be unlocked = all except the first
-  const unlockableLevels = levelList.length > 1
-    ? levelList.slice(1)
-    : [{ id: 2, title: 'Level 2' }, { id: 3, title: 'Level 3' }];
 
   // Position the menu with FIXED coords from the button's rect so it escapes the
   // table's `overflow-x-auto` (which also clips vertically). Without this, with
@@ -139,7 +135,7 @@ function ActionsMenu({ student, levelList, onAction }) {
     if (!open && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
       const menuW = 192;   // w-48
-      const menuH = 40 + unlockableLevels.length * 34 + 90; // approx content height
+      const menuH = 130;   // approx content height (View Details + Enable/Disable)
       let left = Math.max(8, r.right - menuW);
       let top  = r.bottom + 6;
       // Flip above the button if it would overflow the viewport bottom.
@@ -168,18 +164,6 @@ function ActionsMenu({ student, levelList, onAction }) {
               <Eye size={13} /> View Details
             </button>
             <div className="h-px bg-slate-100 my-1" />
-            <p className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase">Unlock Level</p>
-            {unlockableLevels.map(lvl => (
-              <button key={lvl.id} onClick={() => { onAction('unlock', student, lvl.id); setOpen(false); }}
-                className="flex items-center gap-2 w-full px-3 py-2 text-xs text-slate-700 hover:bg-amber-50">
-                <Unlock size={13} className="text-amber-500" /> Unlock {lvl.title || lvl.name || `Level ${lvl.id}`}
-              </button>
-            ))}
-            <div className="h-px bg-slate-100 my-1" />
-            {/* <button onClick={() => { onAction('reset', student); setOpen(false); }}
-              className="flex items-center gap-2 w-full px-3 py-2 text-xs text-orange-600 hover:bg-orange-50">
-              <RotateCcw size={13} /> Reset Progress
-            </button> */}
             <button onClick={() => { onAction('toggle', student); setOpen(false); }}
               className={`flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-red-50 ${student.disabled ? 'text-green-600' : 'text-red-500'}`}>
               {student.disabled ? <UserCheck size={13} /> : <UserX size={13} />}
@@ -565,7 +549,7 @@ export default function StudentManagement() {
                     </span>
                   </td>
                   <td className="px-4 py-3.5">
-                    <ActionsMenu student={s} levelList={levelList} onAction={handleAction} />
+                    <ActionsMenu student={s} onAction={handleAction} />
                   </td>
                 </tr>
               ))}
