@@ -3,19 +3,23 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Clock, ChevronLeft, ChevronRight, CheckCircle, XCircle, Minus,
   Trophy, Shuffle, LayoutGrid, X, BookOpen, ChevronDown, ChevronUp,
-  AlertTriangle,
+  AlertTriangle, ListOrdered, Boxes, MapPin, GripVertical,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useSettings } from '../../context/SettingsContext';
 import { LEVELS } from '../../utils/levelData';
-import { formatDuration, matchSelectedIndex, isMatchAllCorrect } from '../../utils/helpers';
+import {
+  formatDuration, matchSelectedIndex, isMatchAllCorrect,
+  isOrderAllCorrect, isCategorizeAllCorrect, isHotspotAllCorrect,
+} from '../../utils/helpers';
 import { generateLevelQuiz, recordUsedQuestions, saveQuizAttempt } from '../../utils/quizGenerator';
 import { api } from '../../utils/api';
 import { CATEGORY_META, CATEGORIES } from '../../utils/questionBank';
 import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
+import DragDropReview from '../../components/quiz/DragDropReview';
 
 function timerState(t) {
   if (t <= 30)  return 'critical';
@@ -27,14 +31,7 @@ function timerState(t) {
 function ResultQuestionCard({ q, answer, index }) {
   const catMeta = CATEGORY_META[q.category] || { label: q.category, color: '#64748b', bg: '#f8fafc' };
   const isSkipped = answer === undefined || answer === null;
-  let isCorrect = false;
-  if (!isSkipped) {
-    if (q.type === 'match') {
-      isCorrect = isMatchAllCorrect(q.pairs, answer);
-    } else {
-      isCorrect = answer === q.correct;
-    }
-  }
+  const isCorrect = !isSkipped && isQuestionCorrect(q, answer);
   const statusColor = isSkipped ? '#94a3b8' : isCorrect ? '#16a34a' : '#dc2626';
   const statusBg    = isSkipped ? '#f8fafc'  : isCorrect ? '#f0fdf4' : '#fef2f2';
 
@@ -123,6 +120,10 @@ function ResultQuestionCard({ q, answer, index }) {
               );
             })}
           </div>
+        )}
+
+        {(q.type === 'order' || q.type === 'categorize' || q.type === 'hotspot') && (
+          <DragDropReview q={q} answer={answer}/>
         )}
 
         {q.explanation && (
@@ -432,19 +433,399 @@ function DragLabelQuestion({ q, answer, onChange }) {
   );
 }
 
-// ─── Score helper for match questions ─────────────────────────────────────
-// Delegates to the shared, coercion-proof matcher so a correct pairing is never
-// scored wrong because a value round-tripped as a string ("2" vs 2).
-function isMatchCorrect(q, answer) {
-  return isMatchAllCorrect(q.pairs, answer);
+// ─── Helper: stable shuffle of an index list ───────────────────────────────
+function useShuffledIndices(length) {
+  const [order] = useState(() => {
+    const arr = Array.from({ length }, (_, i) => i);
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  });
+  return order;
+}
+
+const txtOf = (o) => (typeof o === 'string' ? o : o?.text || '');
+const imgOf = (o) => (typeof o === 'string' ? '' : o?.imageUrl || '');
+
+// ─── Ordering / Sequencing Question ────────────────────────────────────────
+// Options are authored in the CORRECT order; the student drags the shuffled
+// cards into numbered slots. answer = array where answer[slot] = optionIndex.
+function OrderingQuestion({ q, answer, onChange }) {
+  const opts = Array.isArray(q.options) ? q.options : [];
+  const n = opts.length;
+  const shuffled = useShuffledIndices(n);
+  const placed = Array.isArray(answer) ? answer.slice(0, n) : Array(n).fill(null);
+  while (placed.length < n) placed.push(null);
+
+  const [selected, setSelected] = useState(null); // { optIdx, from:'bank'|'slot', slot }
+  const [overSlot, setOverSlot] = useState(null);
+  const dragRef = useRef(null);
+
+  const placedSet = new Set(placed.filter(v => v !== null && v !== undefined).map(Number));
+  const bank = shuffled.filter(i => !placedSet.has(i));
+
+  const commit = (next) => onChange(next.slice());
+
+  const placeInSlot = (optIdx, fromSlot, targetSlot) => {
+    const next = placed.slice();
+    const displaced = next[targetSlot];
+    if (fromSlot !== undefined && fromSlot !== null) next[fromSlot] = (displaced ?? null);
+    next[targetSlot] = optIdx;
+    commit(next);
+  };
+  const clearSlot = (slot) => { const next = placed.slice(); next[slot] = null; commit(next); };
+
+  // tap interactions
+  const tapBankCard = (optIdx) =>
+    setSelected(s => (s?.optIdx === optIdx && s?.from === 'bank') ? null : { optIdx, from: 'bank' });
+  const tapSlot = (slot) => {
+    const inSlot = placed[slot];
+    if (selected) {
+      placeInSlot(selected.optIdx, selected.from === 'slot' ? selected.slot : undefined, slot);
+      setSelected(null);
+    } else if (inSlot !== null && inSlot !== undefined) {
+      setSelected({ optIdx: Number(inSlot), from: 'slot', slot });
+    }
+  };
+
+  // html5 drag
+  const startDrag = (e, optIdx, from, slot) => { dragRef.current = { optIdx, from, slot }; e.dataTransfer.effectAllowed = 'move'; setSelected(null); };
+  const dropOnSlot = (e, slot) => {
+    e.preventDefault(); setOverSlot(null);
+    const src = dragRef.current; if (!src) return;
+    placeInSlot(src.optIdx, src.from === 'slot' ? src.slot : undefined, slot);
+    dragRef.current = null;
+  };
+  const dropOnBank = (e) => {
+    e.preventDefault();
+    const src = dragRef.current; if (src?.from === 'slot') clearSlot(src.slot);
+    dragRef.current = null;
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[11px] text-slate-400 text-center font-medium">
+        Drag each step into the correct order · or tap a step then tap a slot
+      </p>
+
+      {/* Numbered slots */}
+      <div className="space-y-2.5">
+        {placed.map((optIdx, slot) => {
+          const o = optIdx !== null && optIdx !== undefined ? opts[Number(optIdx)] : null;
+          const isOver = overSlot === slot;
+          const isSlotSel = selected?.from === 'slot' && selected?.slot === slot;
+          const canDrop = !!selected && o == null;
+          return (
+            <div key={slot} className="flex items-stretch gap-2.5">
+              <div className="w-9 shrink-0 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-500">
+                {slot + 1}
+              </div>
+              <div
+                draggable={!!o}
+                onDragStart={o ? e => startDrag(e, Number(optIdx), 'slot', slot) : undefined}
+                onDragOver={e => { e.preventDefault(); setOverSlot(slot); }}
+                onDragLeave={() => setOverSlot(null)}
+                onDrop={e => dropOnSlot(e, slot)}
+                onClick={() => tapSlot(slot)}
+                className={`flex-1 rounded-xl border-2 px-3 py-3 min-h-[52px] flex items-center transition-all duration-150 select-none ${
+                  o
+                    ? `${isSlotSel ? 'border-indigo-400 bg-indigo-50' : 'border-green-300 bg-green-50'} cursor-grab active:cursor-grabbing`
+                    : `border-dashed cursor-pointer ${isOver || canDrop ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 bg-slate-50/50 hover:border-indigo-200'}`
+                }`}>
+                {o ? (
+                  <div className="flex items-center gap-2 w-full">
+                    <GripVertical size={14} className="text-slate-300 shrink-0"/>
+                    {imgOf(o) && <img src={imgOf(o)} alt="" className="w-8 h-8 object-cover rounded-lg shrink-0"/>}
+                    <span className={`text-sm font-semibold flex-1 ${isSlotSel ? 'text-indigo-700' : 'text-green-700'}`}>{txtOf(o)}</span>
+                    <button onMouseDown={e => e.stopPropagation()}
+                      onClick={e => { e.stopPropagation(); clearSlot(slot); setSelected(null); }}
+                      className="w-5 h-5 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-500 shrink-0">
+                      <X size={9}/>
+                    </button>
+                  </div>
+                ) : (
+                  <span className={`text-xs mx-auto font-medium ${isOver || canDrop ? 'text-indigo-400' : 'text-slate-300'}`}>
+                    {canDrop ? 'Tap to place' : 'Drop step here'}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Bank */}
+      <div
+        onDragOver={e => e.preventDefault()}
+        onDrop={dropOnBank}
+        className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-3 min-h-[56px]">
+        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2">Steps</p>
+        {bank.length === 0 ? (
+          <div className="flex items-center justify-center gap-1.5 py-1 text-green-600 text-sm font-semibold">
+            <CheckCircle size={14}/> All steps placed!
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {bank.map(optIdx => {
+              const o = opts[optIdx];
+              const isSel = selected?.optIdx === optIdx && selected?.from === 'bank';
+              return (
+                <div key={optIdx} draggable
+                  onDragStart={e => startDrag(e, optIdx, 'bank', undefined)}
+                  onClick={e => { e.stopPropagation(); tapBankCard(optIdx); }}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 text-sm font-semibold cursor-grab active:cursor-grabbing select-none transition-all ${
+                    isSel ? 'border-indigo-500 bg-indigo-50 text-indigo-700 scale-105 shadow-md ring-2 ring-indigo-200'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200'
+                  }`}>
+                  {imgOf(o) && <img src={imgOf(o)} alt="" className="w-8 h-8 object-cover rounded-lg"/>}
+                  {txtOf(o)}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Categorize / Grouping Question ────────────────────────────────────────
+// extras = { buckets:[name…], items:[{text,imageUrl,bucket}] }. The student drags
+// each item into a bucket column. answer = { itemIndex: bucketIndex }.
+function CategorizeQuestion({ q, answer, onChange }) {
+  const buckets = Array.isArray(q.extras?.buckets) ? q.extras.buckets : [];
+  const items   = Array.isArray(q.extras?.items)   ? q.extras.items   : [];
+  const placed = answer && typeof answer === 'object' ? answer : {};
+  const shuffled = useShuffledIndices(items.length);
+
+  const [selected, setSelected] = useState(null); // itemIdx selected in bank/column
+  const [overBucket, setOverBucket] = useState(null); // bucketIdx | 'bank'
+  const dragRef = useRef(null);
+
+  const bankItems = shuffled.filter(i => placed[i] === undefined && placed[String(i)] === undefined);
+
+  const placeItem = (itemIdx, bucketIdx) => { const n = { ...placed }; n[itemIdx] = bucketIdx; onChange(n); };
+  const removeItem = (itemIdx) => { const n = { ...placed }; delete n[itemIdx]; delete n[String(itemIdx)]; onChange(n); };
+
+  const tapItem = (itemIdx) => setSelected(s => (s === itemIdx ? null : itemIdx));
+  const tapBucket = (bucketIdx) => { if (selected !== null) { placeItem(selected, bucketIdx); setSelected(null); } };
+  const tapBank = () => { if (selected !== null) { removeItem(selected); setSelected(null); } };
+
+  const startDrag = (e, itemIdx) => { dragRef.current = itemIdx; e.dataTransfer.effectAllowed = 'move'; setSelected(null); };
+  const dropOnBucket = (e, bucketIdx) => { e.preventDefault(); setOverBucket(null); if (dragRef.current !== null && dragRef.current !== undefined) placeItem(dragRef.current, bucketIdx); dragRef.current = null; };
+  const dropOnBank = (e) => { e.preventDefault(); setOverBucket(null); if (dragRef.current !== null && dragRef.current !== undefined) removeItem(dragRef.current); dragRef.current = null; };
+
+  // Plain render function (NOT a nested component) so the chip <div> keeps a
+  // stable element type across re-renders — a nested component would remount on
+  // every setState (e.g. dragOver) and cancel an in-progress HTML5 drag.
+  const renderChip = (itemIdx, inBucket) => {
+    const it = items[itemIdx];
+    const isSel = selected === itemIdx;
+    return (
+      <div key={itemIdx} draggable
+        onDragStart={e => startDrag(e, itemIdx)}
+        onClick={e => { e.stopPropagation(); inBucket ? removeItem(itemIdx) : tapItem(itemIdx); }}
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border-2 text-xs font-semibold cursor-grab active:cursor-grabbing select-none transition-all ${
+          inBucket ? 'border-green-300 bg-green-50 text-green-700'
+                   : isSel ? 'border-indigo-500 bg-indigo-50 text-indigo-700 scale-105 shadow-md ring-2 ring-indigo-200'
+                           : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200'
+        }`}>
+        {imgOf(it) && <img src={imgOf(it)} alt="" className="w-7 h-7 object-cover rounded-md"/>}
+        {txtOf(it)}
+        {inBucket && <X size={10} className="text-green-400"/>}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[11px] text-slate-400 text-center font-medium">
+        Drag each item into the correct group · or tap an item then tap a group
+      </p>
+
+      {/* Buckets */}
+      <div className={`grid gap-3 ${buckets.length >= 3 ? 'sm:grid-cols-3 grid-cols-1' : 'sm:grid-cols-2 grid-cols-1'}`}>
+        {buckets.map((b, bi) => {
+          const inThis = Object.keys(placed).filter(k => Number(placed[k]) === bi).map(Number);
+          const isOver = overBucket === bi;
+          const canDrop = selected !== null;
+          return (
+            <div key={bi}
+              onDragOver={e => { e.preventDefault(); setOverBucket(bi); }}
+              onDragLeave={() => setOverBucket(null)}
+              onDrop={e => dropOnBucket(e, bi)}
+              onClick={() => tapBucket(bi)}
+              className={`rounded-2xl border-2 p-3 min-h-[96px] transition-all ${
+                isOver || canDrop ? 'border-indigo-400 bg-indigo-50/60' : 'border-slate-200 bg-slate-50/50'
+              }`}>
+              <p className="text-[11px] font-bold text-slate-600 mb-2 text-center">{b}</p>
+              <div className="flex flex-wrap gap-1.5 justify-center">
+                {inThis.length === 0
+                  ? <span className="text-[10px] text-slate-300 py-2">Drop items here</span>
+                  : inThis.map(ii => renderChip(ii, true))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Bank */}
+      <div
+        onDragOver={e => { e.preventDefault(); setOverBucket('bank'); }}
+        onDragLeave={() => setOverBucket(null)}
+        onDrop={dropOnBank}
+        onClick={tapBank}
+        className={`rounded-2xl border-2 p-3 min-h-[56px] transition-all ${
+          overBucket === 'bank' ? 'border-indigo-400 bg-indigo-50' : 'border-dashed border-slate-200 bg-slate-50/60'
+        }`}>
+        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2">Items</p>
+        {bankItems.length === 0 ? (
+          <div className="flex items-center justify-center gap-1.5 py-1 text-green-600 text-sm font-semibold">
+            <CheckCircle size={14}/> All items grouped!
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {bankItems.map(ii => renderChip(ii, false))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Image Hotspot Labeling Question ───────────────────────────────────────
+// q.imageUrl is the picture; extras.hotspots = [{x,y,label}] (x,y in %). The
+// student drags labels onto the marked spots. answer = { hotspotIdx: labelIdx }.
+function HotspotLabelQuestion({ q, answer, onChange }) {
+  const hotspots = Array.isArray(q.extras?.hotspots) ? q.extras.hotspots : [];
+  const labels = hotspots.map(h => h?.label || '');
+  const shuffled = useShuffledIndices(labels.length);
+  const placed = answer && typeof answer === 'object' ? answer : {};
+
+  const [selected, setSelected] = useState(null); // labelIdx
+  const [overSpot, setOverSpot] = useState(null);
+  const dragRef = useRef(null);
+
+  const usedLabels = new Set(Object.values(placed).map(Number));
+  const bank = shuffled.filter(li => !usedLabels.has(li));
+
+  const placeLabel = (labelIdx, spotIdx) => {
+    const n = { ...placed };
+    // a label can only be in one spot — remove it from any other spot first
+    Object.keys(n).forEach(k => { if (Number(n[k]) === labelIdx) delete n[k]; });
+    n[spotIdx] = labelIdx;
+    onChange(n);
+  };
+  const clearSpot = (spotIdx) => { const n = { ...placed }; delete n[spotIdx]; delete n[String(spotIdx)]; onChange(n); };
+
+  const tapLabel = (labelIdx) => setSelected(s => (s === labelIdx ? null : labelIdx));
+  const tapSpot = (spotIdx) => {
+    const cur = placed[spotIdx] ?? placed[String(spotIdx)];
+    if (selected !== null) { placeLabel(selected, spotIdx); setSelected(null); }
+    else if (cur !== undefined) { clearSpot(spotIdx); }
+  };
+
+  const startDrag = (e, labelIdx) => { dragRef.current = labelIdx; e.dataTransfer.effectAllowed = 'move'; setSelected(null); };
+  const dropOnSpot = (e, spotIdx) => { e.preventDefault(); setOverSpot(null); if (dragRef.current !== null && dragRef.current !== undefined) placeLabel(dragRef.current, spotIdx); dragRef.current = null; };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[11px] text-slate-400 text-center font-medium">
+        Drag each label onto the matching spot · or tap a label then tap a spot
+      </p>
+
+      {/* Image with hotspots */}
+      <div className="relative w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-50 select-none">
+        {q.imageUrl
+          ? <img src={q.imageUrl} alt="Labelled diagram" className="w-full max-h-[340px] object-contain pointer-events-none"/>
+          : <div className="h-40 flex items-center justify-center text-slate-300 text-sm">No image</div>}
+        {hotspots.map((h, si) => {
+          const lab = placed[si] ?? placed[String(si)];
+          const hasLabel = lab !== undefined;
+          const isOver = overSpot === si;
+          return (
+            <div key={si}
+              onDragOver={e => { e.preventDefault(); setOverSpot(si); }}
+              onDragLeave={() => setOverSpot(null)}
+              onDrop={e => dropOnSpot(e, si)}
+              onClick={() => tapSpot(si)}
+              style={{ left: `${h.x}%`, top: `${h.y}%` }}
+              className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer">
+              {hasLabel ? (
+                <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-500 text-white text-[11px] font-bold shadow-lg whitespace-nowrap">
+                  {txtOf(labels[Number(lab)])}
+                  <X size={9} className="opacity-80"/>
+                </span>
+              ) : (
+                <span className={`flex items-center justify-center w-7 h-7 rounded-full border-2 text-[11px] font-bold shadow-md transition-all ${
+                  isOver || selected !== null ? 'border-indigo-500 bg-indigo-500 text-white scale-110' : 'border-white bg-slate-700/80 text-white'
+                }`}>
+                  {si + 1}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Labels bank */}
+      <div>
+        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Labels</p>
+        <div className="flex flex-wrap gap-2">
+          {bank.length === 0 ? (
+            <div className="flex items-center justify-center gap-1.5 py-1 text-green-600 text-sm font-semibold w-full">
+              <CheckCircle size={14}/> All labels placed!
+            </div>
+          ) : bank.map(li => {
+            const isSel = selected === li;
+            return (
+              <div key={li} draggable
+                onDragStart={e => startDrag(e, li)}
+                onClick={() => tapLabel(li)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 text-sm font-semibold cursor-grab active:cursor-grabbing select-none transition-all ${
+                  isSel ? 'border-indigo-500 bg-indigo-50 text-indigo-700 scale-105 shadow-md ring-2 ring-indigo-200'
+                        : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200'
+                }`}>
+                {labels[li]}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// True when a question's answer is fully correct (all-or-nothing for the
+// drag-and-drop types, exact match for single-answer types).
+function isQuestionCorrect(q, answer) {
+  if (answer === undefined || answer === null) return false;
+  switch (q.type) {
+    case 'match':      return isMatchAllCorrect(q.pairs, answer);
+    case 'order':      return isOrderAllCorrect(q.options, answer);
+    case 'categorize': return isCategorizeAllCorrect(q.extras, answer);
+    case 'hotspot':    return isHotspotAllCorrect(q.extras, answer);
+    default:           return answer === q.correct;
+  }
 }
 
 function isAnswered(q, answer) {
   if (answer === undefined || answer === null) return false;
-  if (q.type === 'match') {
-    return typeof answer === 'object' && Object.keys(answer).length === q.pairs.length;
+  switch (q.type) {
+    case 'match':
+      return typeof answer === 'object' && Object.keys(answer).length === (q.pairs?.length || 0);
+    case 'order':
+      return Array.isArray(answer) && answer.length === (q.options?.length || 0) &&
+        answer.every(v => v !== null && v !== undefined);
+    case 'categorize':
+      return typeof answer === 'object' && Object.keys(answer).length === (q.extras?.items?.length || 0);
+    case 'hotspot':
+      return typeof answer === 'object' && Object.keys(answer).length === (q.extras?.hotspots?.length || 0);
+    default:
+      return answer !== undefined;
   }
-  return answer !== undefined;
 }
 
 export default function LevelQuiz() {
@@ -636,13 +1017,8 @@ export default function LevelQuiz() {
     questions.forEach(q => {
       const ans = answers[q.id];
       if (ans === undefined || ans === null) return;
-      if (q.type === 'match') {
-        if (isMatchCorrect(q, ans)) correct++;
-        else wrong++;
-      } else {
-        if (ans === q.correct) correct++;
-        else wrong++;
-      }
+      if (isQuestionCorrect(q, ans)) correct++;
+      else wrong++;
     });
     const total = questions.length;
     const pct   = total > 0 ? Math.round((correct / total) * 100) : 0;
@@ -723,6 +1099,17 @@ export default function LevelQuiz() {
                      leftImage:  keepImg(p.leftImage),
                      rightImage: keepImg(p.rightImage),
                    })),
+      // Keep type-specific structure for 'categorize' / 'hotspot' review, with
+      // base64 images stripped (same rule as options/pairs above).
+      extras:      q.extras ? {
+                     ...(Array.isArray(q.extras.buckets) ? { buckets: q.extras.buckets } : {}),
+                     ...(Array.isArray(q.extras.items) ? { items: q.extras.items.map(it => ({
+                       text: it?.text || '', imageUrl: keepImg(it?.imageUrl), bucket: it?.bucket,
+                     })) } : {}),
+                     ...(Array.isArray(q.extras.hotspots) ? { hotspots: q.extras.hotspots.map(h => ({
+                       x: h?.x, y: h?.y, label: h?.label || '',
+                     })) } : {}),
+                   } : undefined,
       explanation: q.explanation || '',
     });
 
@@ -1157,6 +1544,10 @@ export default function LevelQuiz() {
   const catMeta = CATEGORY_META[q.category] || { label: q.category, color: colors.primary };
   const typeLabel = q.type === 'match' ? 'Match the Following'
     : q.type === 'label' ? 'Label Question'
+    : q.type === 'order' ? 'Arrange in Order'
+    : q.type === 'categorize' ? 'Group into Categories'
+    : q.type === 'hotspot' ? 'Label the Image'
+    : q.type === 'tf' ? 'True / False'
     : 'Multiple Choice';
 
   return (
@@ -1259,8 +1650,9 @@ export default function LevelQuiz() {
                 </span>
               </div>
 
-              {/* Question image (all types) */}
-              {q.imageUrl && (
+              {/* Question image (all types except hotspot, which renders its own
+                  image with the drop markers overlaid) */}
+              {q.imageUrl && q.type !== 'hotspot' && (
                 <div className="mb-4 rounded-xl overflow-hidden border border-slate-200">
                   <img src={q.imageUrl} alt="Question visual" className="w-full max-h-56 object-contain bg-slate-50" />
                 </div>
@@ -1292,6 +1684,21 @@ export default function LevelQuiz() {
                   onChange={val => handleAnswer(q.id, val)}
                   levelColor={level.color}
                 />
+              )}
+
+              {/* Ordering / Sequencing */}
+              {q.type === 'order' && (
+                <OrderingQuestion q={q} answer={answers[q.id]} onChange={val => handleAnswer(q.id, val)} />
+              )}
+
+              {/* Categorize / Grouping */}
+              {q.type === 'categorize' && (
+                <CategorizeQuestion q={q} answer={answers[q.id]} onChange={val => handleAnswer(q.id, val)} />
+              )}
+
+              {/* Image hotspot labeling */}
+              {q.type === 'hotspot' && (
+                <HotspotLabelQuestion q={q} answer={answers[q.id]} onChange={val => handleAnswer(q.id, val)} />
               )}
 
               {/* MCQ / True-False */}

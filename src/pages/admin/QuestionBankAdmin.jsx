@@ -7,7 +7,7 @@ import {
   List, AlignLeft, Layers, Tag, HelpCircle, Check,
   FolderOpen, Folder, Upload, Download, FileSpreadsheet, AlertCircle,
   ChevronRight, Database, MoreVertical, Calendar, ToggleLeft, Loader2,
-  Users, UserCheck, Globe,
+  Users, UserCheck, Globe, ListOrdered, Boxes, MapPin, GripVertical, ArrowUp, ArrowDown,
 } from 'lucide-react';
 import Modal from '../../components/ui/Modal';
 import { api } from '../../utils/api';
@@ -66,10 +66,13 @@ const levelPal = (idx) => LEVEL_PALETTE[idx % LEVEL_PALETTE.length];
 
 // ─── Question-type config ─────────────────────────────────────────────────
 const Q_TYPES = [
-  { value:'mcq',       label:'MCQ',                icon:List,       sub:'4 options · text or image'      },
-  { value:'match',     label:'Match the Following', icon:AlignLeft,  sub:'Pair matching · text or image'  },
-  { value:'label',     label:'Label Question',      icon:Image,      sub:'Identify & label image parts'   },
-  { value:'truefalse', label:'True / False',        icon:ToggleLeft, sub:'2 options · True or False'      },
+  { value:'mcq',        label:'MCQ',                 icon:List,        sub:'4 options · text or image'      },
+  { value:'match',      label:'Match the Following', icon:AlignLeft,   sub:'Pair matching · text or image'  },
+  { value:'label',      label:'Label Question',      icon:Image,       sub:'Identify & label image parts'   },
+  { value:'truefalse',  label:'True / False',        icon:ToggleLeft,  sub:'2 options · True or False'      },
+  { value:'order',      label:'Arrange in Order',    icon:ListOrdered, sub:'Drag steps into correct order'  },
+  { value:'categorize', label:'Group into Categories', icon:Boxes,     sub:'Drag items into buckets'        },
+  { value:'hotspot',    label:'Label the Image',     icon:MapPin,      sub:'Drag labels onto image spots'   },
 ];
 const DIFF_CFG = {
   easy:   { label:'Easy',   cls:'bg-green-100 text-green-700' },
@@ -91,7 +94,21 @@ const blankMcq       = (af='student') => ({ type:'mcq',       text:'', imageUrl:
 const blankMatch     = (af='student') => ({ type:'match',     text:'', imageUrl:'', difficulty:'easy', applicableFor:af, pairs:[blankPair(),blankPair(),blankPair(),blankPair()], explanation:'' });
 const blankLabel     = (af='student') => ({ type:'label',     text:'', imageUrl:'', difficulty:'easy', applicableFor:af, options:[blankOpt(),blankOpt(),blankOpt(),blankOpt()], correct:null, explanation:'' });
 const blankTrueFalse = (af='student') => ({ type:'truefalse', text:'', imageUrl:'', difficulty:'easy', applicableFor:af, options:[{text:'True',imageUrl:''},{text:'False',imageUrl:''}], correct:null, explanation:'' });
-const blankForType   = (t, af='student') => t==='match'?blankMatch(af):t==='label'?blankLabel(af):t==='truefalse'?blankTrueFalse(af):blankMcq(af);
+// Ordering: options ARE the correct order (students see them shuffled).
+const blankOrder     = (af='student') => ({ type:'order',      text:'', imageUrl:'', difficulty:'easy', applicableFor:af, options:[blankOpt(),blankOpt(),blankOpt()], correct:0, explanation:'' });
+// Categorize: extras.buckets (group names) + extras.items ({text,imageUrl,bucket}).
+const blankCatItem   = () => ({ text:'', imageUrl:'', bucket:0 });
+const blankCategorize= (af='student') => ({ type:'categorize', text:'', imageUrl:'', difficulty:'easy', applicableFor:af, correct:0, extras:{ buckets:['Group A','Group B'], items:[blankCatItem(),blankCatItem(),blankCatItem(),blankCatItem()] }, explanation:'' });
+// Hotspot: question imageUrl + extras.hotspots ({x,y,label}).
+const blankHotspot   = (af='student') => ({ type:'hotspot',    text:'', imageUrl:'', difficulty:'easy', applicableFor:af, correct:0, extras:{ hotspots:[] }, explanation:'' });
+const blankForType   = (t, af='student') =>
+  t==='match'      ? blankMatch(af)      :
+  t==='label'      ? blankLabel(af)      :
+  t==='truefalse'  ? blankTrueFalse(af)  :
+  t==='order'      ? blankOrder(af)      :
+  t==='categorize' ? blankCategorize(af) :
+  t==='hotspot'    ? blankHotspot(af)    :
+  blankMcq(af);
 
 // ─── CSV parser ───────────────────────────────────────────────────────────
 function parseCSV(text) {
@@ -383,15 +400,64 @@ function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catNam
   const setOpt  = (i, field, val) => setForm(p => { const opts = (Array.isArray(p.options)?p.options:[]).map(normalizeOpt); opts[i]={...opts[i],[field]:val}; return {...p,options:opts}; });
   const setPair = (i, side, val) => setForm(p => { const pairs=(p.pairs||[]).map(normalizePair); pairs[i]={...pairs[i],[side]:val}; return {...p,pairs}; });
 
+  // ── Ordering step helpers (options ARE the correct order) ──────────────────
+  const addStep    = () => setForm(p => ({ ...p, options: [...(p.options||[]), blankOpt()] }));
+  const removeStep = (i) => setForm(p => ({ ...p, options: (p.options||[]).filter((_,j)=>j!==i) }));
+  const moveStep   = (i, dir) => setForm(p => {
+    const arr = [...(p.options||[])]; const j = i + dir;
+    if (j < 0 || j >= arr.length) return p;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    return { ...p, options: arr };
+  });
+
+  // ── Categorize helpers (extras.buckets + extras.items) ─────────────────────
+  const ex = form.extras || {};
+  const setExtras  = (updater) => setForm(p => ({ ...p, extras: updater(p.extras || {}) }));
+  const setBucket  = (i, val) => setExtras(x => ({ ...x, buckets: (x.buckets||[]).map((b,j)=> j===i?val:b) }));
+  const addBucket  = () => setExtras(x => ({ ...x, buckets: [...(x.buckets||[]), `Group ${String.fromCharCode(65+(x.buckets||[]).length)}`] }));
+  const removeBucket = (i) => setExtras(x => {
+    const buckets = (x.buckets||[]).filter((_,j)=>j!==i);
+    // Re-point items: items in the removed bucket fall back to bucket 0; items
+    // after it shift down by one so indices stay valid.
+    const items = (x.items||[]).map(it => {
+      const b = Number(it.bucket);
+      return { ...it, bucket: b === i ? 0 : b > i ? b - 1 : b };
+    });
+    return { ...x, buckets, items };
+  });
+  const setItem      = (i, field, val) => setExtras(x => ({ ...x, items: (x.items||[]).map((it,j)=> j===i?{...it,[field]:val}:it) }));
+  const addItem      = () => setExtras(x => ({ ...x, items: [...(x.items||[]), blankCatItem()] }));
+  const removeItem   = (i) => setExtras(x => ({ ...x, items: (x.items||[]).filter((_,j)=>j!==i) }));
+
+  // ── Hotspot helpers (extras.hotspots = [{x,y,label}]) ──────────────────────
+  const addHotspot    = (x, y) => setExtras(e2 => ({ ...e2, hotspots: [...(e2.hotspots||[]), { x: Math.round(x), y: Math.round(y), label: '' }] }));
+  const setHotspot    = (i, field, val) => setExtras(e2 => ({ ...e2, hotspots: (e2.hotspots||[]).map((h,j)=> j===i?{...h,[field]:val}:h) }));
+  const removeHotspot = (i) => setExtras(e2 => ({ ...e2, hotspots: (e2.hotspots||[]).filter((_,j)=>j!==i) }));
+
   const handleTypeChange = (t) => { setForm(p => ({ ...blankForType(t, p.applicableFor || defaultAudience), id: p.id, difficulty: p.difficulty, text: p.text, imageUrl: p.imageUrl || '' })); setErrors({}); };
 
   const validate = () => {
     const e = {};
-    if (!form.text.trim() && !form.imageUrl) e.text = 'Question text or image required';
+    const needsImg = form.type === 'hotspot';
+    if (!form.text.trim() && !form.imageUrl && !needsImg) e.text = 'Question text or image required';
     if (form.type === 'match') {
       (form.pairs || []).forEach((p, i) => { const pr=normalizePair(p); if ((!pr.left.trim()&&!pr.leftImage)||(!pr.right.trim()&&!pr.rightImage)) e[`pair${i}`]='Both sides need text or image'; });
     } else if (form.type === 'truefalse') {
       if (form.correct === null || form.correct === undefined) e.correct = 'Please select True or False';
+    } else if (form.type === 'order') {
+      const opts = form.options || [];
+      if (opts.length < 2) e.order = 'Add at least 2 steps';
+      opts.forEach((o,i)=>{ const opt=normalizeOpt(o); if(!opt.text.trim()&&!opt.imageUrl) e[`opt${i}`]='Fill every step'; });
+    } else if (form.type === 'categorize') {
+      const buckets = ex.buckets || []; const items = ex.items || [];
+      if (buckets.filter(b=>b.trim()).length < 2) e.buckets = 'Add at least 2 named groups';
+      if (items.length < 2) e.items = 'Add at least 2 items';
+      items.forEach((it,i)=>{ if(!it.text?.trim() && !it.imageUrl) e[`item${i}`]='Fill every item'; if(it.bucket===undefined||it.bucket===null||Number(it.bucket)>=buckets.length) e[`item${i}`]='Pick a group'; });
+    } else if (form.type === 'hotspot') {
+      if (!form.imageUrl) e.text = 'A base image is required for hotspot questions';
+      const hs = ex.hotspots || [];
+      if (hs.length < 2) e.hotspots = 'Add at least 2 hotspots (click the image)';
+      hs.forEach((h,i)=>{ if(!h.label?.trim()) e[`hs${i}`]='Each hotspot needs a label'; });
     } else {
       (form.options||[]).forEach((o,i)=>{ const opt=normalizeOpt(o); if(!opt.text.trim()&&!opt.imageUrl) e[`opt${i}`]='Fill all options'; });
       if (form.correct === null || form.correct === undefined) e.correct = 'Please select the correct answer';
@@ -515,6 +581,126 @@ function QuestionFormModal({ isOpen, onClose, onSave, initial, levelName, catNam
             </div>
           </div>
         )}
+
+        {/* ── Ordering editor ─────────────────────────────────────────── */}
+        {form.type==='order' && (
+          <div>
+            <label className={lbl}>Steps in Correct Order <span className="text-red-400">*</span>
+              <span className="normal-case font-normal text-slate-400 ml-1">Students see them shuffled</span></label>
+            <div className="space-y-2">
+              {(form.options||[]).map((opt,i)=>{ const optObj=normalizeOpt(opt); return (
+                <div key={i} className={`rounded-xl border-2 p-3 ${errors[`opt${i}`]?'border-red-300':'border-slate-100 bg-slate-50/60'}`}>
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0">{i+1}</span>
+                    <input value={optObj.text} onChange={e=>setOpt(i,'text',e.target.value)} placeholder={`Step ${i+1}…`}
+                      className="flex-1 bg-transparent outline-none text-sm placeholder-slate-300 text-slate-700"/>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button type="button" onClick={()=>moveStep(i,-1)} disabled={i===0}
+                        className="w-6 h-6 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-100 disabled:opacity-30"><ArrowUp size={12}/></button>
+                      <button type="button" onClick={()=>moveStep(i,1)} disabled={i===(form.options||[]).length-1}
+                        className="w-6 h-6 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-100 disabled:opacity-30"><ArrowDown size={12}/></button>
+                      {(form.options||[]).length>2 && (
+                        <button type="button" onClick={()=>removeStep(i)}
+                          className="w-6 h-6 rounded-lg border border-slate-200 flex items-center justify-center text-red-400 hover:bg-red-50"><X size={12}/></button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-2 pl-9"><ImageUpload value={optObj.imageUrl} onChange={v=>setOpt(i,'imageUrl',v)} compact/></div>
+                </div>
+              );})}
+            </div>
+            <button type="button" onClick={addStep} className="mt-2 flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-700"><Plus size={13}/> Add step</button>
+            {errors.order && <p className="mt-2 flex items-center gap-1.5 text-xs text-red-500 font-semibold"><AlertCircle size={12}/>{errors.order}</p>}
+          </div>
+        )}
+
+        {/* ── Categorize editor ───────────────────────────────────────── */}
+        {form.type==='categorize' && (
+          <div className="space-y-4">
+            <div>
+              <label className={lbl}>Groups / Categories <span className="text-red-400">*</span></label>
+              <div className="space-y-2">
+                {(ex.buckets||[]).map((b,i)=>(
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-slate-400 w-5">{i+1}.</span>
+                    <input value={b} onChange={e=>setBucket(i,e.target.value)} placeholder={`Group ${i+1} name…`}
+                      className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
+                    {(ex.buckets||[]).length>2 && (
+                      <button type="button" onClick={()=>removeBucket(i)} className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-red-400 hover:bg-red-50"><X size={13}/></button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button type="button" onClick={addBucket} className="mt-2 flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-700"><Plus size={13}/> Add group</button>
+              {errors.buckets && <p className="mt-1.5 flex items-center gap-1.5 text-xs text-red-500 font-semibold"><AlertCircle size={12}/>{errors.buckets}</p>}
+            </div>
+            <div>
+              <label className={lbl}>Items <span className="text-red-400">*</span>
+                <span className="normal-case font-normal text-slate-400 ml-1">Pick the correct group for each</span></label>
+              <div className="space-y-2">
+                {(ex.items||[]).map((it,i)=>(
+                  <div key={i} className={`rounded-xl border-2 p-3 ${errors[`item${i}`]?'border-red-300':'border-slate-100 bg-slate-50/60'}`}>
+                    <div className="flex items-center gap-2">
+                      <input value={it.text||''} onChange={e=>setItem(i,'text',e.target.value)} placeholder={`Item ${i+1}…`}
+                        className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
+                      <select value={it.bucket ?? 0} onChange={e=>setItem(i,'bucket',Number(e.target.value))}
+                        className="px-2 py-2 rounded-xl border border-slate-200 text-xs font-semibold bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 max-w-[40%]">
+                        {(ex.buckets||[]).map((b,bi)=>(<option key={bi} value={bi}>{b||`Group ${bi+1}`}</option>))}
+                      </select>
+                      {(ex.items||[]).length>2 && (
+                        <button type="button" onClick={()=>removeItem(i)} className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-red-400 hover:bg-red-50 shrink-0"><X size={13}/></button>
+                      )}
+                    </div>
+                    <div className="mt-2"><ImageUpload value={it.imageUrl||''} onChange={v=>setItem(i,'imageUrl',v)} compact/></div>
+                  </div>
+                ))}
+              </div>
+              <button type="button" onClick={addItem} className="mt-2 flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-700"><Plus size={13}/> Add item</button>
+              {errors.items && <p className="mt-1.5 flex items-center gap-1.5 text-xs text-red-500 font-semibold"><AlertCircle size={12}/>{errors.items}</p>}
+            </div>
+          </div>
+        )}
+
+        {/* ── Hotspot editor ──────────────────────────────────────────── */}
+        {form.type==='hotspot' && (
+          <div>
+            <label className={lbl}>Hotspots <span className="text-red-400">*</span>
+              <span className="normal-case font-normal text-slate-400 ml-1">Click the image to add a labelled spot</span></label>
+            {form.imageUrl ? (
+              <div className="relative w-full rounded-xl overflow-hidden border-2 border-slate-200 bg-slate-50 cursor-crosshair"
+                onClick={e=>{
+                  const r = e.currentTarget.getBoundingClientRect();
+                  const x = ((e.clientX - r.left) / r.width) * 100;
+                  const y = ((e.clientY - r.top) / r.height) * 100;
+                  addHotspot(x, y);
+                }}>
+                <img src={form.imageUrl} alt="Base" className="w-full max-h-[340px] object-contain pointer-events-none"/>
+                {(ex.hotspots||[]).map((h,i)=>(
+                  <span key={i} style={{ left:`${h.x}%`, top:`${h.y}%` }}
+                    className="absolute -translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-indigo-600 text-white text-[11px] font-bold flex items-center justify-center shadow-lg ring-2 ring-white">{i+1}</span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 bg-slate-50 rounded-xl p-4 text-center border border-dashed border-slate-200">
+                Add a <span className="font-semibold">Question Image</span> above first, then click it here to place hotspots.
+              </p>
+            )}
+            {(ex.hotspots||[]).length>0 && (
+              <div className="space-y-2 mt-3">
+                {(ex.hotspots||[]).map((h,i)=>(
+                  <div key={i} className={`flex items-center gap-2 rounded-xl border-2 p-2 ${errors[`hs${i}`]?'border-red-300':'border-slate-100 bg-slate-50/60'}`}>
+                    <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-[11px] font-bold flex items-center justify-center shrink-0">{i+1}</span>
+                    <input value={h.label||''} onChange={e=>setHotspot(i,'label',e.target.value)} placeholder={`Correct label for spot ${i+1}…`}
+                      className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
+                    <button type="button" onClick={()=>removeHotspot(i)} className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-red-400 hover:bg-red-50 shrink-0"><X size={13}/></button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {errors.hotspots && <p className="mt-2 flex items-center gap-1.5 text-xs text-red-500 font-semibold"><AlertCircle size={12}/>{errors.hotspots}</p>}
+          </div>
+        )}
+
         <div>
           <label className={lbl}>Difficulty</label>
           <div className="flex gap-2">
@@ -605,6 +791,34 @@ function QuestionRow({ q, index, onEdit, onDelete }) {
                 </div>
               ))}
             </div>
+          ):q.type==='order'?(
+            <ol className="space-y-1.5">
+              {(q.options||[]).map((opt,i)=>{ const o=normalizeOpt(opt); return (
+                <li key={i} className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs border bg-slate-50 border-slate-100 text-slate-700">
+                  <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-bold shrink-0">{i+1}</span>
+                  {o.imageUrl&&<img src={o.imageUrl} alt="" className="w-8 h-8 rounded-lg object-cover border border-slate-200 shrink-0"/>}
+                  <span className="truncate">{o.text||(o.imageUrl?'[Image]':'—')}</span>
+                </li>
+              );})}
+            </ol>
+          ):q.type==='categorize'?(
+            <div className="space-y-1.5">
+              {(q.extras?.buckets||[]).map((b,bi)=>(
+                <div key={bi} className="flex items-start gap-2 text-xs">
+                  <span className="font-bold text-slate-600 shrink-0 min-w-[80px]">{b}:</span>
+                  <span className="text-slate-600">{(q.extras?.items||[]).filter(it=>Number(it.bucket)===bi).map(it=>it.text||'[img]').join(', ')||'—'}</span>
+                </div>
+              ))}
+            </div>
+          ):q.type==='hotspot'?(
+            <div className="space-y-1.5">
+              {(q.extras?.hotspots||[]).map((h,i)=>(
+                <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs border bg-slate-50 border-slate-100 text-slate-700">
+                  <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold shrink-0">{i+1}</span>
+                  <span className="truncate">{h.label||'—'}</span>
+                </div>
+              ))}
+            </div>
           ):(
             <div className="space-y-1.5">
               {(q.options||[]).map((opt,i)=>{ const o=normalizeOpt(opt); return (
@@ -652,9 +866,12 @@ function CategorySection({ cat, levelId, levelName, pal, onRenamed, onDeleted, s
       const saved = await api.addQuestion({
         text:          q.text,
         type:          q.type,
-        options:       flattenOptions(q.options),
+        // Ordering keeps full option objects so step images survive; other types
+        // flatten to plain strings as before.
+        options:       q.type === 'order' ? (q.options || []).map(normalizeOpt) : flattenOptions(q.options),
         pairs:         flattenPairs(q.pairs),
-        correctAnswer: q.correct,
+        extras:        q.extras || {},
+        correctAnswer: q.correct ?? 0,
         difficulty:    q.difficulty,
         imageUrl:      q.imageUrl || '',
         explanation:   q.explanation || '',
@@ -679,8 +896,10 @@ function CategorySection({ cat, levelId, levelName, pal, onRenamed, onDeleted, s
     try {
       await api.updateQuestion(updated.id, {
         text: updated.text, type: updated.type,
-        options: flattenOptions(updated.options), pairs: flattenPairs(updated.pairs),
-        correctAnswer: updated.correct, difficulty: updated.difficulty,
+        options: updated.type === 'order' ? (updated.options || []).map(normalizeOpt) : flattenOptions(updated.options),
+        pairs: flattenPairs(updated.pairs),
+        extras: updated.extras || {},
+        correctAnswer: updated.correct ?? 0, difficulty: updated.difficulty,
         imageUrl: updated.imageUrl || '', explanation: updated.explanation || '',
         applicableFor: updated.applicableFor || 'student',
       });
@@ -875,8 +1094,10 @@ function LevelSection({ level, bankId, index, onRenamed, onDeleted, showToast })
       try {
         await api.addQuestion({
           text: q.text, type: q.type,
-          options: flattenOptions(q.options), pairs: flattenPairs(q.pairs),
-          correctAnswer: q.correct, difficulty: q.difficulty,
+          options: q.type === 'order' ? (q.options || []).map(normalizeOpt) : flattenOptions(q.options),
+          pairs: flattenPairs(q.pairs),
+          extras: q.extras || {},
+          correctAnswer: q.correct ?? 0, difficulty: q.difficulty,
           imageUrl: q.imageUrl || '', explanation: q.explanation || '',
           applicableFor: q.applicableFor || 'student',
           qbCategoryId: targetCatId, qbLevelId: level.id,

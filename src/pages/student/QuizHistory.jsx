@@ -7,7 +7,11 @@ import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
 import { CATEGORY_META } from '../../utils/questionBank';
-import { formatDuration, getPerformanceLabel, matchSelectedIndex, isMatchAllCorrect } from '../../utils/helpers';
+import {
+  formatDuration, getPerformanceLabel, matchSelectedIndex, isMatchAllCorrect,
+  isOrderAllCorrect, isCategorizeAllCorrect, isHotspotAllCorrect,
+} from '../../utils/helpers';
+import DragDropReview from '../../components/quiz/DragDropReview';
 
 // ─── Score badge ──────────────────────────────────────────────────────────────
 // Shows just the percentage (coloured by band). The textual label ("Poor", etc.)
@@ -44,11 +48,11 @@ function QuestionReview({ q, answer, index }) {
   const isSkipped  = answer === undefined || answer === null;
   let isCorrect = false;
   if (!isSkipped) {
-    if (q.type === 'match') {
-      isCorrect = isMatchAllCorrect(q.pairs, answer);
-    } else {
-      isCorrect = answer === correctIdx;
-    }
+    if (q.type === 'match')           isCorrect = isMatchAllCorrect(q.pairs, answer);
+    else if (q.type === 'order')      isCorrect = isOrderAllCorrect(q.options, answer);
+    else if (q.type === 'categorize') isCorrect = isCategorizeAllCorrect(q.extras, answer);
+    else if (q.type === 'hotspot')    isCorrect = isHotspotAllCorrect(q.extras, answer);
+    else                              isCorrect = answer === correctIdx;
   }
   const statusColor = isSkipped ? '#94a3b8' : isCorrect ? '#16a34a' : '#dc2626';
   const statusBg    = isSkipped ? '#f8fafc'  : isCorrect ? '#f0fdf4' : '#fef2f2';
@@ -141,6 +145,10 @@ function QuestionReview({ q, answer, index }) {
               );
             })}
           </div>
+        )}
+
+        {(q.type === 'order' || q.type === 'categorize' || q.type === 'hotspot') && (
+          <DragDropReview q={q} answer={answer}/>
         )}
 
         {q.explanation && (

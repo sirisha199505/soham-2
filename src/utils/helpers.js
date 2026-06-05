@@ -117,6 +117,63 @@ export const isMatchAllCorrect = (pairs, answer) =>
   Array.isArray(pairs) && pairs.length > 0 &&
   pairs.every((_, i) => isMatchPairCorrect(answer, i));
 
+// ── Ordering / Sequencing scoring ────────────────────────────────────────────
+// Options are stored in the CORRECT order. The answer is the student's slot
+// arrangement: answer[slotIndex] = the option index placed in that slot. A slot
+// is correct when the option index placed there equals the slot index. Values
+// can round-trip as strings, so coerce with Number().
+export const orderPlacedIndex = (answer, slot) => {
+  if (!Array.isArray(answer)) return undefined;
+  const v = answer[slot];
+  if (v === undefined || v === null || v === '') return undefined;
+  const n = Number(v);
+  return Number.isNaN(n) ? undefined : n;
+};
+export const isOrderSlotCorrect = (answer, slot) => orderPlacedIndex(answer, slot) === slot;
+export const isOrderAllCorrect = (options, answer) =>
+  Array.isArray(options) && options.length > 0 && Array.isArray(answer) &&
+  answer.length === options.length &&
+  options.every((_, i) => isOrderSlotCorrect(answer, i));
+
+// ── Categorize / Grouping scoring ────────────────────────────────────────────
+// extras = { buckets:[name…], items:[{ text, imageUrl, bucket:<bucketIndex> }] }.
+// The answer maps each item index to the bucket the student dropped it into:
+// { itemIndex: bucketIndex }. An item is correct when its placed bucket equals
+// its defined bucket. Keys/values may be strings.
+export const categorizePlacedBucket = (answer, itemIdx) => {
+  if (!answer || typeof answer !== 'object') return undefined;
+  const v = answer[itemIdx] ?? answer[String(itemIdx)];
+  if (v === undefined || v === null || v === '') return undefined;
+  const n = Number(v);
+  return Number.isNaN(n) ? undefined : n;
+};
+export const isCategorizeItemCorrect = (extras, answer, itemIdx) =>
+  categorizePlacedBucket(answer, itemIdx) === Number(extras?.items?.[itemIdx]?.bucket);
+export const isCategorizeAllCorrect = (extras, answer) => {
+  const items = extras?.items;
+  return Array.isArray(items) && items.length > 0 &&
+    items.every((_, i) => isCategorizeItemCorrect(extras, answer, i));
+};
+
+// ── Hotspot labeling scoring ─────────────────────────────────────────────────
+// extras = { hotspots:[{ x, y, label }] }. The labels bank is the hotspot labels
+// in their original order, so hotspot i is correct when the label dropped on it
+// has index i. The answer maps hotspot index → label index: { hotspotIdx: labelIdx }.
+export const hotspotPlacedLabel = (answer, hotspotIdx) => {
+  if (!answer || typeof answer !== 'object') return undefined;
+  const v = answer[hotspotIdx] ?? answer[String(hotspotIdx)];
+  if (v === undefined || v === null || v === '') return undefined;
+  const n = Number(v);
+  return Number.isNaN(n) ? undefined : n;
+};
+export const isHotspotSpotCorrect = (answer, hotspotIdx) =>
+  hotspotPlacedLabel(answer, hotspotIdx) === hotspotIdx;
+export const isHotspotAllCorrect = (extras, answer) => {
+  const hs = extras?.hotspots;
+  return Array.isArray(hs) && hs.length > 0 &&
+    hs.every((_, i) => isHotspotSpotCorrect(answer, i));
+};
+
 export const debounce = (fn, delay = 300) => {
   let t;
   return (...args) => {
