@@ -134,9 +134,6 @@ export const api = {
     request('POST', `/api/levels/progress/${userId}/${levelId}/complete`, { score }),
   markContentRead: (userId, levelId) =>
     request('POST', `/api/levels/progress/${userId}/${levelId}/content-read`),
-  getApprovals: () => request('GET', '/api/levels/approvals'),
-  setApproval: (userId, levelId, status) =>
-    request('PUT', `/api/levels/approvals/${userId}/${levelId}`, { status }),
   getOverrides: () => request('GET', '/api/levels/overrides'),
   setOverride: (userId, levelId) =>
     request('POST', `/api/levels/overrides/${userId}/${levelId}`),

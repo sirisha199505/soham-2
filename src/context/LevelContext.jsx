@@ -8,7 +8,6 @@ const LevelContext = createContext(null);
 export function LevelProvider({ children }) {
   const { user } = useAuth();
   const [progress,            setProgress]           = useState({});
-  const [approvals,           setApprovals]          = useState({});
   const [overrides,           setOverrides]          = useState({});
   // levelSettings is the SINGLE source of truth for level access. The backend
   // stores one `open` flag per level (exposed as both open + active); there is no
@@ -51,16 +50,10 @@ export function LevelProvider({ children }) {
       try {
         const data = await api.getLevelProgress(userId);
         const map = {};
-        const userApprovals = {};
         Object.entries(data || {}).forEach(([k, v]) => {
-          const levelId = Number(k);
-          map[levelId] = v;
-          if (v.approvalStatus) userApprovals[levelId] = v.approvalStatus;
+          map[Number(k)] = v;
         });
         setProgress(prev => ({ ...prev, [userId]: map }));
-        if (Object.keys(userApprovals).length > 0) {
-          setApprovals(prev => ({ ...prev, [userId]: userApprovals }));
-        }
         setProgressFetched(prev => ({ ...prev, [userId]: true }));
         return;
       } catch {
@@ -105,22 +98,9 @@ export function LevelProvider({ children }) {
     // Admin-only calls — only fetch for admin roles to avoid 401/403 for students
     const ADMIN_ROLES = ['admin', 'super_admin', 'school_admin', 'district_admin', 'teacher'];
     if (ADMIN_ROLES.includes(user.role)) {
-      // Backend returns FLAT ARRAYS ([{userId, levelId, status}, …]) but the rest of
-      // this context reads approvals as { userId: { levelId: status } } and overrides
-      // as { userId: [levelId, …] }. Without this reshaping the maps stay array-shaped
-      // and `overrides[userId]` / `approvals[userId]` are always undefined after a
-      // reload — i.e. a previously-granted unlock silently stops being recognised.
-      api.getApprovals()
-        .then(data => {
-          const map = {};
-          (Array.isArray(data) ? data : []).forEach(a => {
-            if (a?.userId == null) return;
-            (map[a.userId] ||= {})[a.levelId] = a.status;
-          });
-          setApprovals(map);
-        })
-        .catch(() => {});
-
+      // Backend returns a FLAT ARRAY ([{userId, levelId}, …]) but this context reads
+      // overrides as { userId: [levelId, …] }. Reshape so `overrides[userId]` resolves
+      // after a reload — otherwise a previously-granted unlock stops being recognised.
       api.getOverrides()
         .then(data => {
           const map = {};
@@ -280,19 +260,6 @@ export function LevelProvider({ children }) {
     }
   }, []);
 
-  // Admin: approve or reject a student's level access
-  const setApproval = useCallback(async (userId, levelId, status) => {
-    try {
-      await api.setApproval(userId, levelId, status);
-      setApprovals(prev => ({
-        ...prev,
-        [userId]: { ...prev[userId], [levelId]: status },
-      }));
-    } catch (err) {
-      console.error('setApproval failed:', err.message);
-    }
-  }, []);
-
   // Admin: create a new exam level
   const createLevel = useCallback(async (data) => {
     try {
@@ -326,7 +293,7 @@ export function LevelProvider({ children }) {
   return (
     <LevelContext.Provider value={{
       getLevel, getLevelStatus, markContentRead, markLevelComplete, isContentRead,
-      setApproval, approvals, setStudentOverride, setLevelActive,
+      setStudentOverride, setLevelActive,
       setGlobalAccess: setGlobalAccessFn, levelSettings, levelSettingsLoaded,
       refreshLevelSettings, createLevel, deleteLevel, progressFetched,
     }}>
