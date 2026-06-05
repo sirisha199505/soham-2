@@ -21,7 +21,7 @@ const levelColor = (order) => DEFAULT_COLORS[(order - 1) % DEFAULT_COLORS.length
 
 /* ── Add Level Modal ── */
 function AddLevelModal({ onSave, onClose, existingTitles = [] }) {
-  const [form, setForm] = useState({ title: '', subtitle: '', description: '', timeLimit: 10, questionCount: 20 });
+  const [form, setForm] = useState({ title: '', subtitle: '', description: '', timeLimit: 10, questionCount: 20, audience: 'both' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -83,6 +83,28 @@ function AddLevelModal({ onSave, onClose, existingTitles = [] }) {
               <input type="number" min="1" max="500" value={form.questionCount}
                 onChange={e => setForm(p => ({ ...p, questionCount: e.target.value }))}
                 className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Access Control — who can take this level</label>
+            <div className="grid grid-cols-1 gap-2">
+              {LEVEL_AUDIENCES.map(opt => {
+                const selected = (form.audience || 'both') === opt.value;
+                return (
+                  <button key={opt.value} type="button" onClick={() => setForm(p => ({ ...p, audience: opt.value }))}
+                    className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl border-2 text-left transition-all ${
+                      selected ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-indigo-200 hover:bg-slate-50'}`}>
+                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      selected ? 'border-indigo-500' : 'border-slate-300'}`}>
+                      {selected && <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />}
+                    </span>
+                    <span className="min-w-0">
+                      <span className={`block text-sm font-semibold ${selected ? 'text-indigo-700' : 'text-slate-700'}`}>{opt.label}</span>
+                      <span className="block text-[11px] text-slate-400">{opt.desc}</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
           {error && (
@@ -400,6 +422,7 @@ export default function ExamLevels() {
       timeLimit:     Number(form.timeLimit) || 10,
       questionCount: Number(form.questionCount) || 20,
       active:        form.active,
+      audience:      form.audience || 'both',
     });
     setEditing(null);
     setSaved(true);
@@ -415,6 +438,7 @@ export default function ExamLevels() {
         description:   form.description,
         timeLimit:     Number(form.timeLimit) || 10,
         questionCount: Number(form.questionCount) || 20,
+        audience:      form.audience || 'both',
       });
 
       // Auto-sync: create a matching QB level so the Question Bank stays in step
