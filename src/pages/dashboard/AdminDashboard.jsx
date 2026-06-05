@@ -228,11 +228,11 @@ export default function AdminDashboard() {
         <button
           onClick={refresh}
           disabled={refreshing}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all disabled:opacity-70
+          className={`flex items-center gap-2 px-2.5 sm:px-4 py-2 rounded-xl border text-sm font-medium transition-all disabled:opacity-70 shrink-0
             ${refreshed ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
         >
           <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-          {refreshing ? 'Refreshing…' : refreshed ? 'Refreshed!' : 'Refresh Stats'}
+          <span className="hidden sm:inline">{refreshing ? 'Refreshing…' : refreshed ? 'Refreshed!' : 'Refresh Stats'}</span>
         </button>
       </div>
 

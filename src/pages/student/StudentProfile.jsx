@@ -225,10 +225,10 @@ export default function StudentProfile() {
         </div>
       </div>
 
-      <div className="px-4 md:px-8 max-w-3xl mx-auto -mt-6 space-y-5">
+      <div className="px-4 py-8 md:px-8 max-w-3xl mx-auto -mt-6 space-y-5">
 
         {/* ── Profile Information ──────────────────────────────────────── */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="py-6 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="px-5 pt-5 pb-4 border-b border-slate-50 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: `${roleColor}15` }}>

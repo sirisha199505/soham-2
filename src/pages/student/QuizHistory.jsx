@@ -6,22 +6,31 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
-import { CATEGORY_META, CATEGORIES } from '../../utils/questionBank';
+import { CATEGORY_META } from '../../utils/questionBank';
 import { formatDuration, getPerformanceLabel, matchSelectedIndex, isMatchAllCorrect } from '../../utils/helpers';
 
 // ─── Score badge ──────────────────────────────────────────────────────────────
+// Shows just the percentage (coloured by band). The textual label ("Poor", etc.)
+// was intentionally removed.
 function ScoreBadge({ pct }) {
   const p = getPerformanceLabel(pct);
   return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md" style={{ color: p.color, background: p.border }}>
-        {p.emoji} {p.label}
-      </span>
-      <span className="font-bold text-sm px-2.5 py-1 rounded-full" style={{ color: p.color, background: p.bg }}>
-        {pct}%
-      </span>
-    </div>
+    <span className="font-bold text-sm px-2.5 py-1 rounded-full" style={{ color: p.color, background: p.bg }}>
+      {pct}%
+    </span>
   );
+}
+
+// ─── Level badge ────────────────────────────────────────────────────────────────
+// Derive the square badge from the level NAME (not the DB id). "Level-1" → "L1".
+// Falls back to the first letters of the name, and only to the id if there is no
+// usable title at all.
+function levelBadge(title, id) {
+  const t = String(title || '').trim();
+  const m = t.match(/\d+/);
+  if (m) return `L${m[0]}`;
+  if (t) return t.replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase() || `L${id}`;
+  return `L${id}`;
 }
 
 // ─── Option text helper ───────────────────────────────────────────────────────
@@ -148,37 +157,24 @@ function QuestionReview({ q, answer, index }) {
 const LEVEL_PALETTE = ['#3BC0EF', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#6366f1', '#14b8a6'];
 function lvlColor(id) { return LEVEL_PALETTE[(Number(id) - 1) % LEVEL_PALETTE.length] || '#4F46E5'; }
 
-function AttemptCard({ attempt, attemptLimit, usedCount, isBest }) {
+function AttemptCard({ attempt, attemptLimit, usedCount }) {
   const [open, setOpen] = useState(false);
-  const col       = lvlColor(attempt.levelId);
+  const badge     = levelBadge(attempt.levelTitle, attempt.levelId);
+  const colNum    = parseInt(String(badge).replace(/\D/g, ''), 10) || Number(attempt.levelId) || 1;
+  const col       = lvlColor(colNum);
   const passed    = (attempt.score?.pct ?? 0) >= 50;
   const date      = attempt.date ? new Date(attempt.date) : null;
   const remaining = Math.max(0, (attemptLimit ?? 3) - (usedCount ?? 0));
 
-  const catBreakdown = useMemo(() => {
-    const qs  = attempt.questions || [];
-    const ans = attempt.answers   || {};
-    return CATEGORIES.map(cat => {
-      const catQs   = qs.filter(q => q.category === cat);
-      const correct = catQs.filter(q => {
-        const a = ans[q.id] ?? ans[String(q.id)];
-        if (a == null) return false;
-        if (q.type === 'match') return isMatchAllCorrect(q.pairs, a);
-        return a === q.correct;
-      }).length;
-      return { cat, meta: CATEGORY_META[cat] || { label: cat, color: '#64748b', bg: '#f8fafc' }, total: catQs.length, correct };
-    }).filter(b => b.total > 0);
-  }, [attempt]);
-
   return (
     <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
-      isBest ? 'border-yellow-300 ring-1 ring-yellow-200' : open ? 'border-indigo-200' : 'border-slate-100'
+      open ? 'border-indigo-200' : 'border-slate-100'
     }`}>
       <button onClick={() => setOpen(p => !p)} className="w-full text-left">
         <div className="flex items-center gap-4 p-4">
           <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg shrink-0"
             style={{ background: `linear-gradient(135deg, ${col}, ${col}cc)` }}>
-            L{attempt.levelId}
+            {badge}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -186,11 +182,6 @@ function AttemptCard({ attempt, attemptLimit, usedCount, isBest }) {
               {attempt.attemptNum && (
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
                   Attempt #{attempt.attemptNum}
-                </span>
-              )}
-              {isBest && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 flex items-center gap-0.5">
-                  <Trophy size={9}/> Best Score
                 </span>
               )}
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
@@ -225,21 +216,6 @@ function AttemptCard({ attempt, attemptLimit, usedCount, isBest }) {
 
       {open && (
         <div className="border-t border-slate-100 p-4 space-y-4">
-          {/* Category breakdown — only shown when questions are available */}
-          {catBreakdown.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {catBreakdown.map(({ cat, meta, total, correct }) => (
-                <div key={cat} className="rounded-xl p-3 text-center" style={{ background: meta.bg }}>
-                  <p className="text-base font-bold" style={{ color: meta.color }}>{correct}/{total}</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">{meta.label}</p>
-                  <div className="mt-1.5 h-1.5 bg-white/60 rounded-full overflow-hidden">
-                    <div className="h-1.5 rounded-full" style={{ width: `${total ? (correct / total) * 100 : 0}%`, background: meta.color }}/>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* Score grid */}
           <div className="grid grid-cols-3 gap-2 text-center">
             {[
@@ -331,17 +307,6 @@ export default function QuizHistory() {
       .sort((a, b) => new Date(b.date) - new Date(a.date));
   }, [attempts]);
 
-  // Best attempt ID per level (highest pct wins)
-  const bestAttemptIds = useMemo(() => {
-    const bestByLevel = {};
-    attemptsWithNumbers.forEach(a => {
-      const k = String(a.levelId);
-      if (!bestByLevel[k] || (a.score?.pct ?? 0) > (bestByLevel[k].score?.pct ?? 0)) {
-        bestByLevel[k] = a;
-      }
-    });
-    return new Set(Object.values(bestByLevel).map(a => a.id ?? a.date));
-  }, [attemptsWithNumbers]);
 
   // Level filter options derived from actual data — no hardcoded list
   const levelFilterOptions = useMemo(() => {
@@ -526,7 +491,6 @@ export default function QuizHistory() {
               attempt={attempt}
               attemptLimit={levelSettings[attempt.levelId]?.attemptLimit ?? 3}
               usedCount={attemptsCountByLevel[String(attempt.levelId)] ?? 0}
-              isBest={bestAttemptIds.has(attempt.id ?? attempt.date)}
             />
           ))
         )}

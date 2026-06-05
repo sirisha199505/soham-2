@@ -71,6 +71,9 @@ async function request(method, path, body, attempt = 0) {
     const msg = data.data || data.error || data.message || `Request failed (${res.status})`;
     const err = new Error(msg);
     err.status = res.status;
+    // Machine-readable error code (e.g. 'session_active' for the single-device
+    // block) so callers can branch without string-matching the message.
+    if (data.code) err.code = data.code;
     // A 401 on an authenticated request means this token is no longer the active
     // session — e.g. the account was logged in on another device (single-session
     // enforcement) or the token expired. Sign this device out so it returns to the

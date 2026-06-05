@@ -28,6 +28,9 @@ export default function Login() {
   const [loading,  setLoading] = useState(false);
   const [waitSec,  setWaitSec] = useState(0);
   const [error,    setError]   = useState('');
+  // Set when the backend reports the account is already signed in elsewhere
+  // (code 'session_active'); reveals the "log out other device & continue" button.
+  const [sessionConflict, setSessionConflict] = useState(false);
 
   useEffect(() => {
     if (!loading) { setWaitSec(0); return; }
@@ -72,24 +75,32 @@ export default function Login() {
     setTab(t);
     setForm({ identifier: '', password: '' });
     setError('');
+    setSessionConflict(false);
     setShowPass(false);
   };
 
-  const doLogin = async () => {
+  const doLogin = async (force = false) => {
     setError('');
     setLoading(true);
     try {
       const identifier = form.identifier.replace(/\s/g, '');
-      const route = await login(identifier, form.password, tab);
+      const route = await login(identifier, form.password, tab, force);
       navigate(route, { replace: true });
     } catch (err) {
-      setError(err.message || 'Login failed. Please check your credentials.');
+      // Account already active on another device — offer to end that session.
+      if (err.code === 'session_active') {
+        setSessionConflict(true);
+        setError(err.message || 'This account is already logged in on another device.');
+      } else {
+        setSessionConflict(false);
+        setError(err.message || 'Login failed. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = (e) => { e.preventDefault(); doLogin(); };
+  const handleSubmit = (e) => { e.preventDefault(); doLogin(false); };
 
   const inputCls = `w-full rounded-xl py-3 text-sm text-white placeholder:text-white/30 transition-all duration-200 focus:outline-none`;
   const inputStyle = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)' };
@@ -167,10 +178,20 @@ export default function Login() {
 
       {/* Error */}
       {error && (
-        <div className="flex items-start gap-3 rounded-2xl px-4 py-3.5 mb-5"
+        <div className="rounded-2xl px-4 py-3.5 mb-5"
           style={{ background: `${colors.error}18`, border: `1px solid ${colors.error}35` }}>
-          <AlertCircle size={16} className="shrink-0 mt-0.5" style={{ color: colors.error }} />
-          <p className="text-sm" style={{ color: '#fca5a5' }}>{error}</p>
+          <div className="flex items-start gap-3">
+            <AlertCircle size={16} className="shrink-0 mt-0.5" style={{ color: colors.error }} />
+            <p className="text-sm" style={{ color: '#fca5a5' }}>{error}</p>
+          </div>
+          {sessionConflict && (
+            <button type="button" onClick={() => doLogin(true)} disabled={loading}
+              className="mt-3 w-full flex items-center justify-center gap-2 text-white font-semibold py-2.5 rounded-xl text-sm transition-all disabled:opacity-60 hover:scale-[1.01] active:scale-[0.98]"
+              style={{ background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.accent} 100%)` }}>
+              {loading && <Loader2 size={14} className="animate-spin" />}
+              Log out other device &amp; continue
+            </button>
+          )}
         </div>
       )}
 

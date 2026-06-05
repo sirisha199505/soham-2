@@ -103,8 +103,10 @@ export function AuthProvider({ children }) {
 
   /* ── Login ── */
   // expectedTab: 'student' | 'coach' | 'admin' — must match the actual account role
-  const login = useCallback(async (identifier, password, expectedTab) => {
-    const data = await api.login(identifier, password);
+  // force=true ends any session already active on another device (the user
+  // explicitly chose "log out other device & continue" after a session_active error).
+  const login = useCallback(async (identifier, password, expectedTab, force = false) => {
+    const data = await api.login(identifier, password, force);
     const normalized = normalizeStoredUser(data.user);
     const role = normalized.role;
 
