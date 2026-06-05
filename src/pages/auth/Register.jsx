@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   User, School, BookOpen, Phone, Mail, Lock, Eye, EyeOff,
@@ -11,7 +11,6 @@ import { api } from '../../utils/api';
 
 const CLASS_OPTIONS = ['VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'Other'];
 const EMAIL_ERROR = 'Enter a valid email address (the part before @ must contain a letter, e.g. name@gmail.com).';
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 const inputCls = `w-full rounded-xl py-3 text-sm text-white placeholder:text-white/30 transition-all duration-200 focus:outline-none`;
 const inputStyle = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)' };
@@ -63,32 +62,8 @@ function PasswordField({ label, value, onChange, show, onToggle, placeholder = '
   );
 }
 
-function GoogleButton({ onError, label, disabled }) {
-  const handleClick = useCallback(() => {
-    if (!window.google?.accounts?.id) {
-      onError('Google Sign-In is not available. Please try again later.');
-      return;
-    }
-    window.google.accounts.id.prompt();
-  }, [onError]);
-
-  return (
-    <button type="button" onClick={handleClick} disabled={disabled}
-      className="w-full flex items-center justify-center gap-3 py-3 rounded-xl text-sm font-semibold transition-all hover:scale-[1.01] disabled:opacity-50"
-      style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: 'white' }}>
-      <svg width="18" height="18" viewBox="0 0 24 24">
-        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-      </svg>
-      {label}
-    </button>
-  );
-}
-
 export default function Register() {
-  const { register, registerCoach, googleLogin } = useAuth();
+  const { register, registerCoach } = useAuth();
   const { colors } = useTheme();
   const navigate   = useNavigate();
 
@@ -131,35 +106,6 @@ export default function Register() {
     const id = setInterval(() => setWaitSec(s => s + 1), 1000);
     return () => clearInterval(id);
   }, [loading]);
-
-  useEffect(() => {
-    if (!GOOGLE_CLIENT_ID || window.google) return;
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      window.google?.accounts?.id?.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleGoogleCredential,
-      });
-    };
-    document.body.appendChild(script);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleGoogleCredential = useCallback(async (response) => {
-    setError('');
-    setLoading(true);
-    try {
-      const role  = tab === 'coach' ? 'coach' : 'student';
-      const route = await googleLogin(response.credential, role);
-      navigate(route, { replace: true });
-    } catch (err) {
-      setError(err.message || 'Google Sign-In failed.');
-    } finally {
-      setLoading(false);
-    }
-  }, [tab, googleLogin, navigate]);
 
   const sS = (k) => (e) => setStudentForm(p => ({ ...p, [k]: e.target.value }));
   const sC = (k) => (e) => setCoachForm(p => ({ ...p, [k]: e.target.value }));

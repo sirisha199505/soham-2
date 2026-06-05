@@ -9,7 +9,6 @@ const NO_AUTH_PATHS = [
   '/api/auth/login',
   '/api/auth/register',
   '/api/auth/register-coach',
-  '/api/auth/google-login',
   '/api/auth/verify-email',
   '/api/auth/forgot-password',
   '/api/auth/verify-reset-otp',
@@ -101,10 +100,6 @@ export const api = {
   // Auth — Innovation Coach
   registerCoach: (data) =>
     request('POST', '/api/auth/register-coach', data),
-
-  // Auth — Google Sign-In
-  googleLogin: (idToken, role = 'student') =>
-    request('POST', '/api/auth/google-login', { idToken, role }),
 
   // Auth — Email verification
   verifyEmail: (token) =>

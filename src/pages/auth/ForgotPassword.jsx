@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
-  Mail, Phone, Lock, Eye, EyeOff, ArrowLeft, CheckCircle,
+  Phone, Lock, Eye, EyeOff, ArrowLeft, CheckCircle,
   AlertCircle, Loader2, ShieldCheck, RefreshCw, Clock,
   GraduationCap, Briefcase,
 } from 'lucide-react';
 import { api } from '../../utils/api';
 import { useTheme } from '../../context/ThemeContext';
-import { isValidEmail, validatePassword } from '../../utils/helpers';
+import { validatePassword } from '../../utils/helpers';
 
 // ── OTP Countdown (5 minutes) ────────────────────────────────────────────────
 function Countdown({ startedAt, onExpire }) {
@@ -183,13 +183,9 @@ export default function ForgotPassword() {
     e?.preventDefault();
     setError('');
 
-    // Basic validation
-    if (isStudent) {
-      const digits = contact.replace(/\D/g, '');
-      if (digits.length !== 10) { setError('Mobile number must be exactly 10 digits.'); return; }
-    } else {
-      if (!isValidEmail(contact)) { setError('Enter a valid email address (the part before @ must contain a letter, e.g. name@gmail.com).'); return; }
-    }
+    // Both students and trainers reset via their registered mobile number (SMS OTP).
+    const digits = contact.replace(/\D/g, '');
+    if (digits.length !== 10) { setError('Mobile number must be exactly 10 digits.'); return; }
 
     setLoading(true);
     try {
@@ -249,7 +245,7 @@ export default function ForgotPassword() {
   };
 
   // ── Step indicator ────────────────────────────────────────────────────────
-  const STEPS   = [{ label: isStudent ? 'Mobile' : 'Email' }, { label: 'Verify' }, { label: 'Reset' }];
+  const STEPS   = [{ label: 'Mobile' }, { label: 'Verify' }, { label: 'Reset' }];
   const stepIdx = { contact: 0, otp: 1, password: 2, success: 2 }[step];
 
   return (
@@ -325,37 +321,29 @@ export default function ForgotPassword() {
           <div className="mb-6">
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4"
               style={{ background: `${colors.primary}25`, border: `1px solid ${colors.primary}35` }}>
-              {isStudent
-                ? <Phone size={22} style={{ color: colors.primary }}/>
-                : <Mail  size={22} style={{ color: colors.primary }}/>}
+              <Phone size={22} style={{ color: colors.primary }}/>
             </div>
             <h2 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: 'Space Grotesk' }}>Forgot Password</h2>
             <p className="text-white/60 text-sm">
-              {isStudent
-                ? "Enter your registered mobile number. We'll send a 6-digit OTP via SMS."
-                : "Enter your registered email address. We'll send a 6-digit OTP to your inbox."}
+              Enter your registered mobile number. We'll send a 6-digit OTP via SMS.
             </p>
           </div>
 
           <form onSubmit={handleSendOtp} className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-                {isStudent ? 'Mobile Number' : 'Email Address'}<span className="text-rose-400 ml-0.5">*</span>
+                Mobile Number<span className="text-rose-400 ml-0.5">*</span>
               </label>
               <div className="relative">
-                {isStudent
-                  ? <Phone size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"/>
-                  : <Mail  size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"/>}
+                <Phone size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"/>
                 <input
                   key={role}
-                  type={isStudent ? 'tel' : 'email'}
-                  inputMode={isStudent ? 'numeric' : 'email'}
-                  maxLength={isStudent ? 10 : undefined}
-                  placeholder={isStudent ? '9876543210' : 'trainer@example.com'}
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
+                  placeholder="9876543210"
                   value={contact}
-                  onChange={e => setContact(
-                    isStudent ? e.target.value.replace(/\D/g, '').slice(0, 10) : e.target.value
-                  )}
+                  onChange={e => setContact(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   required
                   autoFocus
                   className={`${inputCls} pl-11 pr-4`}
@@ -363,9 +351,7 @@ export default function ForgotPassword() {
                 />
               </div>
               <p className="text-[11px] text-slate-500 pl-1">
-                {isStudent
-                  ? 'OTP will be sent to your registered mobile number via SMS.'
-                  : 'OTP will be sent to your registered email address.'}
+                OTP will be sent to your registered mobile number via SMS.
               </p>
             </div>
 
@@ -374,7 +360,7 @@ export default function ForgotPassword() {
               style={gradBtn}>
               {loading
                 ? <><Loader2 size={16} className="animate-spin"/> Sending OTP…</>
-                : `Send OTP via ${isStudent ? 'SMS' : 'Email'}`}
+                : 'Send OTP via SMS'}
             </button>
           </form>
         </>
@@ -392,8 +378,7 @@ export default function ForgotPassword() {
             <p className="text-white/60 text-sm">
               A 6-digit code was sent to{' '}
               <span className="text-white font-semibold">{contact}</span>{' '}
-              via {isStudent ? 'SMS' : 'email'}.
-              {!isStudent && ' Check your inbox and spam folder.'}
+              via SMS.
             </p>
           </div>
 
@@ -414,7 +399,7 @@ export default function ForgotPassword() {
             <div className="flex items-center justify-between text-sm">
               <button type="button" onClick={goBackToContact}
                 className="flex items-center gap-1 text-white/40 hover:text-white/70 transition-colors text-xs">
-                <ArrowLeft size={12}/> Wrong {isStudent ? 'number' : 'email'}?
+                <ArrowLeft size={12}/> Wrong number?
               </button>
               {resendCooldown > 0 ? (
                 <span className="text-white/30 font-semibold text-xs">Resend in {resendCooldown}s</span>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Mail, Lock, Eye, EyeOff, AlertCircle, ChevronRight,
@@ -7,10 +7,8 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
-
 export default function Login() {
-  const { login, googleLogin } = useAuth();
+  const { login } = useAuth();
   const { colors } = useTheme();
   const navigate = useNavigate();
 
@@ -37,39 +35,6 @@ export default function Login() {
     const id = setInterval(() => setWaitSec(s => s + 1), 1000);
     return () => clearInterval(id);
   }, [loading]);
-
-  // Load Google Identity Services once
-  useEffect(() => {
-    if (!GOOGLE_CLIENT_ID || window.google) return;
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      if (window.google?.accounts?.id) {
-        window.google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
-          callback: handleGoogleCredential,
-        });
-      }
-    };
-    document.body.appendChild(script);
-    return () => { document.body.removeChild(script); };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleGoogleCredential = useCallback(async (response) => {
-    setError('');
-    setLoading(true);
-    try {
-      const role = tab === 'coach' ? 'coach' : 'student';
-      const route = await googleLogin(response.credential, role);
-      navigate(route, { replace: true });
-    } catch (err) {
-      setError(err.message || 'Google Sign-In failed.');
-    } finally {
-      setLoading(false);
-    }
-  }, [tab, googleLogin, navigate]);
 
   const switchTab = (t) => {
     setTab(t);

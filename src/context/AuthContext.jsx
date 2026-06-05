@@ -88,19 +88,6 @@ export function AuthProvider({ children }) {
     return api.registerCoach(data);
   }, []);
 
-  /* ── Google Sign-In ── */
-  const googleLogin = useCallback(async (idToken, role = 'student') => {
-    const data = await api.googleLogin(idToken, role);
-    const normalized = normalizeStoredUser(data.user);
-    localStorage.setItem(TOKEN_KEY, data.token);
-    localStorage.setItem(USER_KEY, JSON.stringify(normalized));
-    if (data.sessionToken) {
-      localStorage.setItem(SESSION_TOKEN_KEY, data.sessionToken);
-    }
-    setUser(normalized);
-    return getDashboardRoute(normalized.role);
-  }, []);  
-
   /* ── Login ── */
   // expectedTab: 'student' | 'coach' | 'admin' — must match the actual account role
   // force=true ends any session already active on another device (the user
@@ -166,7 +153,6 @@ export function AuthProvider({ children }) {
     register,
     registerCoach,
     refreshUser,
-    googleLogin,
     isAuthenticated: !!user,
     initializing,
     getStudentList,
