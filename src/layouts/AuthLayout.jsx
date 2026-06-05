@@ -15,7 +15,11 @@ export default function AuthLayout() {
   return (
     <div className="min-h-screen flex bg-[#0a1628]">
       {/* ── Left branding panel ── */}
-      <div className="hidden lg:flex flex-col justify-between w-[48%] p-12 relative overflow-hidden">
+      {/* Pinned to the viewport (h-screen + sticky + self-start) so its
+          justify-between layout doesn't redistribute — and the badge/hero stay
+          put — when the right form changes height between the Student and Trainer
+          tabs (Student has more fields, which used to push this panel down). */}
+      <div className="hidden lg:flex flex-col justify-between w-[48%] p-12 relative overflow-hidden lg:h-screen lg:sticky lg:top-0 lg:self-start">
         {/* Layered background */}
         <div className="absolute inset-0">
           <div className="absolute inset-0" style={{
