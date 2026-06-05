@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect } from 'react';
-import { scrollToTop } from '../../utils/scroll';
 import * as XLSX from 'xlsx';
 import {
   Plus, ChevronDown, ChevronUp, Edit2, Trash2, BookOpen,
@@ -173,10 +172,6 @@ function parseCSV(text) {
     }
   }
   return questions;
-}
-
-function fmtDate(ts) {
-  return new Date(ts).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1270,7 +1265,7 @@ function LevelSection({ level, bankId, index, onRenamed, onDeleted, showToast })
 // ═══════════════════════════════════════════════════════════════════════════
 // Bank Detail — loads levels for this bank
 // ═══════════════════════════════════════════════════════════════════════════
-function BankDetail({ bank, bankIndex, onBack, onBankRenamed, showToast }) {
+function BankDetail({ bank, bankIndex, onBankRenamed, showToast }) {
   const [levels,       setLevels]      = useState([]);
   const [loading,      setLoading]     = useState(true);
   const [addingLevel,  setAddingLevel] = useState(false);
@@ -1313,10 +1308,6 @@ function BankDetail({ bank, bankIndex, onBack, onBankRenamed, showToast }) {
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
-          <button onClick={onBack} className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-indigo-600 transition-colors mb-2 group">
-            <span className="text-base leading-none group-hover:-translate-x-0.5 transition-transform">←</span>
-            <span className="font-semibold">All Question Banks</span>
-          </button>
           {renamingBank ? (
             <div className="max-w-xs">
               <InlineInput initial={bank.name} placeholder="Bank name" onSave={handleRenameBank} onCancel={()=>setRenamingBank(false)}/>
@@ -1394,165 +1385,39 @@ function BankDetail({ bank, bankIndex, onBack, onBankRenamed, showToast }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Banks Overview
 // ═══════════════════════════════════════════════════════════════════════════
-function BanksOverview({ banks, onSelect, onCreate, onDelete, onRename }) {
-  const [creatingName, setCreatingName] = useState('');
-  const [showCreate,   setShowCreate]   = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [menuOpen,     setMenuOpen]     = useState(null);
-  const [renamingId,   setRenamingId]   = useState(null);
-  const [creating,     setCreating]     = useState(false);
-
-  const handleCreate = async () => {
-    const name = creatingName.trim() || `Question Bank ${banks.length + 1}`;
-    setCreating(true);
-    try {
-      await onCreate(name);
-      setCreatingName('');
-      setShowCreate(false);
-    } finally { setCreating(false); }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800" style={{fontFamily:'Space Grotesk'}}>Question Banks</h1>
-          <p className="text-sm text-slate-400 mt-0.5">The exam uses a single Question Bank</p>
-        </div>
-        {banks.length === 0 ? (
-          <button onClick={()=>setShowCreate(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white shadow-sm hover:opacity-90 transition-all" style={{background:'linear-gradient(135deg,#6366f1,#8b5cf6)'}}>
-            <Plus size={15}/>New Question Bank
-          </button>
-        ) : (
-          <span className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-500 bg-slate-100 border border-slate-200">
-            <Database size={14}/> One Question Bank per exam
-          </span>
-        )}
-      </div>
-
-      {showCreate && (
-        <div className="bg-white rounded-2xl border-2 border-indigo-200 p-5 shadow-sm">
-          <p className="text-sm font-bold text-indigo-700 mb-3 flex items-center gap-2"><Database size={15}/>New Question Bank</p>
-          {creating ? (
-            <div className="flex items-center gap-2 py-2 text-sm text-slate-500"><Loader2 size={14} className="animate-spin"/>Creating…</div>
-          ) : (
-            <div className="flex gap-2">
-              <input autoFocus value={creatingName} onChange={e=>setCreatingName(e.target.value)}
-                onKeyDown={e=>{ if(e.key==='Enter') handleCreate(); if(e.key==='Escape'){setShowCreate(false);setCreatingName('');} }}
-                placeholder="e.g. Robotics Bank, Science Quiz…"
-                className="flex-1 px-3 py-2 rounded-xl border border-indigo-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
-              <button onClick={handleCreate} className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 transition-colors">Create</button>
-              <button onClick={()=>{setShowCreate(false);setCreatingName('');}} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {banks.length === 0 && !showCreate ? (
-        <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-200">
-          <Database size={36} className="text-slate-300 mx-auto mb-3"/>
-          <p className="font-semibold text-slate-400">No question banks yet</p>
-          <p className="text-sm text-slate-400 mt-1 mb-4">Create a bank to start adding questions</p>
-          <button onClick={()=>setShowCreate(true)} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white" style={{background:'linear-gradient(135deg,#6366f1,#8b5cf6)'}}>
-            <Plus size={15}/>Create First Bank
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {banks.map((bank, idx) => {
-            const pal = bankPal(idx);
-            return (
-              <div key={bank.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden group">
-                <div className={`h-2 bg-gradient-to-r ${pal.grad}`}/>
-                <div className="p-5">
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br ${pal.grad}`}><Database size={15} className="text-white"/></div>
-                      {renamingId === bank.id ? (
-                        <div onClick={e=>e.stopPropagation()} className="flex-1 min-w-0">
-                          <InlineInput initial={bank.name} placeholder="Bank name"
-                            onSave={name=>{onRename(bank.id,name);setRenamingId(null);}}
-                            onCancel={()=>setRenamingId(null)}/>
-                        </div>
-                      ) : (
-                        <h3 className="font-bold text-slate-800 truncate" style={{fontFamily:'Space Grotesk'}}>{bank.name}</h3>
-                      )}
-                    </div>
-                    <div className="relative shrink-0">
-                      <button onClick={e=>{e.stopPropagation();setMenuOpen(menuOpen===bank.id?null:bank.id);}} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors"><MoreVertical size={14}/></button>
-                      {menuOpen===bank.id && (
-                        <div className="absolute right-0 top-8 bg-white rounded-xl shadow-lg border border-slate-100 z-20 min-w-[130px] overflow-hidden" onClick={e=>e.stopPropagation()}>
-                          <button onClick={()=>{setRenamingId(bank.id);setMenuOpen(null);}} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">
-                            <Edit2 size={12}/>Rename
-                          </button>
-                          <button onClick={()=>{setDeleteTarget(bank);setMenuOpen(null);}} className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-red-500 hover:bg-red-50">
-                            <Trash2 size={12}/>Delete
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  {bank.createdAt && (
-                    <p className="text-[10px] text-slate-400 flex items-center gap-1 mb-4">
-                      <Calendar size={10}/> Created {fmtDate(bank.createdAt)}
-                    </p>
-                  )}
-                  <button onClick={()=>onSelect(bank,idx)} className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white bg-gradient-to-r ${pal.grad} hover:opacity-90 transition-all`}>
-                    <BookOpen size={14}/>Open Bank
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {menuOpen && <div className="fixed inset-0 z-10" onClick={()=>setMenuOpen(null)}/>}
-      <DeleteModal isOpen={!!deleteTarget} onClose={()=>setDeleteTarget(null)}
-        onConfirm={()=>{ onDelete(deleteTarget.id); setDeleteTarget(null); }}
-        title={`Delete "${deleteTarget?.name}"?`}
-        message="All levels, categories, and questions in this bank will be permanently deleted."/>
-    </div>
-  );
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // Main
 // ═══════════════════════════════════════════════════════════════════════════
 export default function QuestionBankAdmin() {
-  const [banks,        setBanks]       = useState([]);
-  const [loading,      setLoading]     = useState(true);
-  const [selectedBank, setSelectedBank]= useState(null);
-  const [selectedIdx,  setSelectedIdx] = useState(0);
-  const [toast,        setToast]       = useState('');
+  // The whole app uses exactly ONE Question Bank, so there's no list/selection
+  // screen — clicking "Question Bank" in the nav opens this single bank's detail
+  // page directly. We load the first (canonical) bank, auto-creating one if none
+  // exists yet, and render its contents straight away.
+  const [bank,    setBank]    = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState('');
+  const [toast,   setToast]   = useState('');
 
   const showToast = useCallback((msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); }, []);
 
   useEffect(() => {
+    let cancelled = false;
     api.getQuestionBanks()
-      .then(data => setBanks(Array.isArray(data) ? data : []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .then(async (data) => {
+        const list = Array.isArray(data) ? data : [];
+        const b = list[0] || await api.createQuestionBank({ name: 'Question Bank' });
+        if (!cancelled) { setBank(b); setLoading(false); }
+      })
+      .catch((err) => {
+        if (!cancelled) { setError(err?.message || 'Failed to load the Question Bank.'); setLoading(false); }
+      });
+    return () => { cancelled = true; };
   }, []);
 
-  const handleCreateBank = async (name) => {
-    const bank = await api.createQuestionBank({ name });
-    setBanks(prev => [...prev, bank]);
-    showToast('Question Bank created!');
-  };
-
-  const handleDeleteBank = async (id) => {
-    await api.deleteQuestionBank(id);
-    setBanks(prev => prev.filter(b => b.id !== id));
-    if (selectedBank?.id === id) setSelectedBank(null);
-    showToast('Bank deleted.');
-  };
-
-  const handleRenameBank = async (id, name) => {
+  const handleRenameBank = useCallback(async (id, name) => {
     await api.updateQuestionBank(id, { name });
-    setBanks(prev => prev.map(b => b.id === id ? { ...b, name } : b));
-    if (selectedBank?.id === id) setSelectedBank(s => ({ ...s, name }));
-  };
+    setBank(prev => (prev && prev.id === id ? { ...prev, name } : prev));
+  }, []);
 
   if (loading) return (
     <div className="min-h-full flex items-center justify-center">
@@ -1564,20 +1429,18 @@ export default function QuestionBankAdmin() {
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-5">
       {toast && <Toast msg={toast}/>}
 
-      {selectedBank ? (
+      {bank ? (
         <BankDetail
-          bank={selectedBank}
-          bankIndex={selectedIdx}
-          onBack={() => { setSelectedBank(null); scrollToTop(); }}
+          bank={bank}
+          bankIndex={0}
           onBankRenamed={handleRenameBank}
           showToast={showToast}/>
       ) : (
-        <BanksOverview
-          banks={banks}
-          onCreate={handleCreateBank}
-          onDelete={handleDeleteBank}
-          onRename={handleRenameBank}
-          onSelect={(bank, idx) => { setSelectedBank(bank); setSelectedIdx(idx); scrollToTop(); }}/>
+        <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-200">
+          <Database size={36} className="text-slate-300 mx-auto mb-3"/>
+          <p className="font-semibold text-slate-500">Couldn't load the Question Bank</p>
+          <p className="text-sm text-slate-400 mt-1">{error || 'Please try again in a moment.'}</p>
+        </div>
       )}
     </div>
   );
