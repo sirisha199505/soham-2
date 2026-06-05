@@ -11,11 +11,6 @@ import { api } from '../../utils/api';
 import { compareLevels } from '../../utils/helpers';
 
 const LEVEL_COLORS = ['#3BC0EF', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899'];
-const DISABLED_KEY = 'rqa_disabled_students';
-
-function saveDisabled(ids) {
-  localStorage.setItem(DISABLED_KEY, JSON.stringify(ids));
-}
 
 /* ── LevelBadge ── */
 function LevelBadge({ data, levelId, overrideIds }) {
@@ -45,6 +40,7 @@ function StudentModal({ student, levelList, onClose, onPhoneUpdated }) {
   const [editingPhone, setEditingPhone] = useState(false);
   const [phoneVal,     setPhoneVal]     = useState(student?.phoneNumber && student.phoneNumber !== '—' ? student.phoneNumber : (student?.phone_number || ''));
   const [phoneSaving,  setPhoneSaving]  = useState(false);
+  const [phoneErr,     setPhoneErr]     = useState('');
 
   if (!student) return null;
   const levels = levelList.length > 0
@@ -53,11 +49,16 @@ function StudentModal({ student, levelList, onClose, onPhoneUpdated }) {
 
   const savePhone = async () => {
     setPhoneSaving(true);
+    setPhoneErr('');
     try {
-      const result = await api.updateStudentPhone(student.uniqueId, phoneVal.replace(/\D/g, ''));
-      onPhoneUpdated?.(student.uniqueId, result.phoneNumber || result.phone_number);
+      // Identify by DB id — uniqueId is empty for trainers and email-registered
+      // students, which is why phone edits used to silently fail for them.
+      const result = await api.updateStudentPhone(student.id, phoneVal.replace(/\D/g, ''));
+      onPhoneUpdated?.(student.id, result.phoneNumber || result.phone_number);
       setEditingPhone(false);
-    } catch { /* ignore */ }
+    } catch (e) {
+      setPhoneErr(e.message || 'Failed to update.');
+    }
     setPhoneSaving(false);
   };
 
@@ -111,7 +112,9 @@ function StudentModal({ student, levelList, onClose, onPhoneUpdated }) {
                     ✕
                   </button>
                 </div>
-              ) : (
+              ) : null}
+              {editingPhone && phoneErr && <p className="text-[10px] text-red-500 mt-1">{phoneErr}</p>}
+              {!editingPhone && (
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-slate-700">{phoneVal || '—'}</p>
                   <button onClick={() => setEditingPhone(true)}
@@ -247,7 +250,6 @@ export default function StudentManagement() {
           : [];
         setLevelList(sorted);
 
-        const localDisabled = JSON.parse(localStorage.getItem(DISABLED_KEY) || '[]');
         setData(students.map(s => ({
           id:          s.id,
           name:        s.name || '—',
@@ -257,7 +259,9 @@ export default function StudentManagement() {
           uniqueId:    s.uniqueId   || s.unique_id,
           schoolName:  s.schoolName || s.school_name || '—',
           className:   s.className  || s.class_name  || '—',
-          disabled:    s.disabled || localDisabled.includes(s.uniqueId || s.unique_id),
+          // Source of truth is the backend (users.active); the old localStorage
+          // overlay was keyed on the empty uniqueId and never worked for trainers.
+          disabled:    s.disabled,
           levels:      s.levels || {},
           overrides:   s.overrideIds || s.override_ids || [],
         })));
@@ -346,9 +350,12 @@ export default function StudentManagement() {
     if (action === 'view') { setViewStudent(student); scrollToTop(); return; }
 
     if (action === 'unlock') {
+      // `lvl` is the level's DB id; show its real title in the toast (it was
+      // showing the raw id, e.g. "Level 25", instead of "Level 2").
+      const lvlTitle = levelList.find(l => l.id === lvl)?.title || `Level ${lvl}`;
       markOverrideLocally(student.id, lvl);
       await setStudentOverride(student.id, lvl);
-      showToast(`Level ${lvl} unlocked for ${student.name || student.uniqueId || student.id}`);
+      showToast(`${lvlTitle} unlocked for ${student.name || student.uniqueId || student.id}`);
       refresh();
     }
     if (action === 'reset') {
@@ -357,13 +364,19 @@ export default function StudentManagement() {
         .catch(() => showToast('Reset failed', 'warning'));
     }
     if (action === 'toggle') {
-      const disabled = JSON.parse(localStorage.getItem(DISABLED_KEY) || '[]');
-      const newDisabled = student.disabled
-        ? disabled.filter(id => id !== student.uniqueId)
-        : [...disabled, student.uniqueId];
-      saveDisabled(newDisabled);
-      showToast(`Account ${student.disabled ? 'enabled' : 'disabled'} for ${student.uniqueId}`, student.disabled ? 'success' : 'warning');
-      refresh();
+      // Persist to the backend (users.active) by DB id — the old version only
+      // wrote localStorage keyed on uniqueId, so it did nothing for trainers/
+      // email students and never actually blocked login. Login filters active:true,
+      // so disabling here truly prevents sign-in.
+      const enabling = student.disabled;          // currently disabled → we are enabling
+      const label    = student.name || student.uniqueId || student.id;
+      try {
+        await api.setStudentActive(student.id, enabling);
+        setData(prev => prev.map(s => s.id === student.id ? { ...s, disabled: !enabling } : s));
+        showToast(`Account ${enabling ? 'enabled' : 'disabled'} for ${label}`, enabling ? 'success' : 'warning');
+      } catch (e) {
+        showToast(e.message || 'Failed to update account status.', 'warning');
+      }
     }
   };
 
@@ -607,9 +620,9 @@ export default function StudentManagement() {
           student={viewStudent}
           levelList={levelList}
           onClose={() => setViewStudent(null)}
-          onPhoneUpdated={(uniqueId, phone) => {
-            setData(prev => prev.map(s => s.uniqueId === uniqueId ? { ...s, phoneNumber: phone || '—' } : s));
-            setViewStudent(prev => prev?.uniqueId === uniqueId ? { ...prev, phoneNumber: phone || '—' } : prev);
+          onPhoneUpdated={(id, phone) => {
+            setData(prev => prev.map(s => s.id === id ? { ...s, phoneNumber: phone || '—' } : s));
+            setViewStudent(prev => prev?.id === id ? { ...prev, phoneNumber: phone || '—' } : prev);
           }}
         />
       )}

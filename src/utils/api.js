@@ -156,7 +156,8 @@ export const api = {
 
   // Students
   getStudents:        () => request('GET', '/api/students'),
-  updateStudentPhone: (uniqueId, phoneNumber) => request('PATCH', `/api/students/${uniqueId}/phone`, { phoneNumber }),
+  updateStudentPhone: (id, phoneNumber) => request('PATCH', `/api/students/${id}/phone`, { phoneNumber }),
+  setStudentActive: (id, active) => request('PATCH', `/api/students/${id}/active`, { active }),
   resetStudentProgress: (userId) => request('DELETE', `/api/levels/progress/${userId}`),
 
   // Content
