@@ -66,9 +66,7 @@ function StudentModal({ student, levelList, onClose }) {
           <div className="bg-indigo-50 rounded-2xl p-4">
             <p className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider mb-1">{isCoach ? 'Trainer Name' : 'Student Name'}</p>
             <p className="font-bold text-slate-800 text-lg">{student.name || '—'}</p>
-            {student.email && student.email !== '—' && (
-              <p className="text-xs text-slate-500 mt-0.5">{student.email}</p>
-            )}
+            <p className="text-xs text-slate-500 mt-0.5">{(student.email && student.email !== '—') ? student.email : '—'}</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -234,7 +232,9 @@ export default function StudentManagement() {
         setData(students.map(s => ({
           id:          s.id,
           name:        s.name || '—',
-          email:       s.email || '—',
+          // "{phone}@student.rq" is a synthetic placeholder for phone-only students,
+          // not a real email — show a dash instead (backend now nulls it too).
+          email:       (s.email && !s.email.endsWith('@student.rq')) ? s.email : '—',
           phoneNumber: s.phoneNumber || s.phone_number || '',
           role:        s.role || 'student',
           uniqueId:    s.uniqueId   || s.unique_id,
@@ -539,7 +539,7 @@ export default function StudentManagement() {
                   <td className="px-4 py-3.5">
                     <div>
                       <p className="font-semibold text-slate-800 text-xs">{s.name || '—'}</p>
-                      <p className="text-[10px] text-slate-400">{s.email !== '—' ? s.email : ''}</p>
+                      <p className="text-[10px] text-slate-400">{s.email !== '—' ? s.email : '—'}</p>
                     </div>
                   </td>
                   {/* Mobile */}
