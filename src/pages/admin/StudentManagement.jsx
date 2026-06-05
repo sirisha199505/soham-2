@@ -35,94 +35,54 @@ function LevelBadge({ data, levelId, overrideIds }) {
 }
 
 /* ── Detail Modal ── */
-function StudentModal({ student, levelList, onClose, onPhoneUpdated }) {
-  // Hooks must run before any early return (React rules of hooks).
-  const [editingPhone, setEditingPhone] = useState(false);
-  const [phoneVal,     setPhoneVal]     = useState(student?.phoneNumber && student.phoneNumber !== '—' ? student.phoneNumber : (student?.phone_number || ''));
-  const [phoneSaving,  setPhoneSaving]  = useState(false);
-  const [phoneErr,     setPhoneErr]     = useState('');
-
+function StudentModal({ student, levelList, onClose }) {
   if (!student) return null;
+  const isCoach = student.role === 'coach' || student.role === 'teacher';
   const levels = levelList.length > 0
     ? levelList.map((lvl, i) => ({ id: lvl.id, label: lvl.title || `Level ${i + 1}`, idx: i }))
     : [1, 2, 3].map((n, i) => ({ id: n, label: `Level ${n}`, idx: i }));
 
-  const savePhone = async () => {
-    setPhoneSaving(true);
-    setPhoneErr('');
-    try {
-      // Identify by DB id — uniqueId is empty for trainers and email-registered
-      // students, which is why phone edits used to silently fail for them.
-      const result = await api.updateStudentPhone(student.id, phoneVal.replace(/\D/g, ''));
-      onPhoneUpdated?.(student.id, result.phoneNumber || result.phone_number);
-      setEditingPhone(false);
-    } catch (e) {
-      setPhoneErr(e.message || 'Failed to update.');
-    }
-    setPhoneSaving(false);
-  };
+  // Trainers have an organization (no class); students have school + class.
+  const detailFields = isCoach
+    ? [
+        { label: 'Organization', value: student.schoolName },
+        { label: 'Status',       value: student.disabled ? 'Disabled' : 'Active' },
+      ]
+    : [
+        { label: 'School', value: student.schoolName },
+        { label: 'Class',  value: student.className },
+        { label: 'Status', value: student.disabled ? 'Disabled' : 'Active' },
+      ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Student Details</h3>
+          <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>{isCoach ? 'Trainer Details' : 'Student Details'}</h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={16} /></button>
         </div>
         <div className="p-6 space-y-4">
           <div className="bg-indigo-50 rounded-2xl p-4">
-            <p className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider mb-1">Student ID</p>
-            <p className="font-mono font-bold text-slate-800 text-lg tracking-widest">{student.uniqueId}</p>
-            <p className="text-xs text-slate-500 mt-0.5">{student.schoolName}</p>
+            <p className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider mb-1">{isCoach ? 'Trainer Name' : 'Student Name'}</p>
+            <p className="font-bold text-slate-800 text-lg">{student.name || '—'}</p>
+            {student.email && student.email !== '—' && (
+              <p className="text-xs text-slate-500 mt-0.5">{student.email}</p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: 'School', value: student.schoolName },
-              { label: 'Class',  value: student.className },
-              { label: 'Status', value: student.disabled ? 'Disabled' : 'Active' },
-            ].map(f => (
+            {detailFields.map(f => (
               <div key={f.label} className="bg-slate-50 rounded-xl p-3">
                 <p className="text-[10px] font-semibold text-slate-400 uppercase mb-0.5">{f.label}</p>
-                <p className="text-sm font-semibold text-slate-700">{f.value}</p>
+                <p className="text-sm font-semibold text-slate-700">{f.value || '—'}</p>
               </div>
             ))}
 
-            {/* Editable Mobile field */}
+            {/* Mobile (read-only) */}
             <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase mb-1">Mobile</p>
-              {editingPhone ? (
-                <div className="flex items-center gap-1.5">
-                  <input
-                    autoFocus
-                    type="tel"
-                    value={phoneVal}
-                    onChange={e => setPhoneVal(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') savePhone(); if (e.key === 'Escape') setEditingPhone(false); }}
-                    placeholder="10-digit number"
-                    className="flex-1 text-xs px-2 py-1 rounded-lg border border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
-                  />
-                  <button onClick={savePhone} disabled={phoneSaving}
-                    className="text-[10px] font-bold px-2 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50">
-                    {phoneSaving ? '…' : 'Save'}
-                  </button>
-                  <button onClick={() => setEditingPhone(false)}
-                    className="text-[10px] font-bold px-2 py-1 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100">
-                    ✕
-                  </button>
-                </div>
-              ) : null}
-              {editingPhone && phoneErr && <p className="text-[10px] text-red-500 mt-1">{phoneErr}</p>}
-              {!editingPhone && (
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-slate-700">{phoneVal || '—'}</p>
-                  <button onClick={() => setEditingPhone(true)}
-                    className="text-[10px] text-indigo-500 hover:text-indigo-700 font-semibold underline ml-2">
-                    Edit
-                  </button>
-                </div>
-              )}
+              <p className="text-[10px] font-semibold text-slate-400 uppercase mb-0.5">Mobile</p>
+              <p className="text-sm font-semibold text-slate-700">{student.phoneNumber || '—'}</p>
             </div>
           </div>
 
@@ -641,10 +601,6 @@ export default function StudentManagement() {
           student={viewStudent}
           levelList={levelList}
           onClose={() => setViewStudent(null)}
-          onPhoneUpdated={(id, phone) => {
-            setData(prev => prev.map(s => s.id === id ? { ...s, phoneNumber: phone || '—' } : s));
-            setViewStudent(prev => prev?.id === id ? { ...prev, phoneNumber: phone || '—' } : prev);
-          }}
         />
       )}
     </div>

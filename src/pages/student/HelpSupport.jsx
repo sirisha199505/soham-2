@@ -218,7 +218,7 @@ export default function HelpSupport() {
             : 'Contact your school administrator or Trainer for assistance with your account or exam access.'}
         </p>
         <div className="flex items-center gap-2 text-sm text-slate-500">
-          <Mail size={14} style={{ color: colors.primary }} />
+          {/* <Mail size={14} style={{ color: colors.primary }} /> */}
           <span>Reach out to your assigned administrator</span>
         </div>
       </div>
