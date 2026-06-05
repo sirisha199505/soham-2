@@ -127,6 +127,50 @@ function parseCSV(text) {
     if (type==='mcq')                         questions.push({ id:uid('q'), type:'mcq',   text, difficulty:diff, applicableFor, options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
     else if (type==='match')                  questions.push({ id:uid('q'), type:'match', text, difficulty:diff, applicableFor, pairs:[{left:clean(cols[10]),leftImage:'',right:clean(cols[11]),rightImage:''},{left:clean(cols[12]),leftImage:'',right:clean(cols[13]),rightImage:''},{left:clean(cols[14]),leftImage:'',right:clean(cols[15]),rightImage:''},{left:clean(cols[16]),leftImage:'',right:clean(cols[17]),rightImage:''}], explanation:'' });
     else if (type==='label'||type==='image')  questions.push({ id:uid('q'), type:'label', text, difficulty:diff, applicableFor, imageUrl:clean(cols[9])||'', options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
+    else if (type==='truefalse'||type==='tf') {
+      // `correct` column holds True/False (also accepts T/F or A/B). True = index 0.
+      const c = clean(cols[7]).toLowerCase();
+      const correct = (c==='false'||c==='f'||c==='b') ? 1 : 0;
+      questions.push({ id:uid('q'), type:'truefalse', text, difficulty:diff, applicableFor,
+        options:[{text:'True',imageUrl:''},{text:'False',imageUrl:''}], correct, explanation:clean(cols[8])||'' });
+    }
+    else if (type==='order') {
+      // `steps` column (19): the steps in CORRECT order, separated by " | ".
+      const steps = clean(cols[19]).split('|').map(s=>s.trim()).filter(Boolean);
+      if (steps.length < 2) continue;
+      questions.push({ id:uid('q'), type:'order', text, difficulty:diff, applicableFor,
+        options: steps.map(s=>({text:s,imageUrl:''})), correct:0, explanation:clean(cols[8])||'' });
+    }
+    else if (type==='categorize') {
+      // `groups` column (20): "Group1: a, b; Group2: c, d" — ';' splits groups,
+      // ':' separates a group name from its comma-separated items.
+      const buckets=[]; const items=[];
+      clean(cols[20]).split(';').map(s=>s.trim()).filter(Boolean).forEach(group=>{
+        const ci = group.indexOf(':'); if (ci < 0) return;
+        const bname = group.slice(0,ci).trim(); if (!bname) return;
+        const bidx = buckets.length; buckets.push(bname);
+        group.slice(ci+1).split(',').map(s=>s.trim()).filter(Boolean)
+          .forEach(it=>items.push({ text:it, imageUrl:'', bucket:bidx }));
+      });
+      if (buckets.length < 2 || items.length < 2) continue;
+      questions.push({ id:uid('q'), type:'categorize', text, difficulty:diff, applicableFor,
+        correct:0, extras:{ buckets, items }, explanation:clean(cols[8])||'' });
+    }
+    else if (type==='hotspot') {
+      // `hotspots` column (21): "label@x,y; label@x,y" with x,y as % (0-100).
+      // The base picture comes from the image_url column (9).
+      const hotspots=[];
+      clean(cols[21]).split(';').map(s=>s.trim()).filter(Boolean).forEach(h=>{
+        const at = h.lastIndexOf('@'); if (at < 0) return;
+        const label = h.slice(0,at).trim();
+        const xy = h.slice(at+1).split(',').map(s=>parseFloat(s.trim()));
+        if (!label || xy.length<2 || Number.isNaN(xy[0]) || Number.isNaN(xy[1])) return;
+        hotspots.push({ x:xy[0], y:xy[1], label });
+      });
+      if (hotspots.length < 2) continue;
+      questions.push({ id:uid('q'), type:'hotspot', text, difficulty:diff, applicableFor,
+        imageUrl:clean(cols[9])||'', correct:0, extras:{ hotspots }, explanation:clean(cols[8])||'' });
+    }
   }
   return questions;
 }
@@ -269,16 +313,22 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
   };
 
   const downloadTemplate = () => {
-    const headers = ['type','text','difficulty','opt_a','opt_b','opt_c','opt_d','correct','explanation','image_url(img only)','p1_left','p1_right','p2_left','p2_right','p3_left','p3_right','p4_left','p4_right','applicable_for'];
+    // 22 columns. 0-18 are the original layout (kept for backward compatibility);
+    // 19-21 carry the new drag-drop types. Leave columns a type doesn't use blank.
+    const headers = ['type','text','difficulty','opt_a','opt_b','opt_c','opt_d','correct','explanation','image_url(img only)','p1_left','p1_right','p2_left','p2_right','p3_left','p3_right','p4_left','p4_right','applicable_for','steps(order: a|b|c)','groups(categorize: G1: a, b; G2: c, d)','hotspots(label@x,y; …  x,y are %)'];
+    const E = ''; // filler for unused columns
     const rows = [
-      ['mcq','What is a servo motor?','easy','A DC motor with feedback control','A stepper motor','A linear actuator','An AC induction motor','A','Servo motors use encoders for closed-loop position control.','','','','','','','','','','student'],
-      ['mcq','What is PID control used for in robotics?','medium','Speed control only','Position and speed control','Power supply regulation','Sensor calibration','B','PID stands for Proportional-Integral-Derivative control.','','','','','','','','','','trainer'],
-      ['mcq','Which protocol is used for wireless robot communication?','hard','I2C','SPI','Bluetooth / Wi-Fi','UART','C','Bluetooth and Wi-Fi are standard wireless protocols.','','','','','','','','','','both'],
-      ['label','What component is shown?','medium','Servo motor','DC motor','Stepper motor','Solenoid','C','','https://example.com/component.jpg','','','','','','','','','student'],
-      ['match','Match each component to its function','easy','','','','','','','','Sensor','Detects input signals','Motor','Converts electricity to motion','CPU','Processes instructions','Battery','Stores electrical energy','both'],
+      ['mcq','What is a servo motor?','easy','A DC motor with feedback control','A stepper motor','A linear actuator','An AC induction motor','A','Servo motors use encoders for closed-loop position control.',E,E,E,E,E,E,E,E,E,'student',E,E,E],
+      ['mcq','Which protocol is used for wireless robot communication?','hard','I2C','SPI','Bluetooth / Wi-Fi','UART','C','Bluetooth and Wi-Fi are standard wireless protocols.',E,E,E,E,E,E,E,E,E,'both',E,E,E],
+      ['truefalse','A stepper motor uses feedback to know its position.','easy',E,E,E,E,'False','Stepper motors move in fixed open-loop steps.',E,E,E,E,E,E,E,E,E,'student',E,E,E],
+      ['label','What component is shown in the image?','medium','Servo motor','DC motor','Stepper motor','Solenoid','C',E,'https://example.com/component.jpg',E,E,E,E,E,E,E,E,'student',E,E,E],
+      ['match','Match each component to its function','easy',E,E,E,E,E,E,E,'Sensor','Detects input signals','Motor','Converts electricity to motion','CPU','Processes instructions','Battery','Stores electrical energy','both',E,E,E],
+      ['order','Arrange the steps to compute a rectangle’s area','easy',E,E,E,E,E,'Start first, End last.',E,E,E,E,E,E,E,E,E,'student','Start|Input length and width|Area = length × width|Print area|End',E,E],
+      ['categorize','Group each device by its role','medium',E,E,E,E,E,E,E,E,E,E,E,E,E,E,E,'student',E,'Input Device: Keyboard, Mouse; Processing Device: CPU, RAM; Output Device: Monitor, Printer',E],
+      ['hotspot','Label the parts of the computer','medium',E,E,E,E,E,E,'https://example.com/computer.jpg',E,E,E,E,E,E,E,E,'student',E,E,'Keyboard@45,80; Mouse@70,82; Monitor@40,25; CPU@80,45'],
     ];
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    ws['!cols'] = [{wch:10},{wch:50},{wch:10},{wch:30},{wch:22},{wch:22},{wch:22},{wch:8},{wch:46},{wch:36},{wch:18},{wch:22},{wch:18},{wch:22},{wch:18},{wch:22},{wch:18},{wch:22},{wch:16}];
+    ws['!cols'] = [{wch:11},{wch:46},{wch:10},{wch:26},{wch:20},{wch:20},{wch:20},{wch:9},{wch:42},{wch:34},{wch:16},{wch:22},{wch:16},{wch:22},{wch:16},{wch:22},{wch:16},{wch:22},{wch:15},{wch:46},{wch:54},{wch:46}];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Questions');
     XLSX.writeFile(wb, 'question_bank_template.xlsx');
@@ -316,15 +366,24 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
       {step==='upload' && (
         <div className="space-y-5">
           <div className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100">
-            <p className="text-sm font-bold text-indigo-800 mb-3">Supported Column Formats</p>
-            <div className="grid grid-cols-3 gap-3">
-              {[{type:'MCQ',cols:['type','text','difficulty','opt_a–opt_d','correct (A–D)']},{type:'Label',cols:['type=label','text','image_url','opt_a–opt_d','correct']},{type:'Match',cols:['type','text','difficulty','p1_left, p1_right','… (4 pairs)']}].map(f=>(
+            <p className="text-sm font-bold text-indigo-800 mb-3">Supported Types &amp; Columns</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                {type:'MCQ',          cols:['type=mcq','opt_a–opt_d','correct = A/B/C/D']},
+                {type:'True / False', cols:['type=truefalse','correct = True/False']},
+                {type:'Label',        cols:['type=label','image_url','opt_a–opt_d + correct']},
+                {type:'Match',        cols:['type=match','p1_left/p1_right …','(exactly 4 pairs)']},
+                {type:'Order',        cols:['type=order','steps = a | b | c','(in correct order)']},
+                {type:'Categorize',   cols:['type=categorize','groups = G1: a, b; G2: c, d']},
+                {type:'Hotspot',      cols:['type=hotspot','image_url','hotspots = label@x,y; …']},
+              ].map(f=>(
                 <div key={f.type} className="bg-white rounded-xl p-3 border border-indigo-100">
                   <p className="text-xs font-bold text-indigo-700 mb-2">{f.type}</p>
-                  {f.cols.map(c=><p key={c} className="text-[10px] text-slate-500 font-mono">• {c}</p>)}
+                  {f.cols.map(c=><p key={c} className="text-[10px] text-slate-500 font-mono leading-relaxed">• {c}</p>)}
                 </div>
               ))}
             </div>
+            <p className="text-[11px] text-indigo-700/80 mt-2">All rows also accept <span className="font-mono">difficulty</span> (easy/medium/hard), <span className="font-mono">explanation</span>, and <span className="font-mono">applicable_for</span> (student/trainer/both).</p>
             <button onClick={downloadTemplate} className="mt-3 flex items-center gap-2 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
               <Download size={12}/> Download Excel Template (.xlsx)
             </button>
