@@ -174,7 +174,7 @@ function EditModal({ levelId, settings, onSave, onClose, otherTitles = [] }) {
         </div>
         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Level Title</label>
+            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Level Title <span className="text-red-400">*</span></label>
             <input value={form.title} onChange={f('title')}
               className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
           </div>

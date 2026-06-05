@@ -340,7 +340,7 @@ export default function ForgotPassword() {
           <form onSubmit={handleSendOtp} className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-                {isStudent ? 'Mobile Number' : 'Email Address'}
+                {isStudent ? 'Mobile Number' : 'Email Address'}<span className="text-rose-400 ml-0.5">*</span>
               </label>
               <div className="relative">
                 {isStudent
@@ -443,7 +443,7 @@ export default function ForgotPassword() {
 
           <form onSubmit={handleResetPassword} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">New Password</label>
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">New Password<span className="text-rose-400 ml-0.5">*</span></label>
               <div className="relative">
                 <Lock size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"/>
                 <input type={showPass ? 'text' : 'password'} placeholder="At least 6 characters"
@@ -458,7 +458,7 @@ export default function ForgotPassword() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Confirm Password</label>
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Confirm Password<span className="text-rose-400 ml-0.5">*</span></label>
               <div className="relative">
                 <Lock size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"/>
                 <input type={showPass ? 'text' : 'password'} placeholder="Re-enter new password"

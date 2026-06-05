@@ -293,14 +293,18 @@ export default function StudentManagement() {
   ], [levelList]);
 
   const filtered = useMemo(() => {
+    // Normalise the query once: trim stray spaces, lowercase for text, and reduce
+    // to digits for phone matching so "98765 43210" or "+91 98765" still match.
+    const q       = search.trim().toLowerCase();
+    const qDigits = q.replace(/\D/g, '');
     return data.filter(s => {
       const matchTab    = tab === 'coaches' ? s.role === 'coach' : s.role !== 'coach';
-      const matchSearch = !search ||
-        (s.name        && s.name.toLowerCase().includes(search.toLowerCase())) ||
-        (s.email       && s.email.toLowerCase().includes(search.toLowerCase())) ||
-        (s.phoneNumber && s.phoneNumber.includes(search)) ||
-        (s.uniqueId    && s.uniqueId.toLowerCase().includes(search.toLowerCase())) ||
-        (s.schoolName  && s.schoolName.toLowerCase().includes(search.toLowerCase()));
+      const matchSearch = !q ||
+        (s.name        && s.name.toLowerCase().includes(q)) ||
+        (s.email       && s.email.toLowerCase().includes(q)) ||
+        (qDigits && s.phoneNumber && s.phoneNumber.replace(/\D/g, '').includes(qDigits)) ||
+        (s.uniqueId    && s.uniqueId.toLowerCase().includes(q)) ||
+        (s.schoolName  && s.schoolName.toLowerCase().includes(q));
       const lf = filterOptions.find(f => f.id === filter && f.levelId != null);
       const matchFilter = filter === 'all'      ? true
         : filter === 'disabled' ? s.disabled

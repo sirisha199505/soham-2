@@ -10,6 +10,7 @@ import { useLevel } from '../../context/LevelContext';
 import { LEVELS } from '../../utils/levelData';
 import { api } from '../../utils/api';
 import { compareLevels } from '../../utils/helpers';
+import DOMPurify from 'dompurify';
 
 // ── Color palette ─────────────────────────────────────────────────────────
 const FALLBACK_COLORS = [
@@ -196,31 +197,12 @@ function ArticleBody({ page }) {
             </h2>
           </div>
 
-          {/* Body text */}
-          <div className="pl-9 space-y-3">
-            {(sec.body || '').split('\n').map((line, li) => {
-              if (!line.trim()) return <div key={li} className="h-2" />;
-
-              // Handle bullet points (•)
-              if (line.trim().startsWith('•') || line.trim().startsWith('*') || line.trim().match(/^[0-9]+\./)) {
-                const text = line.trim().replace(/^[•*]\s*/, '').replace(/^[0-9]+\.\s*/, '');
-                return (
-                  <div key={li} className="flex items-start gap-2.5">
-                    <span className="mt-2 w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-                    <p className="text-[15px] text-slate-700 leading-[1.85]">
-                      {renderBold(text)}
-                    </p>
-                  </div>
-                );
-              }
-
-              return (
-                <p key={li} className="text-[15px] text-slate-700 leading-[1.85]">
-                  {renderBold(line)}
-                </p>
-              );
-            })}
-          </div>
+          {/* Body — the admin editor (RichTextEditor) stores HTML, so render it as
+              sanitised HTML. Previously this split on '\n' and showed it as plain
+              text, which leaked raw <p>/<strong>/<ul> tags to the reader. Kept in
+              sync with LevelContent, which already renders the same field as HTML. */}
+          <div className="pl-9 rich-content text-[15px] text-slate-700 leading-[1.85]"
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sec.body || '') }} />
 
           {/* Section divider (not on last) */}
           {i < (page.sections || []).length - 1 && (
@@ -229,15 +211,6 @@ function ArticleBody({ page }) {
         </section>
       ))}
     </div>
-  );
-}
-
-function renderBold(text) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((p, i) =>
-    p.startsWith('**') && p.endsWith('**')
-      ? <strong key={i} className="text-slate-900 font-semibold">{p.slice(2, -2)}</strong>
-      : p
   );
 }
 

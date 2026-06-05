@@ -63,10 +63,10 @@ export default function AuthLayout() {
         <div className="relative z-10 space-y-10">
           <div>
             <div
-              className="inline-flex items-center gap-4 px-3 py-1.5 rounded-full text-xs font-semibold mb-6"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold mb-6"
               style={{ background: `${colors.primary}20`, color: colors.primary, border: `1px solid ${colors.primary}30` }}
             >
-              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: colors.primary }} />
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0" style={{ background: colors.primary }} />
               Trusted by 240+ schools across India
             </div>
 

@@ -27,10 +27,12 @@ function InfoRow({ icon: Icon, label, value, color }) {
   );
 }
 
-function EditField({ icon: Icon, label, value, onChange, placeholder, type = 'text', color, maxLength, inputMode }) {
+function EditField({ icon: Icon, label, value, onChange, placeholder, type = 'text', color, maxLength, inputMode, required = false }) {
   return (
     <div className="space-y-1.5">
-      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">{label}</label>
+      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+        {label}{required && <span className="text-rose-400 ml-0.5">*</span>}
+      </label>
       <div className="relative">
         {Icon && <Icon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />}
         <input
@@ -44,10 +46,12 @@ function EditField({ icon: Icon, label, value, onChange, placeholder, type = 'te
   );
 }
 
-function PasswordField({ label, value, onChange, show, onToggle, placeholder, maxLength }) {
+function PasswordField({ label, value, onChange, show, onToggle, placeholder, maxLength, required = true }) {
   return (
     <div>
-      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">{label}</label>
+      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+        {label}{required && <span className="text-rose-400 ml-0.5">*</span>}
+      </label>
       <div className="relative">
         <input
           type={show ? 'text' : 'password'}
@@ -259,7 +263,7 @@ export default function StudentProfile() {
             </div>
           ) : (
             <div className="px-5 py-4 space-y-3">
-              <EditField icon={User}  label="Full Name"     value={pform.name}        onChange={setPF('name')}        placeholder="Your full name"           color={roleColor} />
+              <EditField icon={User}  label="Full Name"     value={pform.name}        onChange={setPF('name')}        placeholder="Your full name"           color={roleColor} required />
               <EditField icon={Mail}  label="Email Address" value={pform.email}       onChange={setPF('email')}       placeholder="your@email.com" type="email" color={roleColor} />
               <EditField icon={Phone} label="Phone Number"  value={pform.phoneNumber} onChange={setPF('phoneNumber')} placeholder="10-digit mobile number" type="tel" inputMode="numeric" maxLength={10} color={roleColor} />
               {!isCoach ? (

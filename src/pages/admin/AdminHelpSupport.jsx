@@ -206,18 +206,24 @@ function AudienceBadge({ audience }) {
 function FaqForm({ value, onChange, onSubmit, onCancel, saving, submitLabel }) {
   return (
     <div className="space-y-2.5">
-      <input
-        type="text" placeholder="Question"
-        value={value.question}
-        onChange={e => onChange({ ...value, question: e.target.value })}
-        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-indigo-400"
-      />
-      <textarea
-        placeholder="Answer" rows={3}
-        value={value.answer}
-        onChange={e => onChange({ ...value, answer: e.target.value })}
-        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 leading-relaxed focus:outline-none focus:border-indigo-400 resize-y"
-      />
+      <div>
+        <label className="text-xs font-semibold text-slate-500 block mb-1">Question<span className="text-rose-400 ml-0.5">*</span></label>
+        <input
+          type="text" placeholder="Question"
+          value={value.question}
+          onChange={e => onChange({ ...value, question: e.target.value })}
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-indigo-400"
+        />
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-slate-500 block mb-1">Answer<span className="text-rose-400 ml-0.5">*</span></label>
+        <textarea
+          placeholder="Answer" rows={3}
+          value={value.answer}
+          onChange={e => onChange({ ...value, answer: e.target.value })}
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 leading-relaxed focus:outline-none focus:border-indigo-400 resize-y"
+        />
+      </div>
       <div className="flex flex-wrap items-center gap-3">
         <label className="text-xs font-semibold text-slate-500">Audience</label>
         <select

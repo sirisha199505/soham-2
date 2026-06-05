@@ -101,8 +101,9 @@ export default function AdminDashboard() {
   // during the ~20s Render cold start, which read as a broken/blank page until the
   // 30s interval happened to repaint it. `loaded` flips true after the first OK
   // fetch; `error` only surfaces when we have nothing to show yet.
-  const [loaded,  setLoaded]  = useState(false);
-  const [error,   setError]   = useState(false);
+  const [loaded,     setLoaded]     = useState(false);
+  const [error,      setError]      = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // The periodic 30s refresh keeps the current data on screen and never flashes
   // the loading/error screens: once `loaded` is true those screens are gated off,
@@ -152,10 +153,19 @@ export default function AdminDashboard() {
     return () => clearInterval(timer);
   }, [user?.id]);
 
-  const refresh = () => {
-    fetchData();
-    setRefreshed(true);
-    setTimeout(() => setRefreshed(false), 1500);
+  // Await the actual re-fetch so the button reflects real work: "Refreshing…"
+  // while data loads, then "Refreshed!" only once new data has arrived (the old
+  // version flipped to "Refreshed!" instantly, before any data came back).
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await fetchData();
+      setRefreshed(true);
+      setTimeout(() => setRefreshed(false), 1500);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   // First-load gate: a clear loading state instead of a blank zeroed dashboard.
@@ -217,11 +227,12 @@ export default function AdminDashboard() {
         </div>
         <button
           onClick={refresh}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all
+          disabled={refreshing}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all disabled:opacity-70
             ${refreshed ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
         >
-          <RefreshCw size={14} className={refreshed ? 'animate-spin' : ''} />
-          {refreshed ? 'Refreshed!' : 'Refresh Stats'}
+          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+          {refreshing ? 'Refreshing…' : refreshed ? 'Refreshed!' : 'Refresh Stats'}
         </button>
       </div>
 

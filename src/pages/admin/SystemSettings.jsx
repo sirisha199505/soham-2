@@ -68,28 +68,56 @@ export default function SystemSettings() {
   const [saving,    setSaving]    = useState(false);
   const [saved,     setSaved]     = useState(false);
   const [showReset, setShowReset] = useState(false);
+  // A transient backend failure (Render cold-start timeout) must NOT silently fall
+  // back to DEFAULT_GLOBAL — that looks exactly like saved settings reverting to
+  // defaults after a refresh. Retry, and if it still fails show an explicit error
+  // (with retry) instead of presenting defaults as if they were the saved values.
+  const [loadError,   setLoadError]   = useState(false);
+  const [saveError,   setSaveError]   = useState(false);
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   useEffect(() => {
     if (!user?.id) return;
-    api.getSettings()
-      .then((settingsData) => {
-        if (settingsData && Object.keys(settingsData).length > 0) {
-          const { levels: _ignore, ...rest } = settingsData;
-          setGlobal(prev => ({ ...prev, ...rest }));
-        }
-      })
-      .catch(err => console.error('Failed to load settings:', err))
-      .finally(() => setLoading(false));
-  }, [user?.id]);
+    let cancelled = false;
+    let tries = 0;
+    const load = () => {
+      api.getSettings()
+        .then((settingsData) => {
+          if (cancelled) return;
+          if (settingsData && Object.keys(settingsData).length > 0) {
+            const { levels: _ignore, ...rest } = settingsData;
+            setGlobal(prev => ({ ...prev, ...rest }));
+          }
+          setLoadError(false);
+          setLoading(false);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          tries += 1;
+          if (tries <= 5) {
+            setTimeout(load, Math.min(1000 * tries, 5000));
+          } else {
+            setLoadError(true);
+            setLoading(false);
+          }
+        });
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [user?.id, reloadNonce]);
+
+  const retryLoad = () => { setLoadError(false); setLoading(true); setReloadNonce(n => n + 1); };
 
   const handleSave = async () => {
     setSaving(true);
+    setSaveError(false);
     try {
       await api.saveSettings({ ...global });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
       console.error('Failed to save settings:', err);
+      setSaveError(true);
     } finally {
       setSaving(false);
     }
@@ -111,6 +139,18 @@ export default function SystemSettings() {
     </div>
   );
 
+  if (loadError) return (
+    <div className="min-h-full flex flex-col items-center justify-center gap-3 py-32 px-6 text-center">
+      <AlertTriangle size={32} className="text-red-400" />
+      <p className="text-sm font-semibold text-slate-700">Couldn't load settings</p>
+      <p className="text-xs text-slate-400 max-w-xs">The server may be starting up or temporarily unavailable. Your saved settings are safe — please try again.</p>
+      <button onClick={retryLoad}
+        className="mt-1 flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors">
+        <RotateCcw size={14} /> Retry
+      </button>
+    </div>
+  );
+
   return (
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-6">
 
@@ -118,6 +158,14 @@ export default function SystemSettings() {
       {saved && (
         <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm font-semibold shadow-lg">
           <CheckCircle size={14}/> Settings saved successfully!
+        </div>
+      )}
+
+      {/* Save failed — tell the admin instead of letting a cold-start timeout look
+          like a successful save that then "didn't persist". */}
+      {saveError && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold shadow-lg">
+          <AlertTriangle size={14}/> Couldn't save — please try again.
         </div>
       )}
 

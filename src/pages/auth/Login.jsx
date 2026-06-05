@@ -177,7 +177,7 @@ export default function Login() {
       {/* Email / password form */}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">{cfg.idLabel}</label>
+          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">{cfg.idLabel}<span className="text-rose-400 ml-0.5">*</span></label>
           <div className="relative">
             <cfg.idIcon size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
@@ -197,7 +197,7 @@ export default function Login() {
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Password</label>
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Password<span className="text-rose-400 ml-0.5">*</span></label>
             <Link to={`/forgot-password?role=${tab === 'student' ? 'student' : 'trainer'}`} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
               Forgot password?
             </Link>

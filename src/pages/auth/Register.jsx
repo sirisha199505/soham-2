@@ -21,7 +21,9 @@ function Field({ label, icon: Icon, value, onChange, type = 'text', placeholder,
   const focus = { borderColor: `${primaryColor}60`, boxShadow: `0 0 0 3px ${primaryColor}18` };
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">{label}</label>
+      <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+        {label}{required && <span className="text-rose-400 ml-0.5">*</span>}
+      </label>
       <div className="relative">
         <Icon size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
         <input
@@ -41,7 +43,9 @@ function PasswordField({ label, value, onChange, show, onToggle, placeholder = '
   const border = mismatch ? { borderColor: 'rgba(239,68,68,0.6)' } : (value ? focus : {});
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">{label}</label>
+      <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+        {label}{required && <span className="text-rose-400 ml-0.5">*</span>}
+      </label>
       <div className="relative">
         <Lock size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
         <input
@@ -362,13 +366,18 @@ export default function Register() {
 
           {/* Class / College */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Class / College</label>
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Class / College<span className="text-rose-400 ml-0.5">*</span></label>
             <div className="relative">
               <BookOpen size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
               <select value={studentForm.className} onChange={sS('className')} required
                 className={`${inputCls} pl-11 pr-4 appearance-none cursor-pointer`}
-                style={{ ...inputStyle, color: studentForm.className ? 'white' : 'rgba(255,255,255,0.35)' }}>
-                <option value="">Select your Class / College</option>
+                style={{ ...inputStyle, color: studentForm.className ? 'white' : 'rgba(255,255,255,0.55)' }}>
+                {/* Placeholder needs the same explicit dark bg/colour as the real
+                    options below — without it the open dropdown rendered this row as
+                    near-white text on the browser's default white option background,
+                    so it was invisible unless the cursor was hovering over it. Also
+                    disabled+hidden so it can't be re-selected once a real value is set. */}
+                <option value="" disabled style={{ color: '#94a3b8', background: '#1e293b' }}>Select your Class / College</option>
                 {CLASS_OPTIONS.map(c => (
                   <option key={c} value={c} style={{ color: 'white', background: '#1e293b' }}>{c}</option>
                 ))}
