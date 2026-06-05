@@ -71,8 +71,14 @@ async function request(method, path, body, attempt = 0) {
     const msg = data.data || data.error || data.message || `Request failed (${res.status})`;
     const err = new Error(msg);
     err.status = res.status;
-    if (res.status === 401) {
-      console.warn(`[RQA] 401 from ${path} — session may need re-validation`);
+    // A 401 on an authenticated request means this token is no longer the active
+    // session — e.g. the account was logged in on another device (single-session
+    // enforcement) or the token expired. Sign this device out so it returns to the
+    // login screen. (Transient/server issues come back as 503 and are retried above,
+    // so a 401 here is genuinely an invalid session.)
+    if (res.status === 401 && !isNoAuth) {
+      console.warn(`[RQA] 401 from ${path} — session ended (logged in elsewhere or expired); signing out`);
+      clearSession();
     }
     throw err;
   }

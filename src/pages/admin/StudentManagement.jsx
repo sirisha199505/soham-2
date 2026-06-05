@@ -174,7 +174,7 @@ function ActionsMenu({ student, levelList, onAction }) {
             {unlockableLevels.map(lvl => (
               <button key={lvl.id} onClick={() => { onAction('unlock', student, lvl.id); setOpen(false); }}
                 className="flex items-center gap-2 w-full px-3 py-2 text-xs text-slate-700 hover:bg-amber-50">
-                <Unlock size={13} className="text-amber-500" /> Unlock {lvl.title || `Level ${lvl.id}`}
+                <Unlock size={13} className="text-amber-500" /> Unlock {lvl.title || lvl.name || `Level ${lvl.id}`}
               </button>
             ))}
             <div className="h-px bg-slate-100 my-1" />
@@ -333,7 +333,8 @@ export default function StudentManagement() {
     if (action === 'unlock') {
       // `lvl` is the level's DB id; show its real title in the toast (it was
       // showing the raw id, e.g. "Level 25", instead of "Level 2").
-      const lvlTitle = levelList.find(l => l.id === lvl)?.title || `Level ${lvl}`;
+      const lvlMeta  = levelList.find(l => l.id === lvl);
+      const lvlTitle = lvlMeta?.title || lvlMeta?.name || `Level ${lvl}`;
       markOverrideLocally(student.id, lvl);
       await setStudentOverride(student.id, lvl);
       showToast(`${lvlTitle} unlocked for ${student.name || student.uniqueId || student.id}`);
@@ -479,10 +480,10 @@ export default function StudentManagement() {
               {levelList.slice(1).map(lvl => (
                   <button
                     key={lvl.id}
-                    onClick={() => handleBulkUnlock(lvl.id, lvl.title)}
+                    onClick={() => handleBulkUnlock(lvl.id, lvl.title || lvl.name)}
                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-white border border-amber-300 text-amber-700 hover:bg-amber-100 active:scale-[0.97] transition-all shadow-sm"
                   >
-                    <Unlock size={12} /> Unlock {lvl.title || `Level ${lvl.id}`} for All
+                    <Unlock size={12} /> Unlock {lvl.title || lvl.name || `Level ${lvl.id}`} for All
                   </button>
                 ))}
             </div>
@@ -523,7 +524,7 @@ export default function StudentManagement() {
               <tr className="bg-slate-50 border-b border-slate-100">
                 {[
                   '#', 'Name', 'Mobile', tab === 'coaches' ? 'Organization' : 'School',
-                  ...levelList.map(l => l.title || `Level ${l.id}`),
+                  ...levelList.map(l => l.title || l.name || `Level ${l.id}`),
                   'Status', 'Actions',
                 ].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
