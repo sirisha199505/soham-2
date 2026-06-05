@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { scrollToTop } from '../../utils/scroll';
 import {
   Users, Search, RefreshCw, CheckCircle,
@@ -167,23 +167,44 @@ function StudentModal({ student, levelList, onClose, onPhoneUpdated }) {
 /* ── Actions dropdown ── */
 function ActionsMenu({ student, levelList, onAction }) {
   const [open, setOpen] = useState(false);
+  const btnRef = useRef(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
   // Levels that can be unlocked = all except the first
   const unlockableLevels = levelList.length > 1
     ? levelList.slice(1)
     : [{ id: 2, title: 'Level 2' }, { id: 3, title: 'Level 3' }];
 
+  // Position the menu with FIXED coords from the button's rect so it escapes the
+  // table's `overflow-x-auto` (which also clips vertically). Without this, with
+  // only one row the menu was cut off by the short table card and unreachable.
+  const toggle = () => {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      const menuW = 192;   // w-48
+      const menuH = 40 + unlockableLevels.length * 34 + 90; // approx content height
+      let left = Math.max(8, r.right - menuW);
+      let top  = r.bottom + 6;
+      // Flip above the button if it would overflow the viewport bottom.
+      if (top + menuH > window.innerHeight && r.top - menuH > 8) top = r.top - menuH - 6;
+      setPos({ top, left });
+    }
+    setOpen(o => !o);
+  };
+
   return (
-    <div className="relative">
+    <>
       <button
-        onClick={() => setOpen(p => !p)}
+        ref={btnRef}
+        onClick={toggle}
         className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
       >
         Actions <ChevronDown size={11} />
       </button>
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-8 z-20 bg-white rounded-xl border border-slate-100 shadow-xl w-48 py-1 overflow-hidden">
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="fixed z-50 bg-white rounded-xl border border-slate-100 shadow-xl w-48 py-1 overflow-hidden"
+            style={{ top: pos.top, left: pos.left }}>
             <button onClick={() => { onAction('view', student); setOpen(false); }}
               className="flex items-center gap-2 w-full px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
               <Eye size={13} /> View Details
@@ -209,7 +230,7 @@ function ActionsMenu({ student, levelList, onAction }) {
           </div>
         </>
       )}
-    </div>
+    </>
   );
 }
 

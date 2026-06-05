@@ -180,3 +180,11 @@ h1,h2,h3,h4,h5,h6 {
 .role-school_admin  { background: linear-gradient(135deg,#1E3A8A22,#1E3A8A11); border-color: #1E3A8A44; color: #1E3A8A; }
 .role-district_admin{ background: linear-gradient(135deg,#8B5CF622,#8B5CF611); border-color: #8B5CF644; color: #7c3aed; }
 .role-super_admin   { background: linear-gradient(135deg,#10B98122,#10B98111); border-color: #10B98144; color: #059669; }
+
+/* Hide the browser's native password-reveal / clear controls (Edge & IE add
+   ::-ms-reveal, some webkit builds add their own). The app provides its own eye
+   toggle, so without this those browsers show TWO eye icons on password fields. */
+input::-ms-reveal,
+input::-ms-clear { display: none; }
+input::-webkit-credentials-auto-fill-button,
+input::-webkit-strong-password-auto-fill-button { display: none !important; visibility: hidden; pointer-events: none; }
