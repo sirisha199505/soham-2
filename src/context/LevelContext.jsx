@@ -180,7 +180,7 @@ export function LevelProvider({ children }) {
     // 5. All other levels stay locked until admin explicitly opens them.
     //    Completing a previous level does NOT auto-unlock the next one.
     return 'locked';
-  }, [progress, overrides, levelSettings, fetchProgress, levelSettingsLoaded]);
+  }, [progress, overrides, levelSettings, fetchProgress, levelSettingsLoaded, user?.role]);
 
   const markContentRead = useCallback(async (userId, levelId) => {
     try {

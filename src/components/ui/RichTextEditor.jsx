@@ -41,7 +41,10 @@ function Sep() {
 export default function RichTextEditor({ value, onChange, placeholder = 'Write section content…', minHeight = 180 }) {
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+      // Newer @tiptap/starter-kit bundles its own link & underline extensions;
+      // disable them here so our explicitly-configured ones below are the only
+      // copy (otherwise tiptap warns about duplicate extension names).
+      StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: false, underline: false }),
       Underline,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Placeholder.configure({ placeholder }),

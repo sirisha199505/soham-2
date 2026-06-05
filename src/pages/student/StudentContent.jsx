@@ -158,16 +158,30 @@ function PDFPageRenderer({ pdfData, pageNum, zoom, onDocLoaded }) {
     );
   }
   if (status === 'error') {
+    // pdf.js couldn't render the file — most often because the document is hosted
+    // on S3 without CORS headers (the JS fetch is blocked), or the pdf.js CDN
+    // didn't load. Fall back to the browser's NATIVE inline PDF viewer via an
+    // <iframe>, which displays the document without needing CORS, so the reader
+    // still works. Only if there is no URL at all do we show a hard error.
+    if (!blobUrl) {
+      return (
+        <div className="flex flex-col items-center justify-center py-20 gap-4 text-center px-6">
+          <AlertCircle size={32} className="text-rose-400" />
+          <p className="font-semibold text-slate-700">Could not load this document</p>
+        </div>
+      );
+    }
     return (
-      <div className="flex flex-col items-center justify-center py-20 gap-4 text-center px-6">
-        <AlertCircle size={32} className="text-rose-400" />
-        <p className="font-semibold text-slate-700">Could not load this document</p>
-        {blobUrl && (
+      <div className="w-full">
+        <iframe src={blobUrl} title="Document"
+          className="w-full rounded-xl border border-slate-200 bg-white"
+          style={{ height: '72vh' }} />
+        <div className="flex items-center justify-center mt-3">
           <a href={blobUrl} target="_blank" rel="noreferrer"
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold">
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors">
             <ExternalLink size={13} /> Open in New Tab
           </a>
-        )}
+        </div>
       </div>
     );
   }

@@ -9,7 +9,7 @@ import { useLevel } from '../../context/LevelContext';
 import { useTheme } from '../../context/ThemeContext';
 import { api } from '../../utils/api';
 import { LEVELS } from '../../utils/levelData';
-import { getPerformanceLabel, compareLevels } from '../../utils/helpers';
+import { getPerformanceLabel, compareLevels, levelAudienceAllows } from '../../utils/helpers';
 
 const FALLBACK_COLORS = [
   { from: '#3BC0EF', to: '#1E3A8A' },
@@ -524,7 +524,11 @@ export default function StudentDashboard() {
   // loaded — otherwise the attempt meter briefly shows the full limit (e.g. "3 of 3
   // left") before the real count arrives, which reads as the count resetting.
   const isProgressLoading = userId ? (!progressFetched[userId] || !attemptsLoaded) : false;
-  const visibleLevels = levelSettingsLoaded ? buildLevelList(levelSettings) : [];
+  // Access Control: hide levels not meant for this account type (Students Only /
+  // Trainers Only). 'both' and any admin viewer see everything.
+  const visibleLevels = levelSettingsLoaded
+    ? buildLevelList(levelSettings).filter(l => levelAudienceAllows(levelSettings[l.id]?.audience, user?.role))
+    : [];
 
   const statuses = isProgressLoading
     ? visibleLevels.map(() => 'loading')

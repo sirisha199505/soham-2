@@ -272,9 +272,12 @@ function LevelCard({ levelId, isFirst, settings, stats, onEdit, onDelete }) {
             </h3>
             <p className="text-white/80 text-sm mt-0.5">{s.subtitle || ''}</p>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          <div className="flex flex-col items-end gap-1.5 shrink-0 ml-2">
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${s.active ? 'bg-white/20 text-white' : 'bg-black/20 text-white/60'}`}>
               {s.active ? '● LIVE' : '○ OFF'}
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/20 text-white whitespace-nowrap">
+              {{ student: '👨‍🎓 Students', trainer: '🧑‍🏫 Trainers' }[s.audience] || '👥 Both'}
             </span>
           </div>
         </div>
