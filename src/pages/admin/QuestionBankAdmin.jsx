@@ -1071,14 +1071,13 @@ function CategorySection({ cat, levelId, levelName, pal, onRenamed, onDeleted, s
 // ═══════════════════════════════════════════════════════════════════════════
 // Level Section — loads categories from API, manages them via CRUD
 // ═══════════════════════════════════════════════════════════════════════════
-function LevelSection({ level, bankId, index, onRenamed, onDeleted, showToast }) {
+function LevelSection({ level, bankId, index, onRenamed, showToast }) {
   const pal = levelPal(index);
   const [categories,  setCategories]  = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [collapsed,   setCollapsed]   = useState(false);
   const [addingCat,   setAddingCat]   = useState(false);
   const [renaming,    setRenaming]    = useState(false);
-  const [confirmDel,  setConfirmDel]  = useState(false);
   const [importOpen,  setImportOpen]  = useState(false);
   const [saving,      setSaving]      = useState(false);
 
@@ -1107,15 +1106,6 @@ function LevelSection({ level, bankId, index, onRenamed, onDeleted, showToast })
       onRenamed?.(level.id, name);
       setRenaming(false);
     } catch (err) { showToast?.(`Failed to rename: ${err.message}`, 'red'); }
-  };
-
-  const handleDeleteLevel = async () => {
-    setConfirmDel(false);
-    try {
-      await api.deleteQbLevel(level.id);
-      onDeleted?.(level.id);
-      showToast?.(`${level.name} deleted.`);
-    } catch (err) { showToast?.(`Failed to delete: ${err.message}`, 'red'); }
   };
 
   const handleImport = async (questions, catId, newCatName) => {
@@ -1197,7 +1187,6 @@ function LevelSection({ level, bankId, index, onRenamed, onDeleted, showToast })
                 <Plus size={13}/>Add Category
               </button>
               <button onClick={()=>setRenaming(true)} className="p-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white/80 hover:text-white transition-all"><Edit2 size={13}/></button>
-              <button onClick={()=>setConfirmDel(true)} className="p-1.5 rounded-xl bg-white/15 hover:bg-red-400/50 text-white/80 hover:text-white transition-all"><Trash2 size={13}/></button>
               <button onClick={()=>setCollapsed(p=>!p)} className="p-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white transition-all">{collapsed?<ChevronDown size={15}/>:<ChevronUp size={15}/>}</button>
             </div>
           )}
@@ -1255,9 +1244,6 @@ function LevelSection({ level, bankId, index, onRenamed, onDeleted, showToast })
           onClose={() => setImportOpen(false)}
           onImport={handleImport}/>
       )}
-      <DeleteModal isOpen={confirmDel} onClose={()=>setConfirmDel(false)} onConfirm={handleDeleteLevel}
-        title={`Delete ${level.name}?`}
-        message={`"${level.name}" and all its ${categories.length} categories will be permanently deleted.`}/>
     </div>
   );
 }
@@ -1367,7 +1353,6 @@ function BankDetail({ bank, bankIndex, onBankRenamed, showToast }) {
           {levels.map((level, idx) => (
             <LevelSection key={level.id} level={level} bankId={bank.id} index={idx}
               onRenamed={(levelId, name) => setLevels(prev => prev.map(l => l.id === levelId ? { ...l, name } : l))}
-              onDeleted={(levelId) => setLevels(prev => prev.filter(l => l.id !== levelId))}
               showToast={showToast}/>
           ))}
           {!addingLevel && (

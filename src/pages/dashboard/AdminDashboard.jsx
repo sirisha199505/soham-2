@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Users, Trophy, TrendingUp, CheckCircle, BarChart2,
@@ -13,17 +13,13 @@ import { useAuth } from '../../context/AuthContext';
 import { api } from '../../utils/api';
 import { compareLevels } from '../../utils/helpers';
 
-function computeStats(users) {
-  // api.getStudents() returns role-0 (students) AND role-2 (coaches) together
-  const students   = users.filter(u => u.role !== 'coach');
-  const coachCount = users.filter(u => u.role === 'coach').length;
-
+// Aggregate performance metrics for ONE group of users (students OR trainers).
+function aggregate(list) {
   const levelCounts = {}; // String(levelId) → completion count
   const allScores = [];
-  let passCount = 0, failCount = 0;
-  let totalAttempts = 0;
+  let passCount = 0, failCount = 0, totalAttempts = 0;
 
-  students.forEach(s => {
+  list.forEach(s => {
     totalAttempts += s.attemptsCount || 0;
     Object.entries(s.levels || {}).forEach(([lid, lp]) => {
       if (lp?.status === 'completed') {
@@ -39,7 +35,38 @@ function computeStats(users) {
 
   const avgScore = allScores.length ? Math.round(allScores.reduce((a, b) => a + b, 0) / allScores.length) : 0;
   const passRate = passCount + failCount > 0 ? Math.round((passCount / (passCount + failCount)) * 100) : 0;
-  return { totalStudents: students.length, coachCount, totalAttempts, avgScore, passRate, passCount, failCount, levelCounts };
+  return { count: list.length, totalAttempts, avgScore, passRate, passCount, failCount, levelCounts };
+}
+
+// api.getStudents() returns role-0 (students) AND role-2 (coaches/trainers)
+// together — split them and aggregate each group SEPARATELY so the dashboard can
+// show distinct student vs trainer stats.
+function computeStats(users) {
+  return {
+    student: aggregate(users.filter(u => u.role !== 'coach')),
+    trainer: aggregate(users.filter(u => u.role === 'coach')),
+  };
+}
+
+// Top-5 most-recent level completers for a group (falls back to first few).
+function buildRecent(users, isStudents) {
+  const list = users.filter(u => isStudents ? u.role !== 'coach' : u.role === 'coach');
+  const mapped = list.map(s => {
+    const entries  = Object.values(s.levels || {}).filter(l => l?.status === 'completed');
+    const latestTs = entries.reduce((best, l) => {
+      const t = l.lastCompletedAt || l.completedAt || '';
+      return t > best ? t : best;
+    }, '');
+    return {
+      id:   s.id,
+      name: s.name || s.uniqueId || '—',
+      sub:  isStudents ? `${s.schoolName || '—'} · Class ${s.className || '—'}` : (s.schoolName || s.organizationName || '—'),
+      latestTs,
+      completedCount: entries.length,
+    };
+  });
+  const done = mapped.filter(s => s.completedCount > 0).sort((a, b) => b.latestTs.localeCompare(a.latestTs)).slice(0, 5);
+  return done.length > 0 ? done : mapped.slice(0, 5);
 }
 
 /* ── static chart data ── */
@@ -88,12 +115,10 @@ function QuickAction({ icon, label, to, color }) {
   );
 }
 
-const EMPTY_STATS = { totalStudents: 0, coachCount: 0, totalAttempts: 0, avgScore: 0, passRate: 0, passCount: 0, failCount: 0, levelCounts: {} };
-
 export default function AdminDashboard() {
   const { user } = useAuth();
-  const [stats,      setStats]      = useState(EMPTY_STATS);
-  const [recent,     setRecent]     = useState([]);
+  const [users,      setUsers]      = useState([]); // raw role-0 + role-2 list
+  const [view,       setView]       = useState('students'); // 'students' | 'trainers'
   const [refreshed,  setRefreshed]  = useState(false);
   const [levelsList, setLevelsList] = useState([]); // sorted levels from DB
   // Distinguish "still loading the first response" from "loaded, genuinely empty".
@@ -115,26 +140,7 @@ export default function AdminDashboard() {
           ? levelsData.sort(compareLevels)
           : [];
         setLevelsList(sorted);
-        setStats(computeStats(students));
-
-        // Show students who most recently completed any level
-        const withCompletion = students
-          .map(s => {
-            const entries = Object.values(s.levels || {}).filter(l => l?.status === 'completed');
-            const latestTs = entries.reduce((best, l) => {
-              const t = l.lastCompletedAt || l.completedAt || '';
-              return t > best ? t : best;
-            }, '');
-            const completedCount = entries.length;
-            return { id: s.uniqueId, school: s.schoolName || '—', class: s.className || '—', latestTs, completedCount };
-          })
-          .filter(s => s.completedCount > 0)
-          .sort((a, b) => b.latestTs.localeCompare(a.latestTs))
-          .slice(0, 5);
-
-        setRecent(withCompletion.length > 0 ? withCompletion : students.slice(0, 5).map(s => ({
-          id: s.uniqueId, school: s.schoolName || '—', class: s.className || '—', latestTs: '', completedCount: 0,
-        })));
+        setUsers(Array.isArray(students) ? students : []);
         setLoaded(true);
         setError(false);
       })
@@ -168,6 +174,14 @@ export default function AdminDashboard() {
     }
   };
 
+  // Per-group stats + the active selection. These hooks must run on every render
+  // (before the early-return loading/error gates below), so they live here.
+  const { student, trainer } = useMemo(() => computeStats(users), [users]);
+  const isStudents = view === 'students';
+  const active     = isStudents ? student : trainer;
+  const groupLabel = isStudents ? 'Students' : 'Trainers';
+  const recent     = useMemo(() => buildRecent(users, isStudents), [users, isStudents]);
+
   // First-load gate: a clear loading state instead of a blank zeroed dashboard.
   if (!loaded && !error) {
     return (
@@ -200,14 +214,14 @@ export default function AdminDashboard() {
   const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 17 ? 'Good afternoon' : 'Good evening';
 
   const pieData = [
-    { name: 'Passed', value: Math.max(stats.passCount, 1) },
-    { name: 'Failed', value: Math.max(stats.failCount, 0) },
+    { name: 'Passed', value: Math.max(active.passCount, 1) },
+    { name: 'Failed', value: Math.max(active.failCount, 0) },
   ];
   const PIE_COLORS = ['#10B981', '#EF4444'];
 
   const levelCompletionData = levelsList.map((lvl, i) => ({
     level:     lvl.title || `Level ${i + 1}`,
-    completed: stats.levelCounts?.[String(lvl.id)] || 0,
+    completed: active.levelCounts?.[String(lvl.id)] || 0,
     color:     levelColor(i),
   }));
 
@@ -225,38 +239,68 @@ export default function AdminDashboard() {
             {now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
-        <button
-          onClick={refresh}
-          disabled={refreshing}
-          className={`flex items-center gap-2 px-2.5 sm:px-4 py-2 rounded-xl border text-sm font-medium transition-all disabled:opacity-70 shrink-0
-            ${refreshed ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-        >
-          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-          <span className="hidden sm:inline">{refreshing ? 'Refreshing…' : refreshed ? 'Refreshed!' : 'Refresh Stats'}</span>
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Students / Trainers toggle — switches every stat, chart and list
+              below; the counts stay visible so both groups are differentiable. */}
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-white border border-slate-200">
+            {[
+              { key: 'students', label: 'Students', Icon: Users,     count: student.count },
+              { key: 'trainers', label: 'Trainers', Icon: UserCheck, count: trainer.count },
+            ].map(t => {
+              const on = view === t.key;
+              return (
+                <button key={t.key} onClick={() => setView(t.key)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    on ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}>
+                  <t.Icon size={13} />
+                  <span className="hidden sm:inline">{t.label}</span>
+                  <span className={`px-1.5 py-px rounded-full text-[10px] font-bold ${on ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-500'}`}>{t.count}</span>
+                </button>
+              );
+            })}
+          </div>
+          <button
+            onClick={refresh}
+            disabled={refreshing}
+            className={`flex items-center gap-2 px-2.5 sm:px-4 py-2 rounded-xl border text-sm font-medium transition-all disabled:opacity-70 shrink-0
+              ${refreshed ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+          >
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+            <span className="hidden sm:inline">{refreshing ? 'Refreshing…' : refreshed ? 'Refreshed!' : 'Refresh Stats'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── Group indicator ── */}
+      <div className="flex items-center gap-2 -mb-2">
+        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+          isStudents ? 'bg-indigo-50 text-indigo-600' : 'bg-violet-50 text-violet-600'}`}>
+          {isStudents ? <Users size={12} /> : <UserCheck size={12} />}
+          Showing {groupLabel}
+        </span>
+        <span className="text-xs text-slate-400">{active.count} registered</span>
       </div>
 
       {/* ── Top stat cards — grows dynamically with level count ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-        <StatCard label="Total Students" value={stats.totalStudents} icon={<Users size={18} />} color="#4F46E5" sub="Registered" to="/admin/students" />
+        <StatCard label={`Total ${groupLabel}`} value={active.count} icon={isStudents ? <Users size={18} /> : <UserCheck size={18} />} color={isStudents ? '#4F46E5' : '#8B5CF6'} sub="Registered" to="/admin/students" />
         {levelsList.map((lvl, i) => (
           <StatCard
             key={lvl.id}
             label={`${lvl.title || `Level ${i + 1}`} Done`}
-            value={stats.levelCounts?.[String(lvl.id)] || 0}
+            value={active.levelCounts?.[String(lvl.id)] || 0}
             icon={i === levelsList.length - 1 ? <Trophy size={18} /> : <CheckCircle size={18} />}
             color={levelColor(i)}
-            sub="Completions"
+            sub={`${groupLabel} completions`}
           />
         ))}
       </div>
 
       {/* ── Second stat row ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Trainers"            value={stats.coachCount}              icon={<UserCheck size={18} />}  color="#8B5CF6" sub="Registered trainers" />
-        <StatCard label="Pass Rate"          value={`${stats.passRate}%`}          icon={<TrendingUp size={18} />} color="#10B981" sub="Across all levels" />
-        <StatCard label="Avg Score"          value={`${stats.avgScore}%`}          icon={<BarChart2 size={18} />}  color="#F59E0B" sub="All attempts" />
-        <StatCard label="Total Attempts"     value={stats.totalAttempts}           icon={<BookOpen size={18} />}   color="#3BC0EF" sub="Exam submissions" />
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <StatCard label="Pass Rate"      value={`${active.passRate}%`}      icon={<TrendingUp size={18} />} color="#10B981" sub={`${groupLabel} · all levels`} />
+        <StatCard label="Avg Score"      value={`${active.avgScore}%`}      icon={<BarChart2 size={18} />}  color="#F59E0B" sub={`${groupLabel} · all attempts`} />
+        <StatCard label="Total Attempts" value={active.totalAttempts}       icon={<BookOpen size={18} />}   color="#3BC0EF" sub={`${groupLabel} exam submissions`} />
       </div>
 
       {/* ── Charts row ── */}
@@ -300,7 +344,7 @@ export default function AdminDashboard() {
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <div className="mb-4">
             <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Pass vs Fail</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Overall pass/fail ratio</p>
+            <p className="text-xs text-slate-400 mt-0.5">{groupLabel} pass/fail ratio</p>
           </div>
           <div className="h-44 min-w-0 flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
@@ -315,12 +359,12 @@ export default function AdminDashboard() {
           </div>
           <div className="mt-2 flex justify-around text-center">
             <div>
-              <p className="text-2xl font-bold text-green-600" style={{ fontFamily: 'Space Grotesk' }}>{stats.passCount}</p>
+              <p className="text-2xl font-bold text-green-600" style={{ fontFamily: 'Space Grotesk' }}>{active.passCount}</p>
               <p className="text-xs text-slate-400">Passed</p>
             </div>
             <div className="w-px bg-slate-100" />
             <div>
-              <p className="text-2xl font-bold text-red-500" style={{ fontFamily: 'Space Grotesk' }}>{stats.failCount}</p>
+              <p className="text-2xl font-bold text-red-500" style={{ fontFamily: 'Space Grotesk' }}>{active.failCount}</p>
               <p className="text-xs text-slate-400">Failed</p>
             </div>
           </div>
@@ -332,7 +376,7 @@ export default function AdminDashboard() {
 
         {/* Level bar chart */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-          <h3 className="font-bold text-slate-800 mb-4" style={{ fontFamily: 'Space Grotesk' }}>Level Completions</h3>
+          <h3 className="font-bold text-slate-800 mb-4" style={{ fontFamily: 'Space Grotesk' }}>Level Completions — {groupLabel}</h3>
           {levelCompletionData.length === 0 ? (
             <div className="h-44 flex flex-col items-center justify-center text-center gap-2">
               <BookOpen size={28} className="text-slate-200" />
@@ -360,7 +404,7 @@ export default function AdminDashboard() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Recent Completions</h3>
-              <p className="text-[10px] text-slate-400 mt-0.5">Students who finished a level last</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">{groupLabel} who finished a level last</p>
             </div>
             <Link to="/admin/students" className="text-xs font-semibold text-indigo-500 hover:text-indigo-700 flex items-center gap-1">
               View all <ArrowRight size={11} />
@@ -379,8 +423,8 @@ export default function AdminDashboard() {
                     {i + 1}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-mono font-bold text-slate-700 truncate">{s.id}</p>
-                    <p className="text-[10px] text-slate-400">{s.school} · Class {s.class}</p>
+                    <p className="text-xs font-bold text-slate-700 truncate">{s.name}</p>
+                    <p className="text-[10px] text-slate-400 truncate">{s.sub}</p>
                   </div>
                   {s.completedCount > 0 && (
                     <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-green-50 text-green-600 border border-green-100">
