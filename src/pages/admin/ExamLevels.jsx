@@ -53,7 +53,7 @@ function AddLevelModal({ onSave, onClose, existingTitles = [] }) {
           <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Add New Level</h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={16} /></button>
         </div>
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div>
             <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Level Title <span className="text-red-400">*</span></label>
             <input value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
