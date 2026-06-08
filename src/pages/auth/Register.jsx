@@ -120,7 +120,7 @@ export default function Register() {
     e.preventDefault();
     setError('');
     const effectiveClass = studentForm.className === 'Other' ? studentForm.customClass.trim() : studentForm.className;
-    if (!effectiveClass)                                           { setError('Please select or enter your class / college.'); return; }
+    if (!effectiveClass)                                           { setError('Please select or enter your Class / Course.'); return; }
     const cleanPhone = studentForm.phoneNumber.replace(/\D/g, '');
     if (cleanPhone.length !== 10 || cleanPhone.startsWith('0'))    { setError('Enter a valid 10-digit mobile number (no leading 0).'); return; }
     const studentEmail = studentForm.email.trim();
