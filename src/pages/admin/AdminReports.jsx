@@ -180,7 +180,7 @@ export default function AdminReports() {
 
   const handleExportStudents = () => {
     exportCSV('student_performance.csv', filteredRows.map(r => {
-      const base = { StudentID: r.id, School: r.school, Class: r.class };
+      const base = { StudentID: r.id, Institute: r.school, 'Class / Course': r.class };
       levelIds.forEach(id => {
         const ld = r[id];
         base[`L${id}_Status`] = ld?.status || 'not started';
@@ -339,7 +339,7 @@ export default function AdminReports() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
-                {['Student ID', 'School', 'Class', ...levelIds.map(id => levelData[id]?.title || `Level ${id}`)].map(h => (
+                {['Student ID', 'Institute', 'Class / Course', ...levelIds.map(id => levelData[id]?.title || `Level ${id}`)].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>

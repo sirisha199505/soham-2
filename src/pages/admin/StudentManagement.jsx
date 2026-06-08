@@ -49,8 +49,8 @@ function StudentModal({ student, levelList, onClose }) {
         { label: 'Status',       value: student.disabled ? 'Disabled' : 'Active' },
       ]
     : [
-        { label: 'School', value: student.schoolName },
-        { label: 'Class',  value: student.className },
+        { label: 'Institute',     value: student.schoolName },
+        { label: 'Class / Course', value: student.className },
         { label: 'Status', value: student.disabled ? 'Disabled' : 'Active' },
       ];
 
@@ -422,7 +422,7 @@ export default function StudentManagement() {
         <div className="relative flex-1 max-w-xs">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
-            placeholder="Search by name, mobile, school…"
+            placeholder="Search by name, mobile, institute…"
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
             className="w-full pl-9 pr-4 py-2.5 text-sm bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
@@ -507,7 +507,7 @@ export default function StudentManagement() {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
                 {[
-                  '#', 'Name', 'Mobile', tab === 'coaches' ? 'Organization' : 'School',
+                  '#', 'Name', 'Mobile', tab === 'coaches' ? 'Organization' : 'Institute',
                   ...levelList.map(l => l.title || l.name || `Level ${l.id}`),
                   'Status', 'Actions',
                 ].map(h => (

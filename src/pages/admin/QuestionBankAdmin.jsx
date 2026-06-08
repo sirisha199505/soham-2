@@ -109,42 +109,61 @@ const blankForType   = (t, af='student') =>
   t==='hotspot'    ? blankHotspot(af)    :
   blankMcq(af);
 
-// ─── CSV parser ───────────────────────────────────────────────────────────
+// ─── CSV parser (header-aware) ──────────────────────────────────────────────
+// Columns are resolved by header NAME, not fixed position, so new columns
+// (e.g. `category`) can be added anywhere without breaking older files.
+const splitRow  = (row) => (row.match(/(".*?"|[^,]+|(?<=,)(?=,)|(?<=,)$|^(?=,))/g) || []);
+const cleanCell = (c='') => c.replace(/^"|"$/g,'').trim();
+// Normalise a header cell to its bare key: lowercase, drop any "(hint)" suffix.
+const normHeader = (h='') => cleanCell(h).toLowerCase().split('(')[0].trim().replace(/\s+/g,'_');
+
 function parseCSV(text) {
   const lines = text.trim().split('\n').filter(Boolean);
   if (lines.length < 2) return [];
+
+  const headerCells = splitRow(lines[0]).map(normHeader);
+  const idx = {};
+  headerCells.forEach((h, i) => { if (h && !(h in idx)) idx[h] = i; });
+
   const questions = [];
-  const AF_VALUES = ['student', 'trainer', 'both'];
+  const AF_VALUES   = ['student', 'trainer', 'both'];
+  const VALID_CATS  = ['robotics', 'chemistry', 'physics', 'mathematics'];
+
   for (const row of lines.slice(1)) {
-    const cols = row.match(/(".*?"|[^,]+|(?<=,)(?=,)|(?<=,)$|^(?=,))/g) || [];
-    const clean = (c='') => c.replace(/^"|"$/g,'').trim();
-    const type = clean(cols[0])?.toLowerCase();
-    const text = clean(cols[1]);
+    const cols  = splitRow(row);
+    const col   = (name) => cleanCell(cols[idx[name]] ?? '');
+    const type  = col('type')?.toLowerCase();
+    const text  = col('text');
     if (!text) continue;
-    const diff         = ['easy','medium','hard'].includes(clean(cols[2])) ? clean(cols[2]) : 'easy';
-    const applicableFor = AF_VALUES.includes(clean(cols[18])?.toLowerCase()) ? clean(cols[18]).toLowerCase() : 'student';
-    if (type==='mcq')                         questions.push({ id:uid('q'), type:'mcq',   text, difficulty:diff, applicableFor, options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
-    else if (type==='match')                  questions.push({ id:uid('q'), type:'match', text, difficulty:diff, applicableFor, pairs:[{left:clean(cols[10]),leftImage:'',right:clean(cols[11]),rightImage:''},{left:clean(cols[12]),leftImage:'',right:clean(cols[13]),rightImage:''},{left:clean(cols[14]),leftImage:'',right:clean(cols[15]),rightImage:''},{left:clean(cols[16]),leftImage:'',right:clean(cols[17]),rightImage:''}], explanation:'' });
-    else if (type==='label'||type==='image')  questions.push({ id:uid('q'), type:'label', text, difficulty:diff, applicableFor, imageUrl:clean(cols[9])||'', options:[clean(cols[3]),clean(cols[4]),clean(cols[5]),clean(cols[6])].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((clean(cols[7])||'A').toUpperCase())), explanation:clean(cols[8])||'' });
+    const diff          = ['easy','medium','hard'].includes(col('difficulty')) ? col('difficulty') : 'easy';
+    const applicableFor = AF_VALUES.includes(col('applicable_for')?.toLowerCase()) ? col('applicable_for').toLowerCase() : 'student';
+    const rawCat        = col('category')?.toLowerCase();
+    // Blank/unknown category → '' so the import falls back to the target category's subject.
+    const category      = VALID_CATS.includes(rawCat) ? rawCat : '';
+    const base          = { id:uid('q'), text, difficulty:diff, applicableFor, category };
+
+    if (type==='mcq')                         questions.push({ ...base, type:'mcq',   options:[col('opt_a'),col('opt_b'),col('opt_c'),col('opt_d')].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((col('correct')||'A').toUpperCase())), explanation:col('explanation')||'' });
+    else if (type==='match')                  questions.push({ ...base, type:'match', pairs:[{left:col('p1_left'),leftImage:'',right:col('p1_right'),rightImage:''},{left:col('p2_left'),leftImage:'',right:col('p2_right'),rightImage:''},{left:col('p3_left'),leftImage:'',right:col('p3_right'),rightImage:''},{left:col('p4_left'),leftImage:'',right:col('p4_right'),rightImage:''}], explanation:'' });
+    else if (type==='label'||type==='image')  questions.push({ ...base, type:'label', imageUrl:col('image_url')||'', options:[col('opt_a'),col('opt_b'),col('opt_c'),col('opt_d')].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((col('correct')||'A').toUpperCase())), explanation:col('explanation')||'' });
     else if (type==='truefalse'||type==='tf') {
       // `correct` column holds True/False (also accepts T/F or A/B). True = index 0.
-      const c = clean(cols[7]).toLowerCase();
+      const c = col('correct').toLowerCase();
       const correct = (c==='false'||c==='f'||c==='b') ? 1 : 0;
-      questions.push({ id:uid('q'), type:'truefalse', text, difficulty:diff, applicableFor,
-        options:[{text:'True',imageUrl:''},{text:'False',imageUrl:''}], correct, explanation:clean(cols[8])||'' });
+      questions.push({ ...base, type:'truefalse',
+        options:[{text:'True',imageUrl:''},{text:'False',imageUrl:''}], correct, explanation:col('explanation')||'' });
     }
     else if (type==='order') {
-      // `steps` column (19): the steps in CORRECT order, separated by " | ".
-      const steps = clean(cols[19]).split('|').map(s=>s.trim()).filter(Boolean);
+      // `steps` column: the steps in CORRECT order, separated by " | ".
+      const steps = col('steps').split('|').map(s=>s.trim()).filter(Boolean);
       if (steps.length < 2) continue;
-      questions.push({ id:uid('q'), type:'order', text, difficulty:diff, applicableFor,
-        options: steps.map(s=>({text:s,imageUrl:''})), correct:0, explanation:clean(cols[8])||'' });
+      questions.push({ ...base, type:'order',
+        options: steps.map(s=>({text:s,imageUrl:''})), correct:0, explanation:col('explanation')||'' });
     }
     else if (type==='categorize') {
-      // `groups` column (20): "Group1: a, b; Group2: c, d" — ';' splits groups,
+      // `groups` column: "Group1: a, b; Group2: c, d" — ';' splits groups,
       // ':' separates a group name from its comma-separated items.
       const buckets=[]; const items=[];
-      clean(cols[20]).split(';').map(s=>s.trim()).filter(Boolean).forEach(group=>{
+      col('groups').split(';').map(s=>s.trim()).filter(Boolean).forEach(group=>{
         const ci = group.indexOf(':'); if (ci < 0) return;
         const bname = group.slice(0,ci).trim(); if (!bname) return;
         const bidx = buckets.length; buckets.push(bname);
@@ -152,14 +171,14 @@ function parseCSV(text) {
           .forEach(it=>items.push({ text:it, imageUrl:'', bucket:bidx }));
       });
       if (buckets.length < 2 || items.length < 2) continue;
-      questions.push({ id:uid('q'), type:'categorize', text, difficulty:diff, applicableFor,
-        correct:0, extras:{ buckets, items }, explanation:clean(cols[8])||'' });
+      questions.push({ ...base, type:'categorize',
+        correct:0, extras:{ buckets, items }, explanation:col('explanation')||'' });
     }
     else if (type==='hotspot') {
-      // `hotspots` column (21): "label@x,y; label@x,y" with x,y as % (0-100).
-      // The base picture comes from the image_url column (9).
+      // `hotspots` column: "label@x,y; label@x,y" with x,y as % (0-100).
+      // The base picture comes from the image_url column.
       const hotspots=[];
-      clean(cols[21]).split(';').map(s=>s.trim()).filter(Boolean).forEach(h=>{
+      col('hotspots').split(';').map(s=>s.trim()).filter(Boolean).forEach(h=>{
         const at = h.lastIndexOf('@'); if (at < 0) return;
         const label = h.slice(0,at).trim();
         const xy = h.slice(at+1).split(',').map(s=>parseFloat(s.trim()));
@@ -167,8 +186,8 @@ function parseCSV(text) {
         hotspots.push({ x:xy[0], y:xy[1], label });
       });
       if (hotspots.length < 2) continue;
-      questions.push({ id:uid('q'), type:'hotspot', text, difficulty:diff, applicableFor,
-        imageUrl:clean(cols[9])||'', correct:0, extras:{ hotspots }, explanation:clean(cols[8])||'' });
+      questions.push({ ...base, type:'hotspot',
+        imageUrl:col('image_url')||'', correct:0, extras:{ hotspots }, explanation:col('explanation')||'' });
     }
   }
   return questions;
@@ -280,8 +299,9 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
   const [newCatName, setNewCatName] = useState('');
   const [dragOver,   setDragOver]   = useState(false);
   const [importing,  setImporting]  = useState(false);
+  const [result,     setResult]     = useState(null);
 
-  const reset = () => { setStep('upload'); setParsed([]); setError(''); setCatId(categories[0]?.id || ''); setNewCatName(''); };
+  const reset = () => { setStep('upload'); setParsed([]); setError(''); setCatId(categories[0]?.id || ''); setNewCatName(''); setResult(null); };
 
   const processFile = (f) => {
     if (!f) return;
@@ -308,22 +328,24 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
   };
 
   const downloadTemplate = () => {
-    // 22 columns. 0-18 are the original layout (kept for backward compatibility);
-    // 19-21 carry the new drag-drop types. Leave columns a type doesn't use blank.
-    const headers = ['type','text','difficulty','opt_a','opt_b','opt_c','opt_d','correct','explanation','image_url(img only)','p1_left','p1_right','p2_left','p2_right','p3_left','p3_right','p4_left','p4_right','applicable_for','steps(order: a|b|c)','groups(categorize: G1: a, b; G2: c, d)','hotspots(label@x,y; …  x,y are %)'];
+    // 23 columns. `category` (col 1) maps each question to a subject so it can be
+    // filtered/grouped after import; leave it blank to inherit the target category.
+    // Remaining columns: 2-18 are the original layout; 19-21 carry the drag-drop
+    // types. Parsing is header-aware, so column order can change freely.
+    const headers = ['type','category(robotics/chemistry/physics/mathematics)','text','difficulty','opt_a','opt_b','opt_c','opt_d','correct','explanation','image_url(img only)','p1_left','p1_right','p2_left','p2_right','p3_left','p3_right','p4_left','p4_right','applicable_for','steps(order: a|b|c)','groups(categorize: G1: a, b; G2: c, d)','hotspots(label@x,y; …  x,y are %)'];
     const E = ''; // filler for unused columns
     const rows = [
-      ['mcq','What is a servo motor?','easy','A DC motor with feedback control','A stepper motor','A linear actuator','An AC induction motor','A','Servo motors use encoders for closed-loop position control.',E,E,E,E,E,E,E,E,E,'student',E,E,E],
-      ['mcq','Which protocol is used for wireless robot communication?','hard','I2C','SPI','Bluetooth / Wi-Fi','UART','C','Bluetooth and Wi-Fi are standard wireless protocols.',E,E,E,E,E,E,E,E,E,'both',E,E,E],
-      ['truefalse','A stepper motor uses feedback to know its position.','easy',E,E,E,E,'False','Stepper motors move in fixed open-loop steps.',E,E,E,E,E,E,E,E,E,'student',E,E,E],
-      ['label','What component is shown in the image?','medium','Servo motor','DC motor','Stepper motor','Solenoid','C',E,'https://example.com/component.jpg',E,E,E,E,E,E,E,E,'student',E,E,E],
-      ['match','Match each component to its function','easy',E,E,E,E,E,E,E,'Sensor','Detects input signals','Motor','Converts electricity to motion','CPU','Processes instructions','Battery','Stores electrical energy','both',E,E,E],
-      ['order','Arrange the steps to compute a rectangle’s area','easy',E,E,E,E,E,'Start first, End last.',E,E,E,E,E,E,E,E,E,'student','Start|Input length and width|Area = length × width|Print area|End',E,E],
-      ['categorize','Group each device by its role','medium',E,E,E,E,E,E,E,E,E,E,E,E,E,E,E,'student',E,'Input Device: Keyboard, Mouse; Processing Device: CPU, RAM; Output Device: Monitor, Printer',E],
-      ['hotspot','Label the parts of the computer','medium',E,E,E,E,E,E,'https://example.com/computer.jpg',E,E,E,E,E,E,E,E,'student',E,E,'Keyboard@45,80; Mouse@70,82; Monitor@40,25; CPU@80,45'],
+      ['mcq','robotics','What is a servo motor?','easy','A DC motor with feedback control','A stepper motor','A linear actuator','An AC induction motor','A','Servo motors use encoders for closed-loop position control.',E,E,E,E,E,E,E,E,E,'student',E,E,E],
+      ['mcq','robotics','Which protocol is used for wireless robot communication?','hard','I2C','SPI','Bluetooth / Wi-Fi','UART','C','Bluetooth and Wi-Fi are standard wireless protocols.',E,E,E,E,E,E,E,E,E,'both',E,E,E],
+      ['truefalse','physics','A stepper motor uses feedback to know its position.','easy',E,E,E,E,'False','Stepper motors move in fixed open-loop steps.',E,E,E,E,E,E,E,E,E,'student',E,E,E],
+      ['label','robotics','What component is shown in the image?','medium','Servo motor','DC motor','Stepper motor','Solenoid','C',E,'https://example.com/component.jpg',E,E,E,E,E,E,E,E,'student',E,E,E],
+      ['match','chemistry','Match each component to its function','easy',E,E,E,E,E,E,E,'Sensor','Detects input signals','Motor','Converts electricity to motion','CPU','Processes instructions','Battery','Stores electrical energy','both',E,E,E],
+      ['order','mathematics','Arrange the steps to compute a rectangle’s area','easy',E,E,E,E,E,'Start first, End last.',E,E,E,E,E,E,E,E,E,'student','Start|Input length and width|Area = length × width|Print area|End',E,E],
+      ['categorize','robotics','Group each device by its role','medium',E,E,E,E,E,E,E,E,E,E,E,E,E,E,E,'student',E,'Input Device: Keyboard, Mouse; Processing Device: CPU, RAM; Output Device: Monitor, Printer',E],
+      ['hotspot','robotics','Label the parts of the computer','medium',E,E,E,E,E,E,'https://example.com/computer.jpg',E,E,E,E,E,E,E,E,'student',E,E,'Keyboard@45,80; Mouse@70,82; Monitor@40,25; CPU@80,45'],
     ];
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    ws['!cols'] = [{wch:11},{wch:46},{wch:10},{wch:26},{wch:20},{wch:20},{wch:20},{wch:9},{wch:42},{wch:34},{wch:16},{wch:22},{wch:16},{wch:22},{wch:16},{wch:22},{wch:16},{wch:22},{wch:15},{wch:46},{wch:54},{wch:46}];
+    ws['!cols'] = [{wch:11},{wch:20},{wch:46},{wch:10},{wch:26},{wch:20},{wch:20},{wch:20},{wch:9},{wch:42},{wch:34},{wch:16},{wch:22},{wch:16},{wch:22},{wch:16},{wch:22},{wch:16},{wch:22},{wch:15},{wch:46},{wch:54},{wch:46}];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Questions');
     XLSX.writeFile(wb, 'question_bank_template.xlsx');
@@ -331,9 +353,11 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
 
   const handleImport = async () => {
     setImporting(true);
+    let summary = null;
     try {
-      await onImport(parsed, catId === '__new__' ? null : catId, catId === '__new__' ? newCatName.trim() || 'Imported' : null);
+      summary = await onImport(parsed, catId === '__new__' ? null : catId, catId === '__new__' ? newCatName.trim() || 'Imported' : null);
     } catch { /* ignore — UI advances to done step regardless */ }
+    setResult(summary);
     setImporting(false);
     setStep('done');
   };
@@ -378,7 +402,7 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
                 </div>
               ))}
             </div>
-            <p className="text-[11px] text-indigo-700/80 mt-2">All rows also accept <span className="font-mono">difficulty</span> (easy/medium/hard), <span className="font-mono">explanation</span>, and <span className="font-mono">applicable_for</span> (student/trainer/both).</p>
+            <p className="text-[11px] text-indigo-700/80 mt-2">All rows also accept <span className="font-mono">category</span> (robotics/chemistry/physics/mathematics — used for filtering; blank inherits the target category), <span className="font-mono">difficulty</span> (easy/medium/hard), <span className="font-mono">explanation</span>, and <span className="font-mono">applicable_for</span> (student/trainer/both).</p>
             <button onClick={downloadTemplate} className="mt-3 flex items-center gap-2 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
               <Download size={12}/> Download Excel Template (.xlsx)
             </button>
@@ -429,13 +453,41 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
           </div>
         </div>
       )}
-      {step==='done' && (
-        <div className="text-center py-8">
-          <div className="w-16 h-16 rounded-2xl bg-green-100 flex items-center justify-center mx-auto mb-4"><CheckCircle size={32} className="text-green-500"/></div>
-          <h3 className="text-lg font-bold text-slate-800 mb-1">{parsed.length} Questions Imported!</h3>
-          <p className="text-sm text-slate-500">Added to <span className="font-semibold text-slate-700">{levelName}</span></p>
-        </div>
-      )}
+      {step==='done' && (() => {
+        const r = result || { total: parsed.length, imported: parsed.length, duplicates: 0, errors: 0 };
+        return (
+          <div className="text-center py-8">
+            <div className="w-16 h-16 rounded-2xl bg-green-100 flex items-center justify-center mx-auto mb-4"><CheckCircle size={32} className="text-green-500"/></div>
+            <h3 className="text-lg font-bold text-slate-800 mb-1">Import Complete</h3>
+            <p className="text-sm text-slate-500 mb-5">Added to <span className="font-semibold text-slate-700">{levelName}</span></p>
+            <div className="flex items-center justify-center gap-3 flex-wrap">
+              <div className="px-4 py-2.5 rounded-xl bg-slate-100 text-center min-w-[84px]">
+                <p className="text-xl font-bold text-slate-700">{r.total}</p>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Total</p>
+              </div>
+              <div className="px-4 py-2.5 rounded-xl bg-green-100 text-center min-w-[84px]">
+                <p className="text-xl font-bold text-green-700">{r.imported}</p>
+                <p className="text-[10px] font-semibold text-green-600 uppercase tracking-wide">Imported</p>
+              </div>
+              <div className="px-4 py-2.5 rounded-xl bg-amber-100 text-center min-w-[84px]">
+                <p className="text-xl font-bold text-amber-700">{r.duplicates}</p>
+                <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-wide">Duplicates</p>
+              </div>
+              {r.errors > 0 && (
+                <div className="px-4 py-2.5 rounded-xl bg-red-100 text-center min-w-[84px]">
+                  <p className="text-xl font-bold text-red-700">{r.errors}</p>
+                  <p className="text-[10px] font-semibold text-red-600 uppercase tracking-wide">Failed</p>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-slate-400 mt-5">
+              {r.duplicates > 0
+                ? `${r.duplicates} duplicate${r.duplicates !== 1 ? 's' : ''} already existed and ${r.duplicates !== 1 ? 'were' : 'was'} skipped — ${r.imported} new question${r.imported !== 1 ? 's' : ''} imported.`
+                : `All ${r.imported} question${r.imported !== 1 ? 's' : ''} imported successfully.`}
+            </p>
+          </div>
+        );
+      })()}
     </Modal>
   );
 }
@@ -1122,19 +1174,34 @@ function LevelSection({ level, bankId, index, onRenamed, showToast }) {
       }
     }
 
-    // Deduplicate within the imported batch by question text (case-insensitive)
+    const total = questions.length;
+    const norm  = (t = '') => t.trim().toLowerCase();
+
+    // Skip questions that already exist in the target category (by text). Fetch
+    // the current questions for that category; if the lookup fails, fall back to
+    // batch-only dedup rather than blocking the import.
+    const existing = new Set();
+    if (targetCatId) {
+      try {
+        const current = await api.getQuestionsByCategory(targetCatId);
+        (Array.isArray(current) ? current : []).forEach(q => existing.add(norm(q.text)));
+      } catch { /* couldn't load existing — proceed with batch dedup only */ }
+    }
+
+    // Deduplicate within the imported batch AND against existing questions.
     const seen = new Set();
-    const unique = questions.filter(q => {
-      const key = q.text.trim().toLowerCase();
-      if (seen.has(key)) return false;
+    let duplicates = 0;
+    const toImport = questions.filter(q => {
+      const key = norm(q.text);
+      if (seen.has(key) || existing.has(key)) { duplicates++; return false; }
       seen.add(key);
       return true;
     });
 
     const targetCatName = categories.find(c => c.id == targetCatId)?.name || newCatName || '';
-    let count = 0;
-    let skipped = 0;
-    for (const q of unique) {
+    let imported = 0;
+    let errors   = 0;
+    for (const q of toImport) {
       try {
         await api.addQuestion({
           text: q.text, type: q.type,
@@ -1146,17 +1213,21 @@ function LevelSection({ level, bankId, index, onRenamed, showToast }) {
           applicableFor: q.applicableFor || 'student',
           qbCategoryId: targetCatId, qbLevelId: level.id,
           levelId: undefined,
-          category: getCatFromName(targetCatName),
+          // Per-row category (subject) when provided; otherwise inherit the target category.
+          category: q.category ? getCatFromName(q.category) : getCatFromName(targetCatName),
           bankName: 'Question Bank', status: 'active',
         });
-        count++;
-      } catch { skipped++; }
+        imported++;
+      } catch { errors++; }
     }
-    const msg = skipped > 0
-      ? `${count} imported, ${skipped} skipped (duplicates).`
-      : `${count} question${count !== 1 ? 's' : ''} imported!`;
-    showToast?.(msg);
-    setImportOpen(false);
+
+    const parts = [`${imported} imported`];
+    if (duplicates > 0) parts.push(`${duplicates} duplicate${duplicates !== 1 ? 's' : ''} skipped`);
+    if (errors > 0)     parts.push(`${errors} failed`);
+    showToast?.(`${total} total · ${parts.join(' · ')}.`);
+
+    // Return the summary so the modal can show a post-import breakdown.
+    return { total, imported, duplicates, errors };
   };
 
   return (
