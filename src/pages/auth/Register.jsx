@@ -310,7 +310,7 @@ export default function Register() {
           <Field primaryColor={colors.primary} label="Student Name" icon={User}   value={studentForm.studentName} onChange={sS('studentName')} placeholder="Full name" />
           <Field primaryColor={colors.primary} label="School Name"  icon={School} value={studentForm.schoolName}  onChange={sS('schoolName')}  placeholder="e.g. Delhi Public School" />
 
-          {/* Class / College */}
+          {/*Class / Course */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Class / Course<span className="text-rose-400 ml-0.5">*</span></label>
             <div className="relative">
@@ -323,7 +323,7 @@ export default function Register() {
                     near-white text on the browser's default white option background,
                     so it was invisible unless the cursor was hovering over it. Also
                     disabled+hidden so it can't be re-selected once a real value is set. */}
-                <option value="" disabled style={{ color: '#94a3b8', background: '#1e293b' }}>Select your Class / College</option>
+                <option value="" disabled style={{ color: '#94a3b8', background: '#1e293b' }}>Select your Class / Course</option>
                 {CLASS_OPTIONS.map(c => (
                   <option key={c} value={c} style={{ color: 'white', background: '#1e293b' }}>{c}</option>
                 ))}
