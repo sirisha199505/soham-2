@@ -308,7 +308,7 @@ export default function Register() {
       {tab === 'student' && (
         <form onSubmit={handleStudentSubmit} className="space-y-4">
           <Field primaryColor={colors.primary} label="Student Name" icon={User}   value={studentForm.studentName} onChange={sS('studentName')} placeholder="Full name" />
-          <Field primaryColor={colors.primary} label="School Name"  icon={School} value={studentForm.schoolName}  onChange={sS('schoolName')}  placeholder="e.g. Delhi Public School" />
+          <Field primaryColor={colors.primary} label="Institute Name"  icon={School} value={studentForm.schoolName}  onChange={sS('schoolName')}  placeholder="e.g. Delhi Public School" />
 
           {/*Class / Course */}
           <div className="space-y-1.5">
