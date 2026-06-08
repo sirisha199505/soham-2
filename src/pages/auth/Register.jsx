@@ -312,7 +312,7 @@ export default function Register() {
 
           {/* Class / College */}
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Class / College<span className="text-rose-400 ml-0.5">*</span></label>
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Class / Course<span className="text-rose-400 ml-0.5">*</span></label>
             <div className="relative">
               <BookOpen size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
               <select value={studentForm.className} onChange={sS('className')} required
