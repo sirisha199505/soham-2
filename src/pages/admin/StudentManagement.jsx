@@ -34,8 +34,8 @@ function LevelBadge({ data, levelId, overrideIds }) {
   return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-600">Unlocked</span>;
 }
 
-/* ── Account Management (admin-only password reset) ── */
-function AccountManagement({ student }) {
+/* ── Reset Password Modal (admin-only) ── */
+function ResetPasswordModal({ student, onClose }) {
   const [pw, setPw]           = useState('');
   const [confirm, setConfirm] = useState('');
   const [show, setShow]       = useState(false);
@@ -44,8 +44,8 @@ function AccountManagement({ student }) {
 
   const submit = async () => {
     setMsg(null);
-    if (pw.length < 6)    { setMsg({ type: 'error', text: 'Password must be at least 6 characters.' }); return; }
-    if (pw !== confirm)   { setMsg({ type: 'error', text: 'Passwords do not match.' }); return; }
+    if (pw.length < 6)  { setMsg({ type: 'error', text: 'Password must be at least 6 characters.' }); return; }
+    if (pw !== confirm) { setMsg({ type: 'error', text: 'Passwords do not match.' }); return; }
     setSaving(true);
     try {
       await api.setStudentPassword(student.id, pw);
@@ -61,34 +61,50 @@ function AccountManagement({ student }) {
   const inputCls = 'w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-10 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400';
 
   return (
-    <div className="pt-4 border-t border-slate-100">
-      <p className="text-xs font-semibold text-slate-400 uppercase mb-2 flex items-center gap-1.5">
-        <KeyRound size={12} /> Account Management
-      </p>
-      <div className="space-y-2.5">
-        <div className="relative">
-          <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input type={show ? 'text' : 'password'} value={pw} onChange={e => setPw(e.target.value)}
-            placeholder="New password" autoComplete="new-password" className={inputCls} />
-          <button type="button" onClick={() => setShow(s => !s)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-            {show ? <EyeOff size={14} /> : <Eye size={14} />}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <h3 className="font-bold text-slate-800 flex items-center gap-2" style={{ fontFamily: 'Space Grotesk' }}>
+            <KeyRound size={16} className="text-indigo-500" /> Reset Password
+          </h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={16} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="bg-indigo-50 rounded-xl p-3">
+            <p className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider mb-0.5">Account</p>
+            <p className="font-bold text-slate-800">{student.name || '—'}</p>
+            {student.email && student.email !== '—' && <p className="text-xs text-slate-500 mt-0.5">{student.email}</p>}
+          </div>
+          <div className="space-y-2.5">
+            <div className="relative">
+              <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input type={show ? 'text' : 'password'} value={pw} onChange={e => setPw(e.target.value)}
+                placeholder="New password" autoComplete="new-password" className={inputCls} />
+              <button type="button" onClick={() => setShow(s => !s)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                {show ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+            <div className="relative">
+              <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input type={show ? 'text' : 'password'} value={confirm} onChange={e => setConfirm(e.target.value)}
+                placeholder="Confirm password" autoComplete="new-password" className={inputCls} />
+            </div>
+            {msg && (
+              <div className={`flex items-center gap-1.5 text-xs font-medium ${msg.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+                {msg.type === 'success' ? <CheckCircle size={12} /> : <AlertTriangle size={12} />} {msg.text}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button onClick={submit} disabled={saving || !pw || !confirm}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />} Update Password
           </button>
         </div>
-        <div className="relative">
-          <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input type={show ? 'text' : 'password'} value={confirm} onChange={e => setConfirm(e.target.value)}
-            placeholder="Confirm password" autoComplete="new-password" className={inputCls} />
-        </div>
-        {msg && (
-          <div className={`flex items-center gap-1.5 text-xs font-medium ${msg.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
-            {msg.type === 'success' ? <CheckCircle size={12} /> : <AlertTriangle size={12} />} {msg.text}
-          </div>
-        )}
-        <button onClick={submit} disabled={saving || !pw || !confirm}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-          {saving ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />} Update Password
-        </button>
       </div>
     </div>
   );
@@ -96,7 +112,6 @@ function AccountManagement({ student }) {
 
 /* ── Detail Modal ── */
 function StudentModal({ student, levelList, onClose }) {
-  const { user } = useAuth();
   if (!student) return null;
   const isCoach = student.role === 'coach' || student.role === 'teacher';
   const levels = levelList.length > 0
@@ -177,12 +192,6 @@ function StudentModal({ student, levelList, onClose }) {
               );
             })}
           </div>
-
-          {/* Admin-only: set a new password for this account. Admin == not a
-              student and not a trainer (matches AuthContext's role convention). */}
-          {user && user.role !== 'student' && user.role !== 'coach' && user.role !== 'teacher' && (
-            <AccountManagement student={student} />
-          )}
         </div>
       </div>
     </div>
@@ -202,7 +211,7 @@ function ActionsMenu({ student, onAction }) {
     if (!open && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
       const menuW = 192;   // w-48
-      const menuH = 130;   // approx content height (View Details + Enable/Disable)
+      const menuH = 180;   // approx content height (View Details + Reset Password + Enable/Disable)
       let left = Math.max(8, r.right - menuW);
       let top  = r.bottom + 6;
       // Flip above the button if it would overflow the viewport bottom.
@@ -231,6 +240,11 @@ function ActionsMenu({ student, onAction }) {
               <Eye size={13} /> View Details
             </button>
             <div className="h-px bg-slate-100 my-1" />
+            <button onClick={() => { onAction('password', student); setOpen(false); }}
+              className="flex items-center gap-2 w-full px-3 py-2 text-xs text-slate-700 hover:bg-slate-50">
+              <KeyRound size={13} /> Reset Password
+            </button>
+            <div className="h-px bg-slate-100 my-1" />
             <button onClick={() => { onAction('toggle', student); setOpen(false); }}
               className={`flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-red-50 ${student.disabled ? 'text-green-600' : 'text-red-500'}`}>
               {student.disabled ? <UserCheck size={13} /> : <UserX size={13} />}
@@ -254,6 +268,7 @@ export default function StudentManagement() {
   const [page,      setPage]      = useState(1);
   const [tab,       setTab]       = useState('students'); // 'students' | 'coaches'
   const [viewStudent, setViewStudent] = useState(null);
+  const [resetStudent, setResetStudent] = useState(null);
   const [toast,     setToast]     = useState(null);
   // Tell "still loading the first fetch" apart from "loaded, no users". Without
   // this the table showed "No users found" during the ~20s Render cold start, so
@@ -380,6 +395,8 @@ export default function StudentManagement() {
 
   const handleAction = async (action, student, lvl) => {
     if (action === 'view') { setViewStudent(student); scrollToTop(); return; }
+
+    if (action === 'password') { setResetStudent(student); return; }
 
     if (action === 'unlock') {
       // `lvl` is the level's DB id; show its real title in the toast (it was
@@ -653,6 +670,13 @@ export default function StudentManagement() {
           student={viewStudent}
           levelList={levelList}
           onClose={() => setViewStudent(null)}
+        />
+      )}
+
+      {resetStudent && (
+        <ResetPasswordModal
+          student={resetStudent}
+          onClose={() => setResetStudent(null)}
         />
       )}
     </div>
