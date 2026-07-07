@@ -2,8 +2,8 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { scrollToTop } from '../../utils/scroll';
 import {
   Users, Search, RefreshCw, CheckCircle,
-  ChevronDown, Eye, Unlock, UserX, UserCheck,
-  X, AlertTriangle, Info, Zap,
+  ChevronDown, Eye, EyeOff, Unlock, UserX, UserCheck,
+  X, AlertTriangle, Info, Zap, Lock, KeyRound, Loader2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
@@ -34,8 +34,69 @@ function LevelBadge({ data, levelId, overrideIds }) {
   return <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-600">Unlocked</span>;
 }
 
+/* ── Account Management (admin-only password reset) ── */
+function AccountManagement({ student }) {
+  const [pw, setPw]           = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [show, setShow]       = useState(false);
+  const [saving, setSaving]   = useState(false);
+  const [msg, setMsg]         = useState(null); // { type: 'success' | 'error', text }
+
+  const submit = async () => {
+    setMsg(null);
+    if (pw.length < 6)    { setMsg({ type: 'error', text: 'Password must be at least 6 characters.' }); return; }
+    if (pw !== confirm)   { setMsg({ type: 'error', text: 'Passwords do not match.' }); return; }
+    setSaving(true);
+    try {
+      await api.setStudentPassword(student.id, pw);
+      setMsg({ type: 'success', text: 'Password updated successfully.' });
+      setPw(''); setConfirm('');
+    } catch (err) {
+      setMsg({ type: 'error', text: err.message || 'Failed to update password.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputCls = 'w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-10 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400';
+
+  return (
+    <div className="pt-4 border-t border-slate-100">
+      <p className="text-xs font-semibold text-slate-400 uppercase mb-2 flex items-center gap-1.5">
+        <KeyRound size={12} /> Account Management
+      </p>
+      <div className="space-y-2.5">
+        <div className="relative">
+          <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input type={show ? 'text' : 'password'} value={pw} onChange={e => setPw(e.target.value)}
+            placeholder="New password" autoComplete="new-password" className={inputCls} />
+          <button type="button" onClick={() => setShow(s => !s)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+            {show ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+        </div>
+        <div className="relative">
+          <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input type={show ? 'text' : 'password'} value={confirm} onChange={e => setConfirm(e.target.value)}
+            placeholder="Confirm password" autoComplete="new-password" className={inputCls} />
+        </div>
+        {msg && (
+          <div className={`flex items-center gap-1.5 text-xs font-medium ${msg.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+            {msg.type === 'success' ? <CheckCircle size={12} /> : <AlertTriangle size={12} />} {msg.text}
+          </div>
+        )}
+        <button onClick={submit} disabled={saving || !pw || !confirm}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+          {saving ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />} Update Password
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ── Detail Modal ── */
 function StudentModal({ student, levelList, onClose }) {
+  const { user } = useAuth();
   if (!student) return null;
   const isCoach = student.role === 'coach' || student.role === 'teacher';
   const levels = levelList.length > 0
@@ -57,12 +118,12 @@ function StudentModal({ student, levelList, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
           <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>{isCoach ? 'Trainer Details' : 'Student Details'}</h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={16} /></button>
         </div>
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 overflow-y-auto">
           <div className="bg-indigo-50 rounded-2xl p-4">
             <p className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider mb-1">{isCoach ? 'Trainer Name' : 'Student Name'}</p>
             <p className="font-bold text-slate-800 text-lg">{student.name || '—'}</p>
@@ -116,6 +177,12 @@ function StudentModal({ student, levelList, onClose }) {
               );
             })}
           </div>
+
+          {/* Admin-only: set a new password for this account. Admin == not a
+              student and not a trainer (matches AuthContext's role convention). */}
+          {user && user.role !== 'student' && user.role !== 'coach' && user.role !== 'teacher' && (
+            <AccountManagement student={student} />
+          )}
         </div>
       </div>
     </div>

@@ -66,3 +66,7 @@ export const COLORS = {
 };
 
 export const CHART_COLORS = ['#3BC0EF', '#FAAB34', '#1E3A8A', '#10B981', '#EC4899', '#8B5CF6'];
+
+// Shown on the Forgot Password page so students/trainers can reach the
+// administrator to reset their password. Update to your real admin number.
+export const ADMIN_CONTACT_PHONE = '+91 98765 43210';

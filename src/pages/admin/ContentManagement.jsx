@@ -299,8 +299,7 @@ function DeleteLevelModal({ levelTitle, pageCount, onConfirm, onClose, saving })
 }
 
 /* ── Level Section ── */
-function LevelSection({ levelId, levelTitle, levelOrder, pages, onEdit, onDelete, onAdd, onDeleteLevel }) {
-  const [expanded, setExpanded] = useState(levelOrder === 1);
+function LevelSection({ levelId, levelTitle, levelOrder, pages, expanded, onToggle, onEdit, onDelete, onAdd, onDeleteLevel }) {
   const colors = levelColors(levelOrder);
 
   return (
@@ -329,7 +328,7 @@ function LevelSection({ levelId, levelTitle, levelOrder, pages, onEdit, onDelete
             title="Delete level">
             <Trash2 size={15} />
           </button>
-          <button onClick={() => setExpanded(p => !p)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors">
+          <button onClick={onToggle} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors">
             {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
         </div>
@@ -382,12 +381,20 @@ export default function ContentManagement() {
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState('');
   const [saving, setSaving] = useState(false);
+  // Accordion: only one level open at a time. `undefined` = not yet initialised
+  // (defaults to the first level once levels load); `null` = all collapsed.
+  const [openLevelId, setOpenLevelId] = useState(undefined);
 
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(''), 2500); };
 
   // Sorted levels from LevelContext
   const sortedLevels = Object.values(levelSettings)
     .sort(compareLevels);
+
+  // Open the first level by default, once levels are available.
+  useEffect(() => {
+    if (openLevelId === undefined && sortedLevels.length) setOpenLevelId(sortedLevels[0].id);
+  }, [openLevelId, sortedLevels.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!user?.id || !levelSettingsLoaded) return;
@@ -511,6 +518,8 @@ export default function ContentManagement() {
             levelTitle={lvl.title || `Level ${lvl.id}`}
             levelOrder={idx + 1}
             pages={content[lvl.id] || []}
+            expanded={openLevelId === lvl.id}
+            onToggle={() => setOpenLevelId(cur => cur === lvl.id ? null : lvl.id)}
             onAdd={levelId => setModal({ type: 'add', levelId })}
             onEdit={(levelId, page, pageIdx) => setModal({ type: 'edit', levelId, page, pageIdx })}
             onDelete={handleDelete}

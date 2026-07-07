@@ -949,11 +949,12 @@ function QuestionRow({ q, index, onEdit, onDelete }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Category Section — loads questions from API by cat.id
 // ═══════════════════════════════════════════════════════════════════════════
-function CategorySection({ cat, levelId, levelName, pal, onRenamed, onDeleted, showToast }) {
+function CategorySection({ cat, levelId, levelName, pal, expanded, onToggle, onRenamed, onDeleted, showToast }) {
   const [questions,  setQuestions]  = useState([]);
   const [, setLoaded]               = useState(false);
   const [loading,    setLoading]    = useState(false);
-  const [collapsed,  setCollapsed]  = useState(false);
+  // Expansion is controlled by the parent LevelSection (single-open accordion).
+  const collapsed = !expanded;
   const [qModal,     setQModal]     = useState(null);
   const [deleteQ,    setDeleteQ]    = useState(null);
   const [renaming,   setRenaming]   = useState(false);
@@ -1051,10 +1052,15 @@ function CategorySection({ cat, levelId, levelName, pal, onRenamed, onDeleted, s
   const visibleQuestions = questions;
   const visCount = qCount;
 
+  // Audience breakdown shown beside the question count.
+  const studentCount = questions.filter(q => (q.applicableFor || 'student') === 'student').length;
+  const trainerCount = questions.filter(q => q.applicableFor === 'trainer').length;
+  const bothCount    = questions.filter(q => q.applicableFor === 'both').length;
+
   return (
     <div className={`rounded-2xl border-2 ${pal.border} overflow-hidden`}>
       <div className={`flex items-center gap-3 px-4 py-3 ${pal.light}`}>
-        <button onClick={()=>setCollapsed(p=>!p)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
+        <button onClick={onToggle} className="flex items-center gap-2 flex-wrap flex-1 min-w-0 text-left">
           {collapsed?<Folder size={16} className={pal.text}/>:<FolderOpen size={16} className={pal.text}/>}
           {renaming?(
             <div className="flex-1" onClick={e=>e.stopPropagation()}>
@@ -1064,6 +1070,9 @@ function CategorySection({ cat, levelId, levelName, pal, onRenamed, onDeleted, s
             <>
               <span className={`text-sm font-bold ${pal.text} truncate`}>{cat.name}</span>
               <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/70 ${pal.text} shrink-0`}>{qCount} {qCount===1?'question':'questions'}</span>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 shrink-0">{studentCount} Students</span>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 shrink-0">{trainerCount} Trainers</span>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 shrink-0">{bothCount} Both</span>
             </>
           )}
         </button>
@@ -1074,7 +1083,7 @@ function CategorySection({ cat, levelId, levelName, pal, onRenamed, onDeleted, s
             </button>
             <button onClick={()=>setRenaming(true)} className="p-1.5 rounded-lg hover:bg-white/60 text-slate-500 transition-colors"><Edit2 size={13}/></button>
             <button onClick={()=>setConfirmDel(true)} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={13}/></button>
-            <button onClick={()=>setCollapsed(p=>!p)} className="p-1.5 rounded-lg hover:bg-white/60 text-slate-500 transition-colors">{collapsed?<ChevronDown size={13}/>:<ChevronUp size={13}/>}</button>
+            <button onClick={onToggle} className="p-1.5 rounded-lg hover:bg-white/60 text-slate-500 transition-colors">{collapsed?<ChevronDown size={13}/>:<ChevronUp size={13}/>}</button>
           </div>
         )}
       </div>
@@ -1123,14 +1132,20 @@ function CategorySection({ cat, levelId, levelName, pal, onRenamed, onDeleted, s
 // ═══════════════════════════════════════════════════════════════════════════
 // Level Section — loads categories from API, manages them via CRUD
 // ═══════════════════════════════════════════════════════════════════════════
-function LevelSection({ level, bankId, index, onRenamed, showToast }) {
+function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onDeleted, showToast }) {
   const pal = levelPal(index);
   const [categories,  setCategories]  = useState([]);
   const [loading,     setLoading]     = useState(true);
-  const [collapsed,   setCollapsed]   = useState(false);
+  // Level expansion is controlled by the parent (single-open accordion) so that
+  // opening one level auto-closes any other. Levels start collapsed.
+  const collapsed = !expanded;
+  // Within an open level, only one category stays expanded at a time.
+  // `undefined` = not yet initialised (defaults to first category once loaded).
+  const [openCatId,   setOpenCatId]   = useState(undefined);
   const [addingCat,   setAddingCat]   = useState(false);
   const [renaming,    setRenaming]    = useState(false);
   const [importOpen,  setImportOpen]  = useState(false);
+  const [confirmDel,  setConfirmDel]  = useState(false);
   const [saving,      setSaving]      = useState(false);
 
   useEffect(() => {
@@ -1139,6 +1154,11 @@ function LevelSection({ level, bankId, index, onRenamed, showToast }) {
       .catch(err => console.error('Load categories failed:', err.message))
       .finally(() => setLoading(false));
   }, [level.id]);
+
+  // Open the first category by default, once categories are available.
+  useEffect(() => {
+    if (openCatId === undefined && categories.length) setOpenCatId(categories[0].id);
+  }, [openCatId, categories.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAddCategory = async (name) => {
     setSaving(true);
@@ -1158,6 +1178,15 @@ function LevelSection({ level, bankId, index, onRenamed, showToast }) {
       onRenamed?.(level.id, name);
       setRenaming(false);
     } catch (err) { showToast?.(`Failed to rename: ${err.message}`, 'red'); }
+  };
+
+  const handleDeleteLevel = async () => {
+    setConfirmDel(false);
+    try {
+      await api.deleteQbLevel(level.id);
+      onDeleted?.(level.id);
+      showToast?.(`"${level.name}" deleted.`);
+    } catch (err) { showToast?.(`Failed to delete: ${err.message}`, 'red'); }
   };
 
   const handleImport = async (questions, catId, newCatName) => {
@@ -1258,14 +1287,15 @@ function LevelSection({ level, bankId, index, onRenamed, showToast }) {
                 <Plus size={13}/>Add Category
               </button>
               <button onClick={()=>setRenaming(true)} className="p-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white/80 hover:text-white transition-all"><Edit2 size={13}/></button>
-              <button onClick={()=>setCollapsed(p=>!p)} className="p-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white transition-all">{collapsed?<ChevronDown size={15}/>:<ChevronUp size={15}/>}</button>
+              <button onClick={()=>setConfirmDel(true)} className="p-1.5 rounded-xl bg-white/15 hover:bg-red-500/70 text-white/80 hover:text-white transition-all"><Trash2 size={13}/></button>
+              <button onClick={onToggle} className="p-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white transition-all">{collapsed?<ChevronDown size={15}/>:<ChevronUp size={15}/>}</button>
             </div>
           )}
         </div>
       </div>
 
       {!collapsed && (
-        <div className={`${pal.light} px-5 py-4 space-y-3`}>
+        <div className={`${pal.light} px-5 py-4 space-y-3 max-h-[70vh] overflow-y-auto`}>
           {addingCat && (
             <div className={`bg-white rounded-2xl border-2 ${pal.border} p-4`}>
               <p className={`text-xs font-bold ${pal.text} mb-2`}>New Category Name</p>
@@ -1295,6 +1325,8 @@ function LevelSection({ level, bankId, index, onRenamed, showToast }) {
                 key={cat.id} cat={cat}
                 levelId={level.id} levelName={level.name} bankId={bankId}
                 pal={pal}
+                expanded={openCatId === cat.id}
+                onToggle={() => setOpenCatId(cur => cur === cat.id ? null : cat.id)}
                 onRenamed={(catId, name) => setCategories(prev => prev.map(c => c.id === catId ? { ...c, name } : c))}
                 onDeleted={(catId) => setCategories(prev => prev.filter(c => c.id !== catId))}
                 showToast={showToast}
@@ -1315,6 +1347,10 @@ function LevelSection({ level, bankId, index, onRenamed, showToast }) {
           onClose={() => setImportOpen(false)}
           onImport={handleImport}/>
       )}
+
+      <DeleteModal isOpen={confirmDel} onClose={()=>setConfirmDel(false)} onConfirm={handleDeleteLevel}
+        title={`Delete "${level.name}"?`}
+        message={`This level${categories.length ? ` and its ${categories.length} ${categories.length===1?'category':'categories'} (with all their questions)` : ''} will be permanently deleted.`}/>
     </div>
   );
 }
@@ -1329,6 +1365,8 @@ function BankDetail({ bank, bankIndex, onBankRenamed, showToast }) {
   const [newLevelName, setNewLevelName]= useState('');
   const [renamingBank, setRenamingBank]= useState(false);
   const [saving,       setSaving]      = useState(false);
+  // Accordion: only one level open at a time (null = all collapsed).
+  const [openLevelId,  setOpenLevelId] = useState(null);
 
   useEffect(() => {
     api.getQbLevels(bank.id)
@@ -1423,7 +1461,10 @@ function BankDetail({ bank, bankIndex, onBankRenamed, showToast }) {
         <div className="space-y-4">
           {levels.map((level, idx) => (
             <LevelSection key={level.id} level={level} bankId={bank.id} index={idx}
+              expanded={openLevelId === level.id}
+              onToggle={() => setOpenLevelId(cur => cur === level.id ? null : level.id)}
               onRenamed={(levelId, name) => setLevels(prev => prev.map(l => l.id === levelId ? { ...l, name } : l))}
+              onDeleted={(levelId) => { setOpenLevelId(cur => cur === levelId ? null : cur); setLevels(prev => prev.filter(l => l.id !== levelId)); }}
               showToast={showToast}/>
           ))}
           {!addingLevel && (
