@@ -396,7 +396,7 @@ export default function ImportExport() {
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
             <div className="flex items-center gap-2 mb-4">
               <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center">
-                <Upload size={15} className="text-indigo-500"/>
+                <Download size={15} className="text-indigo-500"/>
               </div>
               <h2 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Import Questions</h2>
             </div>
@@ -511,7 +511,7 @@ export default function ImportExport() {
                       >
                         {importing
                           ? <><span className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full inline-block"/> Importing…</>
-                          : <><Upload size={15}/> Import {validCount} Question{validCount !== 1 ? 's' : ''}</>}
+                          : <><Download size={15}/> Import {validCount} Question{validCount !== 1 ? 's' : ''}</>}
                       </button>
                     )}
                   </>
@@ -542,7 +542,7 @@ export default function ImportExport() {
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
             <div className="flex items-center gap-2 mb-4">
               <div className="w-8 h-8 rounded-xl bg-green-50 flex items-center justify-center">
-                <Download size={15} className="text-green-500"/>
+                <Upload size={15} className="text-green-500"/>
               </div>
               <h2 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Export Data</h2>
             </div>
@@ -562,7 +562,7 @@ export default function ImportExport() {
                 </div>
                 {exporting
                   ? <span className="animate-spin w-4 h-4 border-2 border-slate-300 border-t-indigo-500 rounded-full"/>
-                  : <Download size={15} className="text-slate-400 group-hover:text-slate-600 shrink-0"/>}
+                  : <Upload size={15} className="text-slate-400 group-hover:text-slate-600 shrink-0"/>}
               </button>
 
               <button

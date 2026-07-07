@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
-  BarChart2, Download, TrendingUp, Users,
+  BarChart2, Upload, TrendingUp, Users,
   Trophy, RefreshCw,
 } from 'lucide-react';
 import {
@@ -204,10 +204,10 @@ export default function AdminReports() {
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
           <button onClick={handleExportSummary} className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
-            <Download size={14} /> Summary CSV
+            <Upload size={14} /> Summary CSV
           </button>
           <button onClick={handleExportStudents} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors">
-            <Download size={14} /> Export Students
+            <Upload size={14} /> Export Students
           </button>
         </div>
       </div>

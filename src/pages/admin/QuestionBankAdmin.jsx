@@ -374,7 +374,7 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
               <button onClick={()=>{reset();onClose();}} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
               <button onClick={handleImport} disabled={importing||(catId==='__new__'&&!newCatName.trim())}
                 className="flex items-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-                {importing?<><Loader2 size={14} className="animate-spin"/>Importing…</>:<><Upload size={14}/>Import {parsed.length} Questions</>}
+                {importing?<><Loader2 size={14} className="animate-spin"/>Importing…</>:<><Download size={14}/>Import {parsed.length} Questions</>}
               </button>
             </div>
           </div>
@@ -1252,7 +1252,7 @@ function LevelSection({ level, bankId, index, onRenamed, showToast }) {
           {!renaming && (
             <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
               <button onClick={()=>setImportOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-all border border-white/30">
-                <Upload size={12}/>Import Excel
+                <Download size={12}/>Import Excel
               </button>
               <button onClick={()=>setAddingCat(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-all">
                 <Plus size={13}/>Add Category
@@ -1286,7 +1286,7 @@ function LevelSection({ level, bankId, index, onRenamed, showToast }) {
               <p className="text-xs text-slate-400 mt-1 mb-3">Create categories to organise your questions</p>
               <div className="flex items-center justify-center gap-2 flex-wrap">
                 <button onClick={()=>setAddingCat(true)} className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r ${pal.bg}`}><Plus size={12}/>Add Category</button>
-                <button onClick={()=>setImportOpen(true)} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-white border-2 border-slate-200 text-slate-600 hover:bg-slate-50"><Upload size={12}/>Import Excel</button>
+                <button onClick={()=>setImportOpen(true)} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-white border-2 border-slate-200 text-slate-600 hover:bg-slate-50"><Download size={12}/>Import Excel</button>
               </div>
             </div>
           ) : (
