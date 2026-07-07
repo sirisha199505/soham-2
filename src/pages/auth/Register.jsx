@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   User, School, BookOpen, Phone, Mail, Lock, Eye, EyeOff,
-  AlertCircle, CheckCircle, ArrowRight, Loader2, GraduationCap, Briefcase,
+  AlertCircle, CheckCircle, ArrowRight, Loader2, Briefcase,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -67,12 +67,13 @@ export default function Register() {
   const { colors } = useTheme();
   const navigate   = useNavigate();
 
-  // Pre-select the tab from ?role= so "Register as Trainer" (from the login page)
-  // opens the Trainer form rather than always defaulting to Student.
-  const [tab, setTab] = useState(() => {
+  // The role is fixed by ?role= — "Create your Student Account" opens ONLY the
+  // student form, "Register as Trainer" opens ONLY the trainer form. There is no
+  // in-page switcher; the two flows are kept separate (switch via the login page).
+  const tab = (() => {
     const r = new URLSearchParams(window.location.search).get('role');
     return (r === 'coach' || r === 'trainer' || r === 'teacher') ? 'coach' : 'student';
-  });
+  })();
 
   const [studentForm, setStudentForm] = useState({
     studentName: '', schoolName: '', className: '', customClass: '',
@@ -270,21 +271,6 @@ export default function Register() {
 
   return (
     <div className="fade-in-up">
-      {/* Tab switcher */}
-      <div className="flex p-1 rounded-2xl mb-7" style={{ background: 'rgba(255,255,255,0.06)' }}>
-        {[
-          { key: 'student', label: 'Student',          Icon: GraduationCap },
-          { key: 'coach',   label: 'Trainer',           Icon: Briefcase     },
-        ].map(t => (
-          <button key={t.key} onClick={() => { setTab(t.key); setError(''); }}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all
-              ${tab === t.key ? 'text-white shadow-lg' : 'text-slate-500 hover:text-slate-400'}`}
-            style={tab === t.key ? { background: `linear-gradient(135deg, ${colors.primary}, ${colors.accent})` } : {}}>
-            <t.Icon size={14} /> {t.label}
-          </button>
-        ))}
-      </div>
-
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-white mb-1" style={{ fontFamily: 'Space Grotesk' }}>
           {tab === 'student' ? 'Student Registration' : 'Trainer Registration'}
@@ -308,7 +294,7 @@ export default function Register() {
       {tab === 'student' && (
         <form onSubmit={handleStudentSubmit} className="space-y-4">
           <Field primaryColor={colors.primary} label="Student Name" icon={User}   value={studentForm.studentName} onChange={sS('studentName')} placeholder="Full name" />
-          <Field primaryColor={colors.primary} label="Institute Name"  icon={School} value={studentForm.schoolName}  onChange={sS('schoolName')}  placeholder="e.g. Delhi Public School" />
+          <Field primaryColor={colors.primary} label="Institute Name"  icon={School} value={studentForm.schoolName}  onChange={sS('schoolName')}  placeholder="Institution name" />
 
           {/*Class / Course */}
           <div className="space-y-1.5">
@@ -367,7 +353,7 @@ export default function Register() {
       {tab === 'coach' && (
         <form onSubmit={handleCoachSubmit} className="space-y-4">
           <Field primaryColor={colors.primary} label="Trainer Name"               icon={User}     value={coachForm.coachName}        onChange={sC('coachName')}        placeholder="Full name" />
-          <Field primaryColor={colors.primary} label="Organization / Institution" icon={Briefcase} value={coachForm.organizationName} onChange={sC('organizationName')} placeholder="e.g. Soham Robotics Academy" />
+          <Field primaryColor={colors.primary} label="Organization / Institution" icon={Briefcase} value={coachForm.organizationName} onChange={sC('organizationName')} placeholder="Organization / Institution" />
           <Field primaryColor={colors.primary} label="Phone Number"               icon={Phone}    value={coachForm.phoneNumber}      onChange={sCPhone}                placeholder="10-digit mobile number" type="tel" maxLength={10} inputMode="numeric" />
           <Field primaryColor={colors.primary} label="Email ID"                   icon={Mail}     value={coachForm.email}            onChange={sC('email')}            placeholder="trainer@email.com" type="email"
              />

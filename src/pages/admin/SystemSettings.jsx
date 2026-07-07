@@ -9,7 +9,6 @@ import { api } from '../../utils/api';
 
 const DEFAULT_GLOBAL = {
   quizTimerMinutes:       10,
-  randomizeQuestions:     false,
   showResultsImmediately: true,
   registrationOpen:       true,
   maintenanceMode:        false,
@@ -242,9 +241,6 @@ export default function SystemSettings() {
             <div className="w-8 h-8 rounded-xl bg-purple-50 flex items-center justify-center"><Shuffle size={15} className="text-purple-500"/></div>
             <h2 className="font-bold text-slate-800" style={{ fontFamily:'Space Grotesk' }}>Question & Result</h2>
           </div>
-          <ToggleRow label="Randomize Questions" desc="Shuffle question order globally"
-            value={global.randomizeQuestions} onChange={v => setGlobal(p => ({ ...p, randomizeQuestions: v }))}
-            icon={<Shuffle size={14}/>} color="#8B5CF6"/>
           <ToggleRow label="Show Results Immediately" desc="Students see score right after submission"
             value={global.showResultsImmediately} onChange={v => setGlobal(p => ({ ...p, showResultsImmediately: v }))}
             icon={<Eye size={14}/>} color="#3BC0EF"/>
