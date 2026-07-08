@@ -348,7 +348,7 @@ export default function QuizHistory() {
   if (loading) {
     return (
       <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-6">
-        <div>
+        <div className="sticky top-0 z-30 -mt-6 py-4 bg-slate-50/95 backdrop-blur-sm border-b border-slate-100">
           <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Quiz History</h1>
           <p className="text-sm text-slate-400 mt-0.5">Review all attempts with answer analysis and explanations</p>
         </div>

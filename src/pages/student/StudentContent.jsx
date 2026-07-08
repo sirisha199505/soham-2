@@ -741,7 +741,7 @@ export default function StudentContent() {
       <div className="min-h-full bg-slate-50">
 
         {/* ── Page header ── */}
-        <div className="bg-white border-b border-slate-100">
+        <div className="sticky top-0 z-30 bg-white border-b border-slate-100">
           <div className="max-w-5xl mx-auto px-4 md:px-8 py-6">
 
             {/* Title + summary */}

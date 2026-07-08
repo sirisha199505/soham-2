@@ -398,7 +398,7 @@ export default function AdminHelpSupport() {
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-6 max-w-4xl mx-auto">
 
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="sticky top-0 z-30 -mt-6 py-4 bg-slate-50/95 backdrop-blur-sm border-b border-slate-100 flex items-center gap-3">
         <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center">
           <HelpCircle size={20} className="text-indigo-600" />
         </div>

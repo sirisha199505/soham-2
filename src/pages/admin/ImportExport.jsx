@@ -332,7 +332,7 @@ export default function ImportExport() {
         </div>
       )}
 
-      <div>
+      <div className="sticky top-0 z-30 -mt-6 py-4 bg-slate-50/95 backdrop-blur-sm border-b border-slate-100">
         <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Import / Export</h1>
         <p className="text-sm text-slate-400 mt-0.5">Bulk import questions from Excel or CSV · export question bank data</p>
       </div>

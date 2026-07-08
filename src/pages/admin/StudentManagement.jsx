@@ -3,7 +3,7 @@ import { scrollToTop } from '../../utils/scroll';
 import {
   Users, Search, RefreshCw, CheckCircle,
   ChevronDown, Eye, EyeOff, Unlock, UserX, UserCheck,
-  X, AlertTriangle, Info, Zap, Lock, KeyRound, Loader2,
+  X, AlertTriangle, Zap, Lock, KeyRound, Loader2, Edit2, Save,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
@@ -110,10 +110,19 @@ function ResetPasswordModal({ student, onClose }) {
   );
 }
 
-/* ── Detail Modal ── */
-function StudentModal({ student, levelList, onClose }) {
-  if (!student) return null;
+/* ── Detail Modal (with inline Edit) ── */
+function StudentModal({ student, levelList, onClose, onSaved }) {
   const isCoach = student.role === 'coach' || student.role === 'teacher';
+  const [editing, setEditing] = useState(false);
+  const [saving,  setSaving]  = useState(false);
+  const [error,   setError]   = useState('');
+  const [form,    setForm]    = useState({
+    name:        student.name || '',
+    schoolName:  student.schoolName || '',
+    className:   student.className || '',
+    phoneNumber: student.phoneNumber || '',
+  });
+
   const levels = levelList.length > 0
     ? levelList.map((lvl, i) => ({ id: lvl.id, label: lvl.title || `Level ${i + 1}`, idx: i }))
     : [1, 2, 3].map((n, i) => ({ id: n, label: `Level ${n}`, idx: i }));
@@ -130,69 +139,145 @@ function StudentModal({ student, levelList, onClose }) {
         { label: 'Status', value: student.disabled ? 'Disabled' : 'Active' },
       ];
 
+  const set = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
+  const inputCls = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400';
+
+  const save = async () => {
+    setError('');
+    if (!form.name.trim()) { setError('Name is required.'); return; }
+    const payload = { name: form.name.trim(), phoneNumber: form.phoneNumber.trim() };
+    if (isCoach) payload.organizationName = form.schoolName.trim();
+    else { payload.schoolName = form.schoolName.trim(); payload.className = form.className.trim(); }
+    setSaving(true);
+    try {
+      await api.updateStudentDetails(student.id, payload);
+      onSaved?.(student.id, {
+        name: payload.name,
+        phoneNumber: payload.phoneNumber,
+        schoolName: form.schoolName.trim(),
+        ...(isCoach ? {} : { className: form.className.trim() }),
+      });
+      setEditing(false);
+    } catch (err) {
+      setError(err.message || 'Failed to update details.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
           <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>{isCoach ? 'Trainer Details' : 'Student Details'}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={16} /></button>
+          <div className="flex items-center gap-1">
+            {!editing && (
+              <button onClick={() => { setEditing(true); setError(''); }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-indigo-600 hover:bg-indigo-50 transition-colors">
+                <Edit2 size={13} /> Edit
+              </button>
+            )}
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={16} /></button>
+          </div>
         </div>
+
         <div className="p-6 space-y-4 overflow-y-auto">
-          <div className="bg-indigo-50 rounded-2xl p-4">
-            <p className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider mb-1">{isCoach ? 'Trainer Name' : 'Student Name'}</p>
-            <p className="font-bold text-slate-800 text-lg">{student.name || '—'}</p>
-            <p className="text-xs text-slate-500 mt-0.5">{(student.email && student.email !== '—') ? student.email : '—'}</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            {detailFields.map(f => (
-              <div key={f.label} className="bg-slate-50 rounded-xl p-3">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase mb-0.5">{f.label}</p>
-                <p className="text-sm font-semibold text-slate-700">{f.value || '—'}</p>
-              </div>
-            ))}
-
-            {/* Mobile (read-only) */}
-            <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase mb-0.5">Mobile</p>
-              <p className="text-sm font-semibold text-slate-700">{student.phoneNumber || '—'}</p>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-slate-400 uppercase">Level Progress</p>
-            {levels.map(({ id, label, idx }) => {
-              const d = student.levels?.[id];
-              return (
-                <div key={id} className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg flex items-center justify-center text-white text-[10px] font-bold"
-                      style={{ background: LEVEL_COLORS[idx] || '#94a3b8' }}>
-                      {idx + 1}
-                    </div>
-                    <span className="text-sm font-medium text-slate-700">{label}</span>
-                  </div>
-                  <div className="text-right">
-                    {d?.status === 'completed' ? (
-                      <div>
-                        <div className="flex items-center justify-end gap-1 mb-0.5">
-                          <p className={`text-sm font-bold ${(d.score?.pct ?? 0) >= 50 ? 'text-green-600' : 'text-red-500'}`}>{d.score?.pct ?? 0}%</p>
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${(d.score?.pct ?? 0) >= 50 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                            {(d.score?.pct ?? 0) >= 50 ? '✓' : '✗'}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-400">{d.score?.correct}/{d.score?.total} correct</p>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-slate-400">{d ? 'Unlocked' : 'Not started'}</span>
-                    )}
-                  </div>
+          {editing ? (
+            <div className="space-y-3">
+              {error && (
+                <div className="flex items-center gap-1.5 text-xs font-medium text-red-500">
+                  <AlertTriangle size={12} /> {error}
                 </div>
-              );
-            })}
-          </div>
+              )}
+              <div>
+                <label className="text-[10px] font-semibold text-slate-400 uppercase mb-1 block">{isCoach ? 'Trainer Name' : 'Student Name'}</label>
+                <input value={form.name} onChange={set('name')} className={inputCls} placeholder="Full name" />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-slate-400 uppercase mb-1 block">{isCoach ? 'Organization / Institution' : 'Institute'}</label>
+                <input value={form.schoolName} onChange={set('schoolName')} className={inputCls} placeholder={isCoach ? 'Organization / Institution' : 'Institution name'} />
+              </div>
+              {!isCoach && (
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase mb-1 block">Class / Course</label>
+                  <input value={form.className} onChange={set('className')} className={inputCls} placeholder="Class / Course" />
+                </div>
+              )}
+              <div>
+                <label className="text-[10px] font-semibold text-slate-400 uppercase mb-1 block">Mobile</label>
+                <input value={form.phoneNumber} onChange={set('phoneNumber')} className={inputCls} placeholder="10-digit mobile number" inputMode="numeric" maxLength={10} />
+              </div>
+              <p className="text-[10px] text-slate-400">Email is not editable here.</p>
+            </div>
+          ) : (
+            <>
+              <div className="bg-indigo-50 rounded-2xl p-4">
+                <p className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider mb-1">{isCoach ? 'Trainer Name' : 'Student Name'}</p>
+                <p className="font-bold text-slate-800 text-lg">{student.name || '—'}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{(student.email && student.email !== '—') ? student.email : '—'}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {detailFields.map(f => (
+                  <div key={f.label} className="bg-slate-50 rounded-xl p-3">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase mb-0.5">{f.label}</p>
+                    <p className="text-sm font-semibold text-slate-700">{f.value || '—'}</p>
+                  </div>
+                ))}
+
+                {/* Mobile */}
+                <div className="bg-slate-50 rounded-xl p-3">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase mb-0.5">Mobile</p>
+                  <p className="text-sm font-semibold text-slate-700">{student.phoneNumber || '—'}</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-slate-400 uppercase">Level Progress</p>
+                {levels.map(({ id, label, idx }) => {
+                  const d = student.levels?.[id];
+                  return (
+                    <div key={id} className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg flex items-center justify-center text-white text-[10px] font-bold"
+                          style={{ background: LEVEL_COLORS[idx] || '#94a3b8' }}>
+                          {idx + 1}
+                        </div>
+                        <span className="text-sm font-medium text-slate-700">{label}</span>
+                      </div>
+                      <div className="text-right">
+                        {d?.status === 'completed' ? (
+                          <div>
+                            <div className="flex items-center justify-end gap-1 mb-0.5">
+                              <p className={`text-sm font-bold ${(d.score?.pct ?? 0) >= 50 ? 'text-green-600' : 'text-red-500'}`}>{d.score?.pct ?? 0}%</p>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${(d.score?.pct ?? 0) >= 50 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                {(d.score?.pct ?? 0) >= 50 ? '✓' : '✗'}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400">{d.score?.correct}/{d.score?.total} correct</p>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">{d ? 'Unlocked' : 'Not started'}</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
+
+        {editing && (
+          <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 shrink-0">
+            <button onClick={() => { setEditing(false); setError(''); }} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+            <button onClick={save} disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save Changes
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -430,21 +515,6 @@ export default function StudentManagement() {
     }
   };
 
-  // Filter base data to match the active tab before computing stats
-  const tabData      = data.filter(s => tab === 'coaches' ? s.role === 'coach' : s.role !== 'coach');
-  const totalInTab   = tabData.length;
-  const tabLabel     = tab === 'coaches' ? 'Total Trainers' : 'Total Students';
-
-  // Build mini-stats dynamically from ALL DB levels — scoped to the active tab
-  const miniStats = [
-    { label: tabLabel, value: totalInTab, color: '#4F46E5' },
-    ...levelList.map((lvl, i) => ({
-      label: `${lvl.title || `L${i + 1}`} Done`,
-      value: tabData.filter(s => s.levels[lvl.id]?.status === 'completed').length,
-      color: LEVEL_COLORS[i % LEVEL_COLORS.length],
-    })),
-  ];
-
   return (
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-5">
 
@@ -458,7 +528,7 @@ export default function StudentManagement() {
       )}
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="sticky top-0 z-30 -mt-6 py-4 bg-slate-50/95 backdrop-blur-sm border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>User Management</h1>
           <p className="text-sm text-slate-400 mt-0.5">{data.length} registered users</p>
@@ -488,19 +558,6 @@ export default function StudentManagement() {
         ))}
       </div>
 
-      {/* Mini stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {miniStats.map(s => (
-          <div key={s.label} className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3 flex items-center justify-between">
-            <div>
-              <p className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>{s.value}</p>
-              <p className="text-[10px] font-semibold text-slate-400 uppercase">{s.label}</p>
-            </div>
-            <div className="w-2 h-8 rounded-full" style={{ background: s.color }} />
-          </div>
-        ))}
-      </div>
-
       {/* Controls */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-xs">
@@ -521,12 +578,6 @@ export default function StudentManagement() {
             </button>
           ))}
         </div>
-      </div>
-
-      {/* Info banner */}
-      <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5">
-        <Info size={13} className="text-blue-500 shrink-0" />
-        <p className="text-xs text-blue-700">Showing {filtered.length} {tab === 'coaches' ? 'trainer' : 'student'}{filtered.length !== 1 ? 's' : ''}. Admin overrides are marked with ★</p>
       </div>
 
       {/* Bulk Actions bar — visible whenever a level filter is active */}
@@ -670,6 +721,11 @@ export default function StudentManagement() {
           student={viewStudent}
           levelList={levelList}
           onClose={() => setViewStudent(null)}
+          onSaved={(id, changes) => {
+            setData(prev => prev.map(s => s.id === id ? { ...s, ...changes } : s));
+            setViewStudent(prev => prev ? { ...prev, ...changes } : prev);
+            showToast('Details updated');
+          }}
         />
       )}
 

@@ -161,6 +161,8 @@ export const api = {
   setStudentActive: (id, active) => request('PATCH', `/api/students/${id}/active`, { active }),
   // Admin sets a new password for a student/trainer (existing password never read).
   setStudentPassword: (id, newPassword) => request('PATCH', `/api/students/${id}/password`, { newPassword }),
+  // Admin edits a student/trainer's profile (name, institute/org, class, mobile).
+  updateStudentDetails: (id, data) => request('PATCH', `/api/students/${id}/details`, data),
   resetStudentProgress: (userId) => request('DELETE', `/api/levels/progress/${userId}`),
 
   // Content

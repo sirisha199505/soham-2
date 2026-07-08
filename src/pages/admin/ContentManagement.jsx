@@ -489,7 +489,7 @@ export default function ContentManagement() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="sticky top-0 z-30 -mt-6 py-4 bg-slate-50/95 backdrop-blur-sm border-b border-slate-100 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Content Management</h1>
           <p className="text-sm text-slate-400 mt-0.5">Manage study material for each exam level</p>

@@ -9,7 +9,6 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { ROLES, ROLE_LABELS } from '../../utils/constants';
 import { getSidebarItems } from '../../utils/rolePermissions';
-import Avatar from '../ui/Avatar';
 
 const ICON_MAP = {
   LayoutDashboard, BookOpen, History, User, TrendingUp,
@@ -108,32 +107,6 @@ export default function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose
         )}
         {items.map(item => <NavItem key={item.path} item={item} />)}
       </nav>
-
-
-      {/* User footer */}
-      <div style={{ borderTop: '1px solid #f1f5f9' }} className="p-3">
-        {!collapsed ? (
-          <div className="flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-slate-50 transition-colors">
-            <div className="relative shrink-0">
-              <Avatar name={user?.name} size="sm" />
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-slate-800 truncate leading-tight">{user?.name || 'User'}</p>
-              <p className="text-[11px] truncate mt-0.5" style={{ color: roleColor }}>
-                {user?.email?.includes('@student.rq') ? ROLE_LABELS[user?.role] : user?.email}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-2">
-            <div className="relative">
-              <Avatar name={user?.name} size="sm" />
-              <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-green-500 border-2 border-white" />
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 

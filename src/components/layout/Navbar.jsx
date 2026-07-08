@@ -1,10 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { Menu, Search, ChevronDown, LogOut, HelpCircle, X } from 'lucide-react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Menu, ChevronDown, LogOut } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
-import { ROLES, ROLE_LABELS } from '../../utils/constants';
-import { getSidebarItems } from '../../utils/rolePermissions';
+import { ROLE_LABELS } from '../../utils/constants';
 import Avatar from '../ui/Avatar';
 
 const ROLE_BADGE_STYLE = {
@@ -19,45 +17,13 @@ const ROLE_BADGE_STYLE = {
 
 export default function Navbar({ onMenuClick }) {
   const { user, logout } = useAuth();
-  const { colors } = useTheme();
   const navigate = useNavigate();
   const [showProfile, setShowProfile] = useState(false);
-  const [searchQuery, setSearchQuery]   = useState('');
-  const [searchOpen,  setSearchOpen]    = useState(false);
-  const searchRef  = useRef(null);
   const profileRef = useRef(null);
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
   const roleBadge = ROLE_BADGE_STYLE[user?.role] || ROLE_BADGE_STYLE.student;
-
-  // Admin-only: build searchable list from sidebar items
-  const isAdmin = user?.role && user.role !== ROLES.STUDENT;
-  const navItems = isAdmin ? getSidebarItems(user.role) : [];
-
-  const searchResults = searchQuery.trim().length > 0
-    ? navItems.filter(item =>
-        item.label.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : [];
-
-  const handleResultClick = (path) => {
-    navigate(path);
-    setSearchQuery('');
-    setSearchOpen(false);
-  };
-
-  // Close search dropdown on outside click
-  useEffect(() => {
-    if (!searchOpen) return;
-    const handle = (e) => {
-      if (searchRef.current && !searchRef.current.contains(e.target)) {
-        setSearchOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handle);
-    return () => document.removeEventListener('mousedown', handle);
-  }, [searchOpen]);
 
   // Close profile dropdown on outside click
   useEffect(() => {
@@ -80,63 +46,6 @@ export default function Navbar({ onMenuClick }) {
         className="lg:hidden p-2 rounded-xl transition-colors text-slate-600 hover:bg-white hover:shadow-sm">
         <Menu size={20} />
       </button>
-
-      {/* Search — admin only */}
-      {isAdmin && (
-        <div className="flex-1 max-w-sm hidden sm:block" ref={searchRef}>
-          <div className="relative group">
-            <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#3BC0EF] transition-colors pointer-events-none" />
-            <input
-              value={searchQuery}
-              onChange={e => { setSearchQuery(e.target.value); setSearchOpen(true); }}
-              onFocus={() => setSearchOpen(true)}
-              onKeyDown={e => {
-                if (e.key === 'Escape') { setSearchQuery(''); setSearchOpen(false); }
-                if (e.key === 'Enter' && searchResults.length > 0) handleResultClick(searchResults[0].path);
-              }}
-              placeholder="Search pages…"
-              className="w-full pl-10 pr-8 py-2.5 text-sm rounded-xl transition-all"
-              style={{
-                background: 'rgba(255,255,255,0.9)',
-                border: '1px solid rgba(59,192,239,0.15)',
-                outline: 'none',
-              }}
-              onFocus={e => { e.target.style.borderColor = `${colors.primary}60`; e.target.style.boxShadow = `0 0 0 3px ${colors.primary}15`; }}
-              onBlur={e => { e.target.style.borderColor = 'rgba(59,192,239,0.15)'; e.target.style.boxShadow = 'none'; }}
-            />
-            {searchQuery && (
-              <button onClick={() => { setSearchQuery(''); setSearchOpen(false); }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                <X size={13} />
-              </button>
-            )}
-
-            {/* Dropdown results */}
-            {searchOpen && searchQuery.trim().length > 0 && (
-              <div className="absolute top-[calc(100%+6px)] left-0 w-full bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-50">
-                {searchResults.length > 0 ? (
-                  <ul className="py-1">
-                    {searchResults.map(item => (
-                      <li key={item.path}>
-                        <button
-                          onMouseDown={() => handleResultClick(item.path)}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors text-left"
-                        >
-                          <Search size={12} className="text-slate-400 shrink-0" />
-                          <span className="font-medium">{item.label}</span>
-                          <span className="ml-auto text-[10px] text-slate-400 font-mono truncate max-w-[120px]">{item.path}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="px-4 py-3 text-sm text-slate-400 text-center">No pages match "{searchQuery}"</div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       <div className="flex items-center gap-2 ml-auto">
 
@@ -185,14 +94,6 @@ export default function Navbar({ onMenuClick }) {
 
             {/* Dropdown actions */}
             <div className="p-2 space-y-0.5">
-              <Link
-                to="/help"
-                onClick={() => setShowProfile(false)}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-slate-50 text-slate-600 hover:text-slate-800 transition-colors w-full text-sm font-medium"
-              >
-                <HelpCircle size={15} className="text-slate-400" />
-                Help &amp; Support
-              </Link>
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-red-50 text-slate-600 hover:text-red-600 transition-colors w-full text-sm font-medium"

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import {
   Plus, ChevronDown, ChevronUp, Edit2, Trash2, BookOpen,
@@ -1052,38 +1052,57 @@ function CategorySection({ cat, levelId, levelName, pal, expanded, onToggle, onR
   const visibleQuestions = questions;
   const visCount = qCount;
 
-  // Audience breakdown shown beside the question count.
+  // Audience breakdown (who the questions are for).
   const studentCount = questions.filter(q => (q.applicableFor || 'student') === 'student').length;
   const trainerCount = questions.filter(q => q.applicableFor === 'trainer').length;
   const bothCount    = questions.filter(q => q.applicableFor === 'both').length;
 
+  // Question-type breakdown — only types actually present are shown as chips.
+  const TYPE_LABELS = { mcq: 'MCQ', truefalse: 'True/False', match: 'Match', label: 'Label', order: 'Ordering', categorize: 'Categorize', hotspot: 'Hotspot' };
+  const typeCounts = questions.reduce((acc, q) => { const t = q.type || 'mcq'; acc[t] = (acc[t] || 0) + 1; return acc; }, {});
+
   return (
     <div className={`rounded-2xl border-2 ${pal.border} overflow-hidden`}>
-      <div className={`flex items-center gap-3 px-4 py-3 ${pal.light}`}>
-        <button onClick={onToggle} className="flex items-center gap-2 flex-wrap flex-1 min-w-0 text-left">
-          {collapsed?<Folder size={16} className={pal.text}/>:<FolderOpen size={16} className={pal.text}/>}
-          {renaming?(
-            <div className="flex-1" onClick={e=>e.stopPropagation()}>
-              <InlineInput initial={cat.name} placeholder="Category name" onSave={handleRename} onCancel={()=>setRenaming(false)}/>
+      <div className={`px-4 py-3 ${pal.light}`}>
+        <div className="flex items-center gap-3">
+          <button onClick={onToggle} className="flex items-center gap-2 flex-1 min-w-0 text-left">
+            {collapsed?<Folder size={16} className={pal.text}/>:<FolderOpen size={16} className={pal.text}/>}
+            {renaming?(
+              <div className="flex-1" onClick={e=>e.stopPropagation()}>
+                <InlineInput initial={cat.name} placeholder="Category name" onSave={handleRename} onCancel={()=>setRenaming(false)}/>
+              </div>
+            ):(
+              <>
+                <span className={`text-sm font-bold ${pal.text} truncate`}>{cat.name}</span>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/70 ${pal.text} shrink-0`}>{qCount} {qCount===1?'question':'questions'}</span>
+              </>
+            )}
+          </button>
+          {!renaming && (
+            <div className="flex items-center gap-1 shrink-0">
+              <button onClick={()=>setQModal('add')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border ${pal.border} ${pal.text} text-xs font-bold hover:opacity-80 transition-all shadow-sm`}>
+                <Plus size={12}/>Add Question
+              </button>
+              <button onClick={()=>setRenaming(true)} className="p-1.5 rounded-lg hover:bg-white/60 text-slate-500 transition-colors"><Edit2 size={13}/></button>
+              <button onClick={()=>setConfirmDel(true)} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={13}/></button>
+              <button onClick={onToggle} className="p-1.5 rounded-lg hover:bg-white/60 text-slate-500 transition-colors">{collapsed?<ChevronDown size={13}/>:<ChevronUp size={13}/>}</button>
             </div>
-          ):(
-            <>
-              <span className={`text-sm font-bold ${pal.text} truncate`}>{cat.name}</span>
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/70 ${pal.text} shrink-0`}>{qCount} {qCount===1?'question':'questions'}</span>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 shrink-0">{studentCount} Students</span>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 shrink-0">{trainerCount} Trainers</span>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 shrink-0">{bothCount} Both</span>
-            </>
           )}
-        </button>
-        {!renaming && (
-          <div className="flex items-center gap-1 shrink-0">
-            <button onClick={()=>setQModal('add')} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border ${pal.border} ${pal.text} text-xs font-bold hover:opacity-80 transition-all shadow-sm`}>
-              <Plus size={12}/>Add Question
-            </button>
-            <button onClick={()=>setRenaming(true)} className="p-1.5 rounded-lg hover:bg-white/60 text-slate-500 transition-colors"><Edit2 size={13}/></button>
-            <button onClick={()=>setConfirmDel(true)} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={13}/></button>
-            <button onClick={onToggle} className="p-1.5 rounded-lg hover:bg-white/60 text-slate-500 transition-colors">{collapsed?<ChevronDown size={13}/>:<ChevronUp size={13}/>}</button>
+        </div>
+
+        {/* Counts strip — shown for each category while the level is open, so the
+            audience + question-type breakdown is visible without expanding it. */}
+        {!renaming && qCount > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 mt-2 pl-6">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">For</span>
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">{studentCount} Students</span>
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">{trainerCount} Trainers</span>
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">{bothCount} Both</span>
+            <span className="w-px h-3.5 bg-slate-300 mx-1" />
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Types</span>
+            {Object.keys(TYPE_LABELS).filter(t => typeCounts[t]).map(t => (
+              <span key={t} className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{typeCounts[t]} {TYPE_LABELS[t]}</span>
+            ))}
           </div>
         )}
       </div>
@@ -1147,6 +1166,13 @@ function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onD
   const [importOpen,  setImportOpen]  = useState(false);
   const [confirmDel,  setConfirmDel]  = useState(false);
   const [saving,      setSaving]      = useState(false);
+  const addCatRef = useRef(null);
+
+  // When the "Add Category" form opens, scroll it into view so the action is
+  // visible even if the user had scrolled deep into the level's questions.
+  useEffect(() => {
+    if (addingCat) addCatRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [addingCat]);
 
   useEffect(() => {
     api.getQbCategories(level.id)
@@ -1260,8 +1286,8 @@ function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onD
   };
 
   return (
-    <div className="rounded-2xl overflow-hidden shadow-sm border border-slate-100">
-      <div className={`bg-gradient-to-r ${pal.bg} px-5 py-4`}>
+    <div className="rounded-2xl shadow-sm border border-slate-100">
+      <div className={`bg-gradient-to-r ${pal.bg} px-5 py-4 sticky top-[76px] z-20 ${collapsed ? 'rounded-2xl' : 'rounded-t-2xl'}`}>
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center shrink-0"><Layers size={16} className="text-white"/></div>
           <div className="flex-1 min-w-0">
@@ -1283,7 +1309,7 @@ function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onD
               <button onClick={()=>setImportOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-all border border-white/30">
                 <Download size={12}/>Import Excel
               </button>
-              <button onClick={()=>setAddingCat(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-all">
+              <button onClick={()=>{ if (collapsed) onToggle(); setAddingCat(true); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-all">
                 <Plus size={13}/>Add Category
               </button>
               <button onClick={()=>setRenaming(true)} className="p-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white/80 hover:text-white transition-all"><Edit2 size={13}/></button>
@@ -1295,9 +1321,9 @@ function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onD
       </div>
 
       {!collapsed && (
-        <div className={`${pal.light} px-5 py-4 space-y-3 max-h-[70vh] overflow-y-auto`}>
+        <div className={`${pal.light} px-5 py-4 space-y-3 rounded-b-2xl`}>
           {addingCat && (
-            <div className={`bg-white rounded-2xl border-2 ${pal.border} p-4`}>
+            <div ref={addCatRef} className={`bg-white rounded-2xl border-2 ${pal.border} p-4`}>
               <p className={`text-xs font-bold ${pal.text} mb-2`}>New Category Name</p>
               {saving ? (
                 <div className="flex items-center gap-2 py-2 text-sm text-slate-500"><Loader2 size={14} className="animate-spin"/>Creating…</div>
@@ -1401,7 +1427,7 @@ function BankDetail({ bank, bankIndex, onBankRenamed, showToast }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+      <div className="sticky top-0 z-40 -mt-6 py-3 bg-slate-50/95 backdrop-blur-sm border-b border-slate-100 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
           {renamingBank ? (
             <div className="max-w-xs">

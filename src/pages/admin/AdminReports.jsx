@@ -194,7 +194,7 @@ export default function AdminReports() {
     <div className="min-h-full bg-slate-50 px-4 md:px-6 lg:px-8 py-6 space-y-6">
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="sticky top-0 z-30 -mt-6 py-4 bg-slate-50/95 backdrop-blur-sm border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Reports & Analytics</h1>
           <p className="text-sm text-slate-400 mt-0.5">Student performance and exam completion data</p>
