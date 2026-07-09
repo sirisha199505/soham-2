@@ -140,7 +140,10 @@ function parseCSV(text) {
     const rawCat        = col('category')?.toLowerCase();
     // Blank/unknown category → '' so the import falls back to the target category's subject.
     const category      = VALID_CATS.includes(rawCat) ? rawCat : '';
-    const base          = { id:uid('q'), text, difficulty:diff, applicableFor, category };
+    // Free-text name of the Question Bank category this row should be filed into.
+    // Blank → the row inherits the category chosen in the import dialog.
+    const qbCategory    = col('qb_category')?.trim() || '';
+    const base          = { id:uid('q'), text, difficulty:diff, applicableFor, category, qbCategory };
 
     if (type==='mcq')                         questions.push({ ...base, type:'mcq',   options:[col('opt_a'),col('opt_b'),col('opt_c'),col('opt_d')].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((col('correct')||'A').toUpperCase())), explanation:col('explanation')||'' });
     else if (type==='match')                  questions.push({ ...base, type:'match', pairs:[{left:col('p1_left'),leftImage:'',right:col('p1_right'),rightImage:''},{left:col('p2_left'),leftImage:'',right:col('p2_right'),rightImage:''},{left:col('p3_left'),leftImage:'',right:col('p3_right'),rightImage:''},{left:col('p4_left'),leftImage:'',right:col('p4_right'),rightImage:''}], explanation:'' });
@@ -332,20 +335,24 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
     // filtered/grouped after import; leave it blank to inherit the target category.
     // Remaining columns: 2-18 are the original layout; 19-21 carry the drag-drop
     // types. Parsing is header-aware, so column order can change freely.
-    const headers = ['type','category(robotics/chemistry/physics/mathematics)','text','difficulty','opt_a','opt_b','opt_c','opt_d','correct','explanation','image_url(img only)','p1_left','p1_right','p2_left','p2_right','p3_left','p3_right','p4_left','p4_right','applicable_for','steps(order: a|b|c)','groups(categorize: G1: a, b; G2: c, d)','hotspots(label@x,y; …  x,y are %)'];
+    const headers = ['type','category(robotics/chemistry/physics/mathematics)','text','difficulty','opt_a','opt_b','opt_c','opt_d','correct','explanation','image_url(img only)','p1_left','p1_right','p2_left','p2_right','p3_left','p3_right','p4_left','p4_right','applicable_for','steps(order: a|b|c)','groups(categorize: G1: a, b; G2: c, d)','hotspots(label@x,y; …  x,y are %)','qb_category(files into / creates this category)'];
     const E = ''; // filler for unused columns
+    // Last column (qb_category) routes each row into its own Question Bank
+    // category — a new name is created automatically. Blank inherits the
+    // category selected in the import dialog. The rows below create three
+    // separate categories: "Motors", "Sensors" and "Programming Basics".
     const rows = [
-      ['mcq','robotics','What is a servo motor?','easy','A DC motor with feedback control','A stepper motor','A linear actuator','An AC induction motor','A','Servo motors use encoders for closed-loop position control.',E,E,E,E,E,E,E,E,E,'student',E,E,E],
-      ['mcq','robotics','Which protocol is used for wireless robot communication?','hard','I2C','SPI','Bluetooth / Wi-Fi','UART','C','Bluetooth and Wi-Fi are standard wireless protocols.',E,E,E,E,E,E,E,E,E,'both',E,E,E],
-      ['truefalse','physics','A stepper motor uses feedback to know its position.','easy',E,E,E,E,'False','Stepper motors move in fixed open-loop steps.',E,E,E,E,E,E,E,E,E,'student',E,E,E],
-      ['label','robotics','What component is shown in the image?','medium','Servo motor','DC motor','Stepper motor','Solenoid','C',E,'https://example.com/component.jpg',E,E,E,E,E,E,E,E,'student',E,E,E],
-      ['match','chemistry','Match each component to its function','easy',E,E,E,E,E,E,E,'Sensor','Detects input signals','Motor','Converts electricity to motion','CPU','Processes instructions','Battery','Stores electrical energy','both',E,E,E],
-      ['order','mathematics','Arrange the steps to compute a rectangle’s area','easy',E,E,E,E,E,'Start first, End last.',E,E,E,E,E,E,E,E,E,'student','Start|Input length and width|Area = length × width|Print area|End',E,E],
-      ['categorize','robotics','Group each device by its role','medium',E,E,E,E,E,E,E,E,E,E,E,E,E,E,E,'student',E,'Input Device: Keyboard, Mouse; Processing Device: CPU, RAM; Output Device: Monitor, Printer',E],
-      ['hotspot','robotics','Label the parts of the computer','medium',E,E,E,E,E,E,'https://example.com/computer.jpg',E,E,E,E,E,E,E,E,'student',E,E,'Keyboard@45,80; Mouse@70,82; Monitor@40,25; CPU@80,45'],
+      ['mcq','robotics','What is a servo motor?','easy','A DC motor with feedback control','A stepper motor','A linear actuator','An AC induction motor','A','Servo motors use encoders for closed-loop position control.',E,E,E,E,E,E,E,E,E,'student',E,E,E,'Motors'],
+      ['mcq','robotics','Which protocol is used for wireless robot communication?','hard','I2C','SPI','Bluetooth / Wi-Fi','UART','C','Bluetooth and Wi-Fi are standard wireless protocols.',E,E,E,E,E,E,E,E,E,'both',E,E,E,'Sensors'],
+      ['truefalse','physics','A stepper motor uses feedback to know its position.','easy',E,E,E,E,'False','Stepper motors move in fixed open-loop steps.',E,E,E,E,E,E,E,E,E,'student',E,E,E,'Motors'],
+      ['label','robotics','What component is shown in the image?','medium','Servo motor','DC motor','Stepper motor','Solenoid','C',E,'https://example.com/component.jpg',E,E,E,E,E,E,E,E,'student',E,E,E,'Sensors'],
+      ['match','chemistry','Match each component to its function','easy',E,E,E,E,E,E,E,'Sensor','Detects input signals','Motor','Converts electricity to motion','CPU','Processes instructions','Battery','Stores electrical energy','both',E,E,E,'Sensors'],
+      ['order','mathematics','Arrange the steps to compute a rectangle’s area','easy',E,E,E,E,E,'Start first, End last.',E,E,E,E,E,E,E,E,E,'student','Start|Input length and width|Area = length × width|Print area|End',E,E,'Programming Basics'],
+      ['categorize','robotics','Group each device by its role','medium',E,E,E,E,E,E,E,E,E,E,E,E,E,E,E,'student',E,'Input Device: Keyboard, Mouse; Processing Device: CPU, RAM; Output Device: Monitor, Printer',E,'Programming Basics'],
+      ['hotspot','robotics','Label the parts of the computer','medium',E,E,E,E,E,E,'https://example.com/computer.jpg',E,E,E,E,E,E,E,E,'student',E,E,'Keyboard@45,80; Mouse@70,82; Monitor@40,25; CPU@80,45','Sensors'],
     ];
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    ws['!cols'] = [{wch:11},{wch:20},{wch:46},{wch:10},{wch:26},{wch:20},{wch:20},{wch:20},{wch:9},{wch:42},{wch:34},{wch:16},{wch:22},{wch:16},{wch:22},{wch:16},{wch:22},{wch:16},{wch:22},{wch:15},{wch:46},{wch:54},{wch:46}];
+    ws['!cols'] = [{wch:11},{wch:20},{wch:46},{wch:10},{wch:26},{wch:20},{wch:20},{wch:20},{wch:9},{wch:42},{wch:34},{wch:16},{wch:22},{wch:16},{wch:22},{wch:16},{wch:22},{wch:16},{wch:22},{wch:15},{wch:46},{wch:54},{wch:46},{wch:32}];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Questions');
     XLSX.writeFile(wb, 'question_bank_template.xlsx');
@@ -402,6 +409,7 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
                 </div>
               ))}
             </div>
+            <p className="text-[11px] text-indigo-700/80 mt-2">Add a <span className="font-mono">qb_category</span> column to file each row into its own Question Bank category — a new name is created automatically, so one file can build several categories at once. Rows that leave it blank go into the category selected below.</p>
             <p className="text-[11px] text-indigo-700/80 mt-2">All rows also accept <span className="font-mono">category</span> (robotics/chemistry/physics/mathematics — used for filtering; blank inherits the target category), <span className="font-mono">difficulty</span> (easy/medium/hard), <span className="font-mono">explanation</span>, and <span className="font-mono">applicable_for</span> (student/trainer/both).</p>
             <button onClick={downloadTemplate} className="mt-3 flex items-center gap-2 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
               <Download size={12}/> Download Excel Template (.xlsx)
@@ -426,7 +434,7 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
             ))}
           </div>
           <div>
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Import Into Category</label>
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">Import Into Category <span className="normal-case font-medium text-slate-400">(fallback — rows with a <span className="font-mono">qb_category</span> use that instead)</span></label>
             <select value={catId} onChange={e=>setCatId(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300">
               {categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
               <option value="__new__">+ Create new category</option>
@@ -1216,47 +1224,69 @@ function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onD
   };
 
   const handleImport = async (questions, catId, newCatName) => {
-    let targetCatId = catId;
-
-    if (!catId && newCatName) {
-      try {
-        const newCat = await api.createQbCategory({ levelId: level.id, bankId, name: newCatName });
-        targetCatId = newCat.id;
-        setCategories(prev => [...prev, newCat]);
-      } catch (err) {
-        showToast?.(`Failed to create category: ${err.message}`, 'red');
-        return;
-      }
-    }
-
     const total = questions.length;
     const norm  = (t = '') => t.trim().toLowerCase();
 
-    // Skip questions that already exist in the target category (by text). Fetch
-    // the current questions for that category; if the lookup fails, fall back to
-    // batch-only dedup rather than blocking the import.
-    const existing = new Set();
-    if (targetCatId) {
-      try {
-        const current = await api.getQuestionsByCategory(targetCatId);
-        (Array.isArray(current) ? current : []).forEach(q => existing.add(norm(q.text)));
-      } catch { /* couldn't load existing — proceed with batch dedup only */ }
+    // ── Category resolver ──────────────────────────────────────────────────
+    // A row may name its own Question Bank category via the `qb_category`
+    // column. Each distinct name is matched (case-insensitive) against the
+    // existing categories and created on the fly if it doesn't exist yet, so a
+    // single file can populate several separate categories at once. Rows with
+    // no `qb_category` fall back to the category chosen in the import dialog.
+    const idByName = new Map();   // normalized name -> category id
+    const nameById = new Map();   // category id -> display name
+    categories.forEach(c => { idByName.set(norm(c.name), c.id); nameById.set(c.id, c.name); });
+    const createdCats = [];
+    const ensureCat = async (name) => {
+      const key = norm(name);
+      if (!key) return null;
+      if (idByName.has(key)) return idByName.get(key);
+      const newCat = await api.createQbCategory({ levelId: level.id, bankId, name: name.trim() });
+      idByName.set(key, newCat.id);
+      nameById.set(newCat.id, newCat.name);
+      createdCats.push(newCat);
+      return newCat.id;
+    };
+
+    // Fallback target = the category picked in the dialog (or a new one named there).
+    let fallbackCatId = catId || null;
+    if (!fallbackCatId && newCatName) {
+      try { fallbackCatId = await ensureCat(newCatName); }
+      catch (err) { showToast?.(`Failed to create category: ${err.message}`, 'red'); return; }
     }
 
-    // Deduplicate within the imported batch AND against existing questions.
-    const seen = new Set();
-    let duplicates = 0;
-    const toImport = questions.filter(q => {
-      const key = norm(q.text);
-      if (seen.has(key) || existing.has(key)) { duplicates++; return false; }
-      seen.add(key);
-      return true;
-    });
+    // Existing questions per target category (fetched once each, for text dedup).
+    const existingByCat = new Map();
+    const getExisting = async (id) => {
+      if (existingByCat.has(id)) return existingByCat.get(id);
+      const set = new Set();
+      try {
+        const current = await api.getQuestionsByCategory(id);
+        (Array.isArray(current) ? current : []).forEach(q => set.add(norm(q.text)));
+      } catch { /* couldn't load existing — proceed with batch dedup only */ }
+      existingByCat.set(id, set);
+      return set;
+    };
 
-    const targetCatName = categories.find(c => c.id == targetCatId)?.name || newCatName || '';
-    let imported = 0;
-    let errors   = 0;
-    for (const q of toImport) {
+    const seenByCat = new Map();  // target id -> Set of texts seen in this batch
+    let imported = 0, duplicates = 0, errors = 0;
+
+    for (const q of questions) {
+      // Resolve this row's target category (its own qb_category, else the fallback).
+      let targetCatId;
+      try { targetCatId = q.qbCategory ? await ensureCat(q.qbCategory) : fallbackCatId; }
+      catch { errors++; continue; }
+      if (!targetCatId) { errors++; continue; }
+
+      // Deduplicate within the batch AND against existing questions — per category.
+      const key = norm(q.text);
+      const existing = await getExisting(targetCatId);
+      if (!seenByCat.has(targetCatId)) seenByCat.set(targetCatId, new Set());
+      const seen = seenByCat.get(targetCatId);
+      if (seen.has(key) || existing.has(key)) { duplicates++; continue; }
+      seen.add(key);
+
+      const targetCatName = nameById.get(targetCatId) || '';
       try {
         await api.addQuestion({
           text: q.text, type: q.type,
@@ -1268,7 +1298,7 @@ function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onD
           applicableFor: q.applicableFor || 'student',
           qbCategoryId: targetCatId, qbLevelId: level.id,
           levelId: undefined,
-          // Per-row category (subject) when provided; otherwise inherit the target category.
+          // Per-row subject tag when provided; otherwise derived from the target category.
           category: q.category ? getCatFromName(q.category) : getCatFromName(targetCatName),
           bankName: 'Question Bank', status: 'active',
         });
@@ -1276,13 +1306,17 @@ function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onD
       } catch { errors++; }
     }
 
+    // Register any categories created during this import so the UI shows them.
+    if (createdCats.length) setCategories(prev => [...prev, ...createdCats]);
+
     const parts = [`${imported} imported`];
-    if (duplicates > 0) parts.push(`${duplicates} duplicate${duplicates !== 1 ? 's' : ''} skipped`);
-    if (errors > 0)     parts.push(`${errors} failed`);
+    if (createdCats.length > 0) parts.push(`${createdCats.length} categor${createdCats.length !== 1 ? 'ies' : 'y'} created`);
+    if (duplicates > 0)         parts.push(`${duplicates} duplicate${duplicates !== 1 ? 's' : ''} skipped`);
+    if (errors > 0)             parts.push(`${errors} failed`);
     showToast?.(`${total} total · ${parts.join(' · ')}.`);
 
     // Return the summary so the modal can show a post-import breakdown.
-    return { total, imported, duplicates, errors };
+    return { total, imported, duplicates, errors, categoriesCreated: createdCats.length };
   };
 
   return (
