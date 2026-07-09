@@ -429,7 +429,18 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
       {step==='preview' && (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-3">
-            {[{l:'Total',v:parsed.length,c:'bg-slate-100 text-slate-700'},{l:'MCQ',v:parsed.filter(q=>q.type==='mcq').length,c:'bg-blue-100 text-blue-700'},{l:'Match',v:parsed.filter(q=>q.type==='match').length,c:'bg-violet-100 text-violet-700'},{l:'Label',v:parsed.filter(q=>q.type==='label').length,c:'bg-rose-100 text-rose-700'}].map(s=>(
+            {[
+              {l:'Total',      t:null,          c:'bg-slate-100 text-slate-700'},
+              {l:'MCQ',        t:'mcq',         c:'bg-blue-100 text-blue-700'},
+              {l:'True/False', t:'truefalse',   c:'bg-emerald-100 text-emerald-700'},
+              {l:'Label',      t:'label',       c:'bg-rose-100 text-rose-700'},
+              {l:'Match',      t:'match',       c:'bg-violet-100 text-violet-700'},
+              {l:'Order',      t:'order',       c:'bg-amber-100 text-amber-700'},
+              {l:'Categorize', t:'categorize',  c:'bg-sky-100 text-sky-700'},
+              {l:'Hotspot',    t:'hotspot',     c:'bg-fuchsia-100 text-fuchsia-700'},
+            ].map(s=>({...s, v: s.t===null ? parsed.length : parsed.filter(q=>q.type===s.t).length}))
+             .filter(s=>s.t===null || s.v>0)
+             .map(s=>(
               <div key={s.l} className={`px-4 py-2 rounded-xl text-center ${s.c}`}><p className="text-lg font-bold">{s.v}</p><p className="text-[10px] font-semibold">{s.l}</p></div>
             ))}
           </div>
@@ -489,9 +500,13 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
               )}
             </div>
             <p className="text-xs text-slate-400 mt-5">
-              {r.duplicates > 0
-                ? `${r.duplicates} duplicate${r.duplicates !== 1 ? 's' : ''} already existed and ${r.duplicates !== 1 ? 'were' : 'was'} skipped — ${r.imported} new question${r.imported !== 1 ? 's' : ''} imported.`
-                : `All ${r.imported} question${r.imported !== 1 ? 's' : ''} imported successfully.`}
+              {(() => {
+                const bits = [`${r.imported} new question${r.imported !== 1 ? 's' : ''} imported`];
+                if (r.categoriesCreated > 0) bits.push(`${r.categoriesCreated} new categor${r.categoriesCreated !== 1 ? 'ies' : 'y'} created`);
+                if (r.duplicates > 0)        bits.push(`${r.duplicates} duplicate${r.duplicates !== 1 ? 's' : ''} skipped (already in that category)`);
+                if (r.errors > 0)            bits.push(`${r.errors} failed`);
+                return `${bits.join(' · ')}.`;
+              })()}
             </p>
           </div>
         );
@@ -1303,7 +1318,14 @@ function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onD
           bankName: 'Question Bank', status: 'active',
         });
         imported++;
-      } catch { errors++; }
+      } catch (err) {
+        // The backend also rejects a question whose text already exists in the
+        // target category. That isn't a real failure — count it as a skipped
+        // duplicate (the client-side check can miss it if the existing-questions
+        // lookup failed, e.g. on a Render cold start).
+        if (/already exists/i.test(err?.message || '')) { duplicates++; existing.add(key); }
+        else errors++;
+      }
     }
 
     // Register any categories created during this import so the UI shows them.
