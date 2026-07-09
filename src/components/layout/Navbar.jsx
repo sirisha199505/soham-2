@@ -38,7 +38,7 @@ export default function Navbar({ onMenuClick }) {
   }, [showProfile]);
 
   return (
-    <header className="sticky top-0 z-30 h-[62px] flex items-center px-4 md:px-6 gap-4"
+    <header className="sticky top-0 z-[45] h-[62px] flex items-center px-4 md:px-6 gap-4"
       style={{ background: 'rgba(240,244,248,0.92)', backdropFilter: 'blur(16px)', borderBottom: '1px solid rgba(59,192,239,0.1)' }}>
 
       {/* Mobile menu */}
