@@ -336,24 +336,6 @@ function LevelCard({ level, status, levelData, levelSettings, attemptCount }) {
           </div>
         )}
 
-        {/* Progress bar */}
-        <div className="space-y-1">
-          <div className="flex justify-between text-[10px] text-slate-400 font-medium">
-            <span>Progress</span>
-            <span>{isCompleted ? '100%' : isLocked ? '0%' : 'In Progress'}</span>
-          </div>
-          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-            <div
-              className="h-2 rounded-full transition-all duration-700"
-              style={{
-                width: isCompleted ? '100%' : '0%',
-                background: isLocked
-                  ? '#94a3b8'
-                  : `linear-gradient(90deg, ${level.color.from}, ${level.color.to})`,
-              }}
-            />
-          </div>
-        </div>
 
         {/* CTA */}
         {isLocked && (
