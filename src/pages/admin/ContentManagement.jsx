@@ -316,10 +316,6 @@ function LevelSection({ levelId, levelTitle, levelOrder, pages, expanded, onTogg
       <div className="relative p-5 flex items-center justify-between"
         style={{ background: `linear-gradient(135deg, ${colors.from}15, ${colors.to}08)`, borderBottom: `1px solid ${colors.from}20` }}>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold"
-            style={{ background: `linear-gradient(135deg, ${colors.from}, ${colors.to})` }}>
-            {levelId}
-          </div>
           <div>
             <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>{levelTitle || `Level ${levelId}`}</h3>
             <p className="text-xs text-slate-500">{pages.length} content</p>
