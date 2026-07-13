@@ -475,10 +475,10 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
       {step==='done' && (() => {
         const r = result || { total: parsed.length, imported: parsed.length, duplicates: 0, errors: 0 };
         // Reflect the real outcome instead of always celebrating success:
-        //   nothing imported + failures → Failed (red)
+        //   nothing imported (all duplicates and/or all failed) → Failed (red)
         //   some imported + some failures → Finished with errors (amber)
-        //   no failures → Complete (green)
-        const allFailed = r.imported === 0 && r.errors > 0;
+        //   some imported, no failures → Complete (green)
+        const allFailed = r.imported === 0;
         const partial   = r.imported > 0  && r.errors > 0;
         const head = allFailed
           ? { Icon: AlertCircle,   wrap: 'bg-red-100',   color: 'text-red-500',   title: 'Import Failed' }
@@ -1206,9 +1206,6 @@ function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onD
   const [importOpen,  setImportOpen]  = useState(false);
   const [confirmDel,  setConfirmDel]  = useState(false);
   const [saving,      setSaving]      = useState(false);
-  // Question counts by audience across all of this level's categories. A 'both'
-  // question counts toward BOTH the student and trainer totals.
-  const [audienceCount, setAudienceCount] = useState(null);
   const addCatRef = useRef(null);
 
   // When the "Add Category" form opens, scroll it into view so the action is
@@ -1228,27 +1225,6 @@ function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onD
   useEffect(() => {
     if (openCatId === undefined && categories.length) setOpenCatId(categories[0].id);
   }, [openCatId, categories.length]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Tally question counts per audience across every category in this level, so
-  // the header can show how many questions students and trainers each get.
-  useEffect(() => {
-    let cancelled = false;
-    // Empty category list → Promise.all([]) resolves to [] and tallies to 0/0.
-    Promise.all(categories.map(c => api.getQuestionsByCategory(c.id).catch(() => [])))
-      .then(lists => {
-        if (cancelled) return;
-        let student = 0, trainer = 0;
-        lists.flat().forEach(q => {
-          const af = q.applicableFor || q.applicable_for || 'student';
-          if (af === 'student' || af === 'both') student++;
-          if (af === 'trainer' || af === 'both') trainer++;
-        });
-        setAudienceCount({ student, trainer });
-      });
-    return () => { cancelled = true; };
-    // `expanded` is included so counts refresh when the admin re-opens a level
-    // after adding/removing questions inside its categories.
-  }, [categories, expanded]);
 
   const handleAddCategory = async (name) => {
     setSaving(true);
@@ -1413,16 +1389,6 @@ function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onD
                 <span className="text-white/70 text-xs font-semibold">
                   {loading ? '…' : `${categories.length} ${categories.length===1?'category':'categories'}`}
                 </span>
-                {!loading && audienceCount && (
-                  <span className="flex items-center gap-1.5">
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white">
-                      🎓 {audienceCount.student} for students
-                    </span>
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white">
-                      🧑‍🏫 {audienceCount.trainer} for trainers
-                    </span>
-                  </span>
-                )}
               </div>
             )}
           </div>
