@@ -622,6 +622,7 @@ export default function StudentContent() {
 
   const sortedLevels = useMemo(() =>
     Object.values(levelSettings)
+      .filter(dbLevel => dbLevel?.active !== false)   // inactive levels are hidden entirely
       .sort(compareLevels)
       .map((dbLevel, idx) => {
         const staticLevel = LEVELS.find(l => l.id === dbLevel.id);

@@ -79,6 +79,7 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
   const [pdfDrag, setPdfDrag] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [saveMsg, setSaveMsg] = useState('');
 
   const processPdf = async (file) => {
     if (!file) return;
@@ -96,23 +97,21 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
     }
   };
 
-  const canSave = form.title.trim() && (form.type === 'text' || form.pdfData) && !uploading;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>
-            {page ? 'Edit Content Page' : 'Add Content Page'}
+            {page ? 'Edit Content' : 'Add Content'}
           </h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={16} /></button>
         </div>
         <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
           {/* Title */}
           <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Page Title <span className="text-red-400">*</span></label>
-            <input value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Title <span className="text-red-400">*</span></label>
+            <input value={form.title} onChange={e => { setForm(p => ({ ...p, title: e.target.value })); setSaveMsg(''); }}
               placeholder="e.g. What is Robotics?"
               className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
           </div>
@@ -200,13 +199,22 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
             </div>
           )}
         </div>
-        <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button onClick={() => canSave && onSave(levelId, form, pageIdx)}
-            disabled={!canSave}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-            <Save size={14} /> Save Page
-          </button>
+        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3">
+          <p className="text-xs font-medium text-red-500">{saveMsg}</p>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+            <button
+              onClick={() => {
+                if (!form.title.trim())                        { setSaveMsg('Please add a title name.'); return; }
+                if (form.type !== 'text' && !form.pdfData)     { setSaveMsg('Please add PDF / image content.'); return; }
+                if (uploading) return;
+                onSave(levelId, form, pageIdx);
+              }}
+              disabled={uploading}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+              <Save size={14} /> Save
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -314,14 +322,14 @@ function LevelSection({ levelId, levelTitle, levelOrder, pages, expanded, onTogg
           </div>
           <div>
             <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>{levelTitle || `Level ${levelId}`}</h3>
-            <p className="text-xs text-slate-500">{pages.length} content page{pages.length !== 1 ? 's' : ''}</p>
+            <p className="text-xs text-slate-500">{pages.length} content</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => onAdd(levelId)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white"
             style={{ background: `linear-gradient(135deg, ${colors.from}, ${colors.to})` }}>
-            <Plus size={12} /> Add Page
+            <Plus size={12} /> Add
           </button>
           <button onClick={() => onDeleteLevel(levelId, levelTitle, pages.length)}
             className="p-2 rounded-xl hover:bg-red-50 text-slate-300 hover:text-red-500 transition-colors"
@@ -340,15 +348,11 @@ function LevelSection({ levelId, levelTitle, levelOrder, pages, expanded, onTogg
           {pages.length === 0 ? (
             <div className="flex flex-col items-center py-8 text-center">
               <FileText size={28} className="text-slate-200 mb-2" />
-              <p className="text-sm text-slate-400">No content pages yet</p>
+              <p className="text-sm text-slate-400">No content yet</p>
               <p className="text-xs text-slate-300 mt-0.5">Students will go directly to the quiz</p>
             </div>
           ) : pages.map((pg, i) => (
             <div key={i} className="flex items-start gap-3 bg-slate-50 rounded-xl p-4">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold shrink-0"
-                style={{ background: `linear-gradient(135deg, ${colors.from}, ${colors.to})` }}>
-                {i + 1}
-              </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-slate-800 text-sm">{pg.title}</p>
                 <p className="text-xs text-slate-400 mt-0.5">{pg.sections?.length || 0} section{pg.sections?.length !== 1 ? 's' : ''}</p>

@@ -21,7 +21,7 @@ const levelColor = (order) => DEFAULT_COLORS[(order - 1) % DEFAULT_COLORS.length
 
 /* ── Add Level Modal ── */
 function AddLevelModal({ onSave, onClose, existingTitles = [] }) {
-  const [form, setForm] = useState({ title: '', subtitle: '', description: '', timeLimit: 10, questionCount: 20, audience: 'both' });
+  const [form, setForm] = useState({ title: '', subtitle: '', description: '', timeLimit: 10, questionCount: 20, audience: 'both', active: true });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -107,6 +107,18 @@ function AddLevelModal({ onSave, onClose, existingTitles = [] }) {
               })}
             </div>
           </div>
+
+          <label className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-3 cursor-pointer">
+            <div>
+              <p className="text-sm font-semibold text-slate-700">Level Active</p>
+              <p className="text-xs text-slate-400">When off, no one can access this level</p>
+            </div>
+            <button type="button" onClick={() => setForm(p => ({ ...p, active: !p.active }))}
+              className={`transition-colors ${form.active ? 'text-indigo-500' : 'text-slate-300'}`}>
+              {form.active ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
+            </button>
+          </label>
+
           {error && (
             <div className="flex items-center gap-2 px-3 py-2 bg-red-50 rounded-xl border border-red-100 text-sm text-red-600">
               <AlertCircle size={14} />{error}
@@ -439,6 +451,7 @@ export default function ExamLevels() {
         timeLimit:     Number(form.timeLimit) || 10,
         questionCount: Number(form.questionCount) || 20,
         audience:      form.audience || 'both',
+        active:        form.active !== false,
       });
 
       // Auto-sync: create a matching QB level so the Question Bank stays in step

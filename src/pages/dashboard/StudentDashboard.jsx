@@ -502,7 +502,9 @@ export default function StudentDashboard() {
   // Access Control: hide levels not meant for this account type (Students Only /
   // Trainers Only). 'both' and any admin viewer see everything.
   const visibleLevels = levelSettingsLoaded
-    ? buildLevelList(levelSettings).filter(l => levelAudienceAllows(levelSettings[l.id]?.audience, user?.role))
+    ? buildLevelList(levelSettings).filter(l =>
+        levelSettings[l.id]?.active !== false                                    // inactive → hidden entirely
+        && levelAudienceAllows(levelSettings[l.id]?.audience, user?.role))
     : [];
 
   const statuses = isProgressLoading
