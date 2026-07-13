@@ -12,12 +12,17 @@ export default function Login() {
   const { colors } = useTheme();
   const navigate = useNavigate();
 
+  // Admins reach their login only via the dedicated /admin/login link (or the
+  // legacy ?role=admin), never through a visible tab on the public page.
+  const adminMode = window.location.pathname === '/admin/login'
+    || new URLSearchParams(window.location.search).get('role') === 'admin';
+
   // Pre-select the tab from ?role= so arriving from "Register as Trainer" or a
   // post-registration redirect lands on the matching login tab (the tab-vs-role
   // guard would otherwise reject a trainer signing in on the default Student tab).
   const [tab,      setTab]     = useState(() => {
+    if (adminMode) return 'admin';
     const r = new URLSearchParams(window.location.search).get('role');
-    if (r === 'admin') return 'admin';
     if (r === 'coach' || r === 'trainer' || r === 'teacher') return 'coach';
     return 'student';
   }); // 'student' | 'coach' | 'admin'
@@ -56,6 +61,17 @@ export default function Login() {
       if (err.code === 'session_active') {
         setSessionConflict(true);
         setError(err.message || 'This account is already logged in on another device.');
+      } else if (err.code === 'account_not_found') {
+        // First-time user: no account matches. Point them at registration
+        // instead of the misleading "invalid credentials".
+        setSessionConflict(false);
+        setError(
+          tab === 'student'
+            ? "We couldn't find an account with these details. If this is your first time, create your Student Account below."
+            : tab === 'coach'
+              ? "We couldn't find a Trainer account with these details. If you're new, register as a Trainer below."
+              : 'No account found with these credentials.'
+        );
       } else {
         setSessionConflict(false);
         setError(err.message || 'Login failed. Please check your credentials.');
@@ -71,10 +87,11 @@ export default function Login() {
   const inputStyle = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)' };
   const inputFocus = { borderColor: `${colors.primary}60` };
 
+  // Admin is intentionally absent — admins sign in via /admin/login, so the
+  // public page only offers Student and Trainer.
   const tabs = [
     { key: 'student', label: 'Student', Icon: GraduationCap },
     { key: 'coach',   label: 'Trainer', Icon: Briefcase     },
-    { key: 'admin',   label: 'Admin',   Icon: ShieldCheck   },
   ];
 
   const isAdmin = tab === 'admin';
@@ -116,7 +133,8 @@ export default function Login() {
   return (
     <div className="fade-in-up">
 
-      {/* Tab switcher */}
+      {/* Tab switcher — hidden in admin mode (admins arrive via /admin/login) */}
+      {!adminMode && (
       <div className="flex p-1 rounded-2xl mb-7" style={{ background: 'rgba(255,255,255,0.06)' }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => switchTab(t.key)}
@@ -128,6 +146,7 @@ export default function Login() {
           </button>
         ))}
       </div>
+      )}
 
       {/* Header */}
       <div className="mb-6">

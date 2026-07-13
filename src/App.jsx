@@ -71,6 +71,8 @@ export default function App() {
               {/* Auth routes */}
               <Route element={<AuthLayout />}>
                 <Route path="/login"           element={<Login />} />
+                {/* Hidden admin entry — admins sign in here; no public tab exposes it. */}
+                <Route path="/admin/login"     element={<Login />} />
                 <Route path="/register"        element={<Register />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password"  element={<ForgotPassword />} />
