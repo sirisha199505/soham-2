@@ -1128,24 +1128,29 @@ export default function LevelQuiz() {
       score,
     };
 
-    // The two critical writes are retried independently so a cold-start timeout
-    // on one call does not block or contaminate the other.
-    // recordUsedQuestions is best-effort and never blocks the result screen.
-    const [attemptSaved, progressSaved] = await Promise.allSettled([
-      withRetry(() => saveQuizAttempt(user.id, attemptData)),
-      withRetry(() => markLevelComplete(user.id, id, score)),
-      recordUsedQuestions(user.id, questions.map(q => q.id)),
-    ]);
-
-    if (attemptSaved.status === 'rejected' || progressSaved.status === 'rejected') {
-      console.error('Save failed after retries:',
-        (attemptSaved.reason || progressSaved.reason)?.message);
-      setSaveError(true);
-    }
-
+    // Show the result screen immediately — the score is computed entirely
+    // client-side, so there is no reason to make the student wait on the
+    // network. The two critical writes run in the background; if either fails
+    // after all retries, setSaveError(true) surfaces the warning banner that
+    // the already-rendered result screen renders.
     setResult({ ...score, auto });
     setShowSubmit(false);
     // Keep isSubmitting true — exam is done, no need to re-enable the button
+
+    // The two critical writes are retried independently so a cold-start timeout
+    // on one call does not block or contaminate the other.
+    // recordUsedQuestions is best-effort and never blocks the result screen.
+    Promise.allSettled([
+      withRetry(() => saveQuizAttempt(user.id, attemptData)),
+      withRetry(() => markLevelComplete(user.id, id, score)),
+      recordUsedQuestions(user.id, questions.map(q => q.id)),
+    ]).then(([attemptSaved, progressSaved]) => {
+      if (attemptSaved.status === 'rejected' || progressSaved.status === 'rejected') {
+        console.error('Save failed after retries:',
+          (attemptSaved.reason || progressSaved.reason)?.message);
+        setSaveError(true);
+      }
+    });
   };
 
   const goNext = () => setCurrent(c => Math.min(c + 1, questions.length - 1));
