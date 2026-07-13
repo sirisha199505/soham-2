@@ -508,6 +508,12 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
                 return `${bits.join(' · ')}.`;
               })()}
             </p>
+            {r.errors > 0 && r.firstError && (
+              <div className="mt-4 mx-auto max-w-md rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-left">
+                <p className="text-[11px] font-semibold text-red-600 uppercase tracking-wide mb-1">Why they failed</p>
+                <p className="text-xs text-red-700 break-words">{r.firstError}</p>
+              </div>
+            )}
           </div>
         );
       })()}
@@ -1285,13 +1291,23 @@ function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onD
 
     const seenByCat = new Map();  // target id -> Set of texts seen in this batch
     let imported = 0, duplicates = 0, errors = 0;
+    let firstError = '';  // real reason for the first failed row, surfaced in the summary
 
     for (const q of questions) {
       // Resolve this row's target category (its own qb_category, else the fallback).
       let targetCatId;
       try { targetCatId = q.qbCategory ? await ensureCat(q.qbCategory) : fallbackCatId; }
-      catch { errors++; continue; }
-      if (!targetCatId) { errors++; continue; }
+      catch (err) {
+        errors++;
+        firstError = firstError || `Category "${q.qbCategory}" could not be created: ${err?.message || err}`;
+        console.error('Import row failed (category):', q.qbCategory, err);
+        continue;
+      }
+      if (!targetCatId) {
+        errors++;
+        firstError = firstError || 'No target category — pick a category in the dialog or add a qb_category column.';
+        continue;
+      }
 
       // Deduplicate within the batch AND against existing questions — per category.
       const key = norm(q.text);
@@ -1324,7 +1340,11 @@ function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onD
         // duplicate (the client-side check can miss it if the existing-questions
         // lookup failed, e.g. on a Render cold start).
         if (/already exists/i.test(err?.message || '')) { duplicates++; existing.add(key); }
-        else errors++;
+        else {
+          errors++;
+          firstError = firstError || (err?.message || String(err));
+          console.error('Import row failed (addQuestion):', { text: q.text, type: q.type }, err);
+        }
       }
     }
 
@@ -1335,10 +1355,11 @@ function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onD
     if (createdCats.length > 0) parts.push(`${createdCats.length} categor${createdCats.length !== 1 ? 'ies' : 'y'} created`);
     if (duplicates > 0)         parts.push(`${duplicates} duplicate${duplicates !== 1 ? 's' : ''} skipped`);
     if (errors > 0)             parts.push(`${errors} failed`);
-    showToast?.(`${total} total · ${parts.join(' · ')}.`);
+    showToast?.(`${total} total · ${parts.join(' · ')}.${errors > 0 && firstError ? ` First error: ${firstError}` : ''}`,
+      errors > 0 && imported === 0 ? 'red' : undefined);
 
     // Return the summary so the modal can show a post-import breakdown.
-    return { total, imported, duplicates, errors, categoriesCreated: createdCats.length };
+    return { total, imported, duplicates, errors, categoriesCreated: createdCats.length, firstError };
   };
 
   return (
