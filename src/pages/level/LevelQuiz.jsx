@@ -1573,7 +1573,7 @@ export default function LevelQuiz() {
             </div>
             <h2 className="text-xl font-bold text-slate-800 text-center mb-2">Leave the Exam?</h2>
             <p className="text-slate-500 text-sm text-center mb-6">
-              You have already started this exam. Your timer will keep running even if you leave — and you cannot restart this exam. Your answers so far will be submitted when the time runs out.
+              You have already started this exam. If you leave, your quiz will be submitted automatically with your answers so far — and you cannot restart this exam.
             </p>
             <div className="flex gap-3">
               <button
@@ -1582,7 +1582,7 @@ export default function LevelQuiz() {
                 Stay in Exam
               </button>
               <button
-                onClick={() => { setShowBackWarning(false); navigate('/dashboard', { replace: true }); }}
+                onClick={() => { setShowBackWarning(false); doSubmit(true); }}
                 className="flex-1 py-3 rounded-xl bg-red-50 border border-red-200 text-red-600 font-semibold text-sm hover:bg-red-100 transition-all">
                 Leave Anyway
               </button>
