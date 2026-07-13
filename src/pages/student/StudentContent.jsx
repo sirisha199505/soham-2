@@ -600,18 +600,6 @@ function MaterialCard({ page, index, levelId, level, onRead }) {
           )}
         </div>
 
-        {/* Progress bar */}
-        <div className="mb-4">
-          <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-            <span>Progress</span>
-            <span className="font-bold">{isRead ? '100%' : '0%'}</span>
-          </div>
-          <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
-            <div className="h-1 rounded-full transition-all duration-700"
-              style={{ width: isRead ? '100%' : '0%', ...gradStyle }} />
-          </div>
-        </div>
-
         {/* Read Now button */}
         <button
           onClick={e => { e.stopPropagation(); onRead(index); }}
