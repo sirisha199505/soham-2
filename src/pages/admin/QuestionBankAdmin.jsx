@@ -474,16 +474,27 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
       )}
       {step==='done' && (() => {
         const r = result || { total: parsed.length, imported: parsed.length, duplicates: 0, errors: 0 };
+        // Reflect the real outcome instead of always celebrating success:
+        //   nothing imported + failures → Failed (red)
+        //   some imported + some failures → Finished with errors (amber)
+        //   no failures → Complete (green)
+        const allFailed = r.imported === 0 && r.errors > 0;
+        const partial   = r.imported > 0  && r.errors > 0;
+        const head = allFailed
+          ? { Icon: AlertCircle,   wrap: 'bg-red-100',   color: 'text-red-500',   title: 'Import Failed' }
+          : partial
+            ? { Icon: AlertTriangle, wrap: 'bg-amber-100', color: 'text-amber-500', title: 'Import Finished with Errors' }
+            : { Icon: CheckCircle,   wrap: 'bg-green-100', color: 'text-green-500', title: 'Import Complete' };
         return (
           <div className="text-center py-8">
-            <div className="w-16 h-16 rounded-2xl bg-green-100 flex items-center justify-center mx-auto mb-4"><CheckCircle size={32} className="text-green-500"/></div>
-            <h3 className="text-lg font-bold text-slate-800 mb-1">Import Complete</h3>
-            <p className="text-sm text-slate-500 mb-5">Added to <span className="font-semibold text-slate-700">{levelName}</span></p>
+            <div className={`w-16 h-16 rounded-2xl ${head.wrap} flex items-center justify-center mx-auto mb-4`}><head.Icon size={32} className={head.color}/></div>
+            <h3 className="text-lg font-bold text-slate-800 mb-1">{head.title}</h3>
+            <p className="text-sm text-slate-500 mb-5">
+              {allFailed
+                ? <>Nothing was added to <span className="font-semibold text-slate-700">{levelName}</span></>
+                : <>Added to <span className="font-semibold text-slate-700">{levelName}</span></>}
+            </p>
             <div className="flex items-center justify-center gap-3 flex-wrap">
-              <div className="px-4 py-2.5 rounded-xl bg-slate-100 text-center min-w-[84px]">
-                <p className="text-xl font-bold text-slate-700">{r.total}</p>
-                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Total</p>
-              </div>
               <div className="px-4 py-2.5 rounded-xl bg-green-100 text-center min-w-[84px]">
                 <p className="text-xl font-bold text-green-700">{r.imported}</p>
                 <p className="text-[10px] font-semibold text-green-600 uppercase tracking-wide">Imported</p>
@@ -1195,6 +1206,9 @@ function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onD
   const [importOpen,  setImportOpen]  = useState(false);
   const [confirmDel,  setConfirmDel]  = useState(false);
   const [saving,      setSaving]      = useState(false);
+  // Question counts by audience across all of this level's categories. A 'both'
+  // question counts toward BOTH the student and trainer totals.
+  const [audienceCount, setAudienceCount] = useState(null);
   const addCatRef = useRef(null);
 
   // When the "Add Category" form opens, scroll it into view so the action is
@@ -1214,6 +1228,27 @@ function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onD
   useEffect(() => {
     if (openCatId === undefined && categories.length) setOpenCatId(categories[0].id);
   }, [openCatId, categories.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tally question counts per audience across every category in this level, so
+  // the header can show how many questions students and trainers each get.
+  useEffect(() => {
+    let cancelled = false;
+    // Empty category list → Promise.all([]) resolves to [] and tallies to 0/0.
+    Promise.all(categories.map(c => api.getQuestionsByCategory(c.id).catch(() => [])))
+      .then(lists => {
+        if (cancelled) return;
+        let student = 0, trainer = 0;
+        lists.flat().forEach(q => {
+          const af = q.applicableFor || q.applicable_for || 'student';
+          if (af === 'student' || af === 'both') student++;
+          if (af === 'trainer' || af === 'both') trainer++;
+        });
+        setAudienceCount({ student, trainer });
+      });
+    return () => { cancelled = true; };
+    // `expanded` is included so counts refresh when the admin re-opens a level
+    // after adding/removing questions inside its categories.
+  }, [categories, expanded]);
 
   const handleAddCategory = async (name) => {
     setSaving(true);
@@ -1378,6 +1413,16 @@ function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onD
                 <span className="text-white/70 text-xs font-semibold">
                   {loading ? '…' : `${categories.length} ${categories.length===1?'category':'categories'}`}
                 </span>
+                {!loading && audienceCount && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white">
+                      🎓 {audienceCount.student} for students
+                    </span>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white">
+                      🧑‍🏫 {audienceCount.trainer} for trainers
+                    </span>
+                  </span>
+                )}
               </div>
             )}
           </div>
