@@ -3,7 +3,7 @@ import {
   User, Mail, Phone, School, Briefcase, BookOpen, LogOut,
   ShieldCheck, GraduationCap, ChevronRight, KeyRound,
   CheckCircle, Hash, Settings, Eye, EyeOff, ChevronDown, ChevronUp,
-  Loader2, Pencil, X, HelpCircle,
+  Loader2, Pencil, X,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -395,20 +395,6 @@ export default function StudentProfile() {
                 </div>
               )}
             </div>
-
-            {/* Help & Support */}
-            <button onClick={() => navigate('/help')}
-              className="w-full flex items-center gap-3.5 px-4 py-3.5 rounded-xl border border-slate-100 hover:bg-slate-50 transition-all group">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: `${roleColor}12` }}>
-                <HelpCircle size={15} style={{ color: roleColor }} />
-              </div>
-              <div className="flex-1 text-left">
-                <p className="text-sm font-semibold text-slate-700">Help &amp; Support</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Get help or contact the team</p>
-              </div>
-              <ChevronRight size={15} className="text-slate-300 group-hover:text-slate-500 transition-colors" />
-            </button>
 
             {/* Sign out */}
             <button onClick={handleLogout}

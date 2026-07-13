@@ -8,18 +8,17 @@ import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
 import { CATEGORY_META } from '../../utils/questionBank';
 import {
-  formatDuration, getPerformanceLabel, matchSelectedIndex, isMatchAllCorrect,
+  formatDuration, matchSelectedIndex, isMatchAllCorrect,
   isOrderAllCorrect, isCategorizeAllCorrect, isHotspotAllCorrect,
 } from '../../utils/helpers';
 import DragDropReview from '../../components/quiz/DragDropReview';
 
 // ─── Score badge ──────────────────────────────────────────────────────────────
-// Shows just the percentage (coloured by band). The textual label ("Poor", etc.)
-// was intentionally removed.
+// Shows just the percentage. Per request, there is NO performance-band colour
+// coding (no red for low scores) — every percentage uses the same neutral style.
 function ScoreBadge({ pct }) {
-  const p = getPerformanceLabel(pct);
   return (
-    <span className="font-bold text-sm px-2.5 py-1 rounded-full" style={{ color: p.color, background: p.bg }}>
+    <span className="font-bold text-sm px-2.5 py-1 rounded-full" style={{ color: '#4F46E5', background: '#eef2ff' }}>
       {pct}%
     </span>
   );
@@ -170,7 +169,6 @@ function AttemptCard({ attempt, attemptLimit, usedCount }) {
   const badge     = levelBadge(attempt.levelTitle, attempt.levelId);
   const colNum    = parseInt(String(badge).replace(/\D/g, ''), 10) || Number(attempt.levelId) || 1;
   const col       = lvlColor(colNum);
-  const passed    = (attempt.score?.pct ?? 0) >= 50;
   const date      = attempt.date ? new Date(attempt.date) : null;
   const remaining = Math.max(0, (attemptLimit ?? 3) - (usedCount ?? 0));
 
@@ -192,9 +190,6 @@ function AttemptCard({ attempt, attemptLimit, usedCount }) {
                   Attempt #{attempt.attemptNum}
                 </span>
               )}
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                {passed ? '✓ Passed' : '✗ Failed'}
-              </span>
               {remaining > 0 ? (
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 flex items-center gap-1">
                   <RotateCcw size={9}/> {remaining} left
@@ -435,12 +430,10 @@ export default function QuizHistory() {
 
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           {[
             { label: 'Attempts',   val: stats.total,       color: '#4F46E5', icon: <BookOpen size={18}/> },
-            { label: 'Passed',     val: stats.passed,      color: '#10B981', icon: <CheckCircle size={18}/> },
-            { label: 'Avg Score',  val: `${stats.avg}%`,   color: '#F59E0B', icon: <Target size={18}/> },
-            { label: 'Best Score', val: `${stats.best}%`,  color: '#EF4444', icon: <Trophy size={18}/> },
+            { label: 'Best Score', val: `${stats.best}%`,  color: '#4F46E5', icon: <Trophy size={18}/> },
           ].map(s => (
             <div key={s.label} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: s.color + '15', color: s.color }}>

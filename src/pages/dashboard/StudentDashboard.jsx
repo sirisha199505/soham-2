@@ -303,13 +303,6 @@ function LevelCard({ level, status, levelData, levelSettings, attemptCount }) {
                   <p className="text-lg font-bold leading-none" style={{ color: scoreColor.text, fontFamily: 'Space Grotesk' }}>
                     {scorePct}%
                   </p>
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                    style={{ background: scoreColor.border, color: scoreColor.text }}>
-                    {perf.emoji} {perf.label}
-                  </span>
-                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${scorePct >= 50 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                    {scorePct >= 50 ? '✓ Passed' : '✗ Failed'}
-                  </span>
                 </div>
                 <p className="text-[10px] mt-0.5" style={{ color: scoreColor.text }}>
                   {score.correct}/{score.total} correct
@@ -575,7 +568,7 @@ export default function StudentDashboard() {
         <>
           {/* Attempt tracker */}
           {/* Section label */}
-          <div className="flex items-center gap-3">
+          {/* <div className="flex items-center gap-3">
             <div className="w-1 h-6 rounded-full" style={{ background: colors.primary }} />
             <h2 className="text-lg font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>
               Exam Levels
@@ -585,7 +578,7 @@ export default function StudentDashboard() {
                 Levels are unlocked by your Administrator
               </span>
             )}
-          </div>
+          </div> */}
 
           {/* Level cards grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">

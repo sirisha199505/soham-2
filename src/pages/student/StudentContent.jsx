@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   BookOpen, ChevronLeft, ChevronRight, CheckCircle,
   Loader2, BookMarked, AlertCircle, Bookmark, BookmarkCheck,
@@ -684,9 +685,11 @@ export default function StudentContent() {
     ? { background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }
     : {};
 
+  // Open the study material in a NEW browser tab (standalone reader route)
+  // instead of the in-page takeover, so students keep the content list open.
   const handleOpenReader = useCallback((idx) => {
-    setReadingIdx(idx);
-  }, []);
+    window.open(`/content/${effectiveId}/read/${idx}`, '_blank', 'noopener,noreferrer');
+  }, [effectiveId]);
 
   const handleCloseReader = useCallback(() => {
     setReadingIdx(null);
@@ -837,5 +840,83 @@ export default function StudentContent() {
         </div>
       </div>
     </>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// Standalone reader — mounted at /content/:levelId/read/:idx so "Read Now" can
+// open a single study material in its own browser tab (full-screen, no sidebar).
+// ══════════════════════════════════════════════════════════════════════════
+export function ContentReaderPage() {
+  const { levelId, idx } = useParams();
+  const navigate         = useNavigate();
+  const { user }         = useAuth();
+  const { levelSettings, levelSettingsLoaded } = useLevel();
+
+  const id         = Number(levelId);
+  const startIndex = Math.max(0, Number(idx) || 0);
+
+  const [pages,   setPages]   = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    api.getContent(id)
+      .then(p => setPages(Array.isArray(p) ? p : []))
+      .catch(() => setPages([]))
+      .finally(() => setLoading(false));
+  }, [id, user?.id]);
+
+  // Build the level display object the same way the main page does.
+  const dbLevel     = levelSettings[id];
+  const staticLevel = LEVELS.find(l => l.id === id);
+  const level = staticLevel ?? {
+    id,
+    title:    dbLevel?.title    || `Level ${id}`,
+    subtitle: dbLevel?.subtitle || '',
+    color:    FALLBACK_COLORS[(id - 1 + FALLBACK_COLORS.length) % FALLBACK_COLORS.length],
+  };
+
+  // This view runs in its own tab. Try to close it; browsers only allow
+  // window.close() on script-opened tabs, so fall back to the content list.
+  const handleBack = () => {
+    window.close();
+    navigate('/content');
+  };
+
+  if (loading || !levelSettingsLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 size={28} className="animate-spin text-indigo-400" />
+          <p className="text-slate-400 text-sm">Loading content…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!pages.length) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center p-6">
+        <div className="text-center max-w-sm">
+          <BookOpen size={40} className="mx-auto text-slate-200 mb-4" />
+          <p className="font-semibold text-slate-600">No content available</p>
+          <button onClick={() => navigate('/content')}
+            className="mt-4 px-5 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+            Back to Content
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <ContentReader
+      pages={pages}
+      startIndex={Math.min(startIndex, pages.length - 1)}
+      levelId={id}
+      level={level}
+      onBack={handleBack}
+    />
   );
 }

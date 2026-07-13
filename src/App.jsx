@@ -29,7 +29,7 @@ import QuizAttempt    from './pages/quiz/QuizAttempt';
 import QuizResult     from './pages/quiz/QuizResult';
 import StudentProfile  from './pages/student/StudentProfile';
 import QuizHistory     from './pages/student/QuizHistory';
-import StudentContent  from './pages/student/StudentContent';
+import StudentContent, { ContentReaderPage }  from './pages/student/StudentContent';
 import HelpSupport     from './pages/student/HelpSupport';
 import NotFound          from './pages/NotFound';
 import LevelContent      from './pages/level/LevelContent';
@@ -84,6 +84,11 @@ export default function App() {
               {/* Quiz attempt (full screen, no sidebar) */}
               <Route path="/quiz/:id/attempt" element={
                 <ProtectedRoute><QuizAttempt /></ProtectedRoute>
+              } />
+
+              {/* Standalone study-material reader — opened in a new tab from "Read Now" */}
+              <Route path="/content/:levelId/read/:idx" element={
+                <ProtectedRoute><ContentReaderPage /></ProtectedRoute>
               } />
 
               {/* Level content & quiz (full screen, no sidebar) */}
