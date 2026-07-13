@@ -42,9 +42,10 @@ export const getSidebarItems = (role) => {
 
   // Student and Coach share the same sidebar
   return [
-    { label: 'Dashboard',    path: '/dashboard',    icon: 'LayoutDashboard' },
-    { label: 'Content',      path: '/content',      icon: 'BookOpen'        },
-    { label: 'Quiz History', path: '/quiz-history', icon: 'History'         },
-    { label: 'My Profile',   path: '/profile',      icon: 'User'            },
+    { label: 'Dashboard',      path: '/dashboard',    icon: 'LayoutDashboard' },
+    { label: 'Content',        path: '/content',      icon: 'BookOpen'        },
+    { label: 'Quiz History',   path: '/quiz-history', icon: 'History'         },
+    { label: 'Help & Support', path: '/help',         icon: 'HelpCircle'      },
+    { label: 'My Profile',     path: '/profile',      icon: 'User'            },
   ];
 };
