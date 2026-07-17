@@ -675,14 +675,13 @@ export default function StudentContent() {
     : {};
 
   // Open the study material in a NEW browser tab so students/trainers keep the
-  // content list open. PDFs open in Google Docs Viewer (renders S3 PDFs reliably
-  // even when the in-app pdf.js reader is blocked by CORS); articles still use
-  // the standalone in-app reader route.
+  // content list open. PDFs open directly as the raw file URL, so the browser's
+  // native PDF viewer renders them (page thumbnails, zoom, print, download);
+  // articles still use the standalone in-app reader route.
   const handleOpenReader = useCallback((idx) => {
     const page = pages[idx];
     if (page?.type === 'pdf' && typeof page.pdfData === 'string' && page.pdfData.startsWith('http')) {
-      const viewer = `https://docs.google.com/viewer?url=${encodeURIComponent(page.pdfData)}&embedded=true`;
-      window.open(viewer, '_blank', 'noopener,noreferrer');
+      window.open(page.pdfData, '_blank', 'noopener,noreferrer');
       // Track progress the same way the in-app reader does.
       markRead(effectiveId, idx);
       forceUpdate(n => n + 1);
