@@ -11,6 +11,7 @@ import { useLevel } from '../../context/LevelContext';
 import { LEVELS } from '../../utils/levelData';
 import { api } from '../../utils/api';
 import { compareLevels } from '../../utils/helpers';
+import { downloadWatermarkedPdf } from '../../utils/pdfWatermark';
 import DOMPurify from 'dompurify';
 
 // ── Color palette ─────────────────────────────────────────────────────────
@@ -238,6 +239,7 @@ function ContentReader({ pages, startIndex, levelId, level, onBack, onReadStateC
   const [pdfPages,   setPdfPages]   = useState(0);  // total pages in PDF doc
   const [pdfPage,    setPdfPage]    = useState(1);   // current PDF page
   const [zoom,       setZoom]       = useState(1.0);
+  const [downloading, setDownloading] = useState(false);
   const scrollRef = useRef(null);
 
   const page       = pages[currentIdx];
@@ -280,6 +282,27 @@ function ContentReader({ pages, startIndex, levelId, level, onBack, onReadStateC
       : [...bookmarks, currentIdx];
     setBookmarksState(next);
     setBookmarks(levelId, next);
+  };
+
+  // Download the PDF with a faint diagonal "soham" watermark on every page.
+  // If the source can't be read cross-origin (S3 without CORS), fall back to a
+  // plain download of the original file so the button never silently fails.
+  const handleDownload = async () => {
+    if (downloading || !page?.pdfData) return;
+    setDownloading(true);
+    try {
+      await downloadWatermarkedPdf(page.pdfData, page.title || 'document.pdf', 'soham');
+    } catch (err) {
+      console.warn('Watermarked download failed, downloading original:', err?.message);
+      const url = buildBlobUrl(page.pdfData);
+      if (url) {
+        const a = document.createElement('a');
+        a.href = url; a.download = page.title || 'document.pdf';
+        document.body.appendChild(a); a.click(); a.remove();
+      }
+    } finally {
+      setDownloading(false);
+    }
   };
 
   // Keyboard navigation
@@ -487,15 +510,15 @@ function ContentReader({ pages, startIndex, levelId, level, onBack, onReadStateC
                 </button>
               </div>
 
-              {page.pdfData && (() => {
-                const url = buildBlobUrl(page.pdfData);
-                return url ? (
-                  <a href={url} download={page.title || 'document.pdf'}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
-                    <Download size={11} /> Download
-                  </a>
-                ) : null;
-              })()}
+              {page.pdfData && (
+                <button onClick={handleDownload} disabled={downloading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
+                  {downloading
+                    ? <Loader2 size={11} className="animate-spin" />
+                    : <Download size={11} />}
+                  {downloading ? 'Preparing…' : 'Download'}
+                </button>
+              )}
             </div>
 
             <PDFPageRenderer
@@ -546,10 +569,27 @@ function MaterialCard({ page, index, levelId, level, onRead }) {
   const readList   = getReadList(levelId);
   const lastRead   = getLastRead(levelId);
   const bookmarks  = getBookmarks(levelId);
+  const [dl, setDl] = useState(false);
 
   const isRead       = readList.includes(index);
   const isBookmarked = bookmarks.includes(index);
   const isLastVisited = lastRead?.idx === index;
+  const isPdf        = page.type === 'pdf' && typeof page.pdfData === 'string' && page.pdfData;
+
+  // Download the PDF stamped with a faint "soham" watermark; on a cross-origin
+  // read failure, fall back to the original file so the click still works.
+  const handleDownload = async (e) => {
+    e.stopPropagation();
+    if (dl || !isPdf) return;
+    setDl(true);
+    try {
+      await downloadWatermarkedPdf(page.pdfData, page.title || 'document.pdf', 'soham');
+    } catch (err) {
+      console.warn('Watermarked download failed, downloading original:', err?.message);
+      const url = buildBlobUrl(page.pdfData);
+      if (url) { const a = document.createElement('a'); a.href = url; a.download = page.title || 'document.pdf'; document.body.appendChild(a); a.click(); a.remove(); }
+    } finally { setDl(false); }
+  };
 
   const gradStyle = level
     ? { background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }
@@ -608,6 +648,17 @@ function MaterialCard({ page, index, levelId, level, onRead }) {
           {isRead ? <CheckCircle size={14} /> : <BookOpen size={14} />}
           Read Now
         </button>
+
+        {/* Download (watermarked) — PDFs only */}
+        {isPdf && (
+          <button
+            onClick={handleDownload}
+            disabled={dl}
+            className="w-full mt-2 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-50">
+            {dl ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+            {dl ? 'Preparing…' : 'Download'}
+          </button>
+        )}
       </div>
     </div>
   );
