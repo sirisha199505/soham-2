@@ -11,7 +11,7 @@ const STUDENT_FAQS = [
   },
   {
     q: 'I forgot my password — how do I reset it?',
-    a: 'On the login screen tap "Forgot password?". As a student, enter your registered 10-digit mobile number and we will send a 6-digit OTP by SMS. Enter the OTP, then set a new password. (If SMS is not yet enabled by your school, ask your administrator to reset it for you.)',
+    a: 'On the login screen tap "Forgot password?". Password resets are handled by your administrator — contact them and they will set a new password for you.',
   },
   {
     q: 'How do I access the Exam Levels?',
@@ -54,7 +54,7 @@ const TRAINER_FAQS = [
   },
   {
     q: 'I forgot my password — how do I reset it?',
-    a: 'On the login screen tap "Forgot password?". As a trainer, enter your registered email address and we will send a 6-digit OTP to your inbox (check the spam folder too). Enter the OTP, then set a new password.',
+    a: 'On the login screen tap "Forgot password?". Password resets are handled by your administrator — contact them and they will set a new password for you.',
   },
   {
     q: 'What can I do in the app as a trainer?',
