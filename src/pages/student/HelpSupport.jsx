@@ -7,7 +7,7 @@ import { api } from '../../utils/api';
 const STUDENT_FAQS = [
   {
     q: 'How do I log in to my account?',
-    a: 'On the login screen, choose the Student tab and sign in with your registered mobile number, email address, or Student ID, along with your password.',
+    a: 'On the login screen, choose the Student tab and sign in with your registered mobile number, email address,along with your password.',
   },
   {
     q: 'I forgot my password — how do I reset it?',
