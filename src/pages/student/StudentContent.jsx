@@ -46,30 +46,28 @@ function buildBlobUrl(pdfData) {
   } catch { return pdfData; }
 }
 
-// Open a PDF in a new tab using the browser's NATIVE viewer. S3 serves these
-// files with a Content-Type/Content-Disposition that often makes the browser
-// DOWNLOAD them instead of displaying them; fetching the bytes and opening an
-// object URL typed as application/pdf forces inline rendering. Requires the PDF
-// host to allow cross-origin GET (S3 CORS). The tab is opened synchronously
-// (inside the click gesture) to dodge popup blockers, then pointed at the blob
-// once fetched; on a CORS/fetch failure we navigate it straight to the URL.
-async function openPdfInNewTab(pdfData) {
-  const tab = window.open('', '_blank');
-  try {
-    let url;
-    if (pdfData.startsWith('data:')) {
-      url = buildBlobUrl(pdfData);
-    } else {
-      const res = await fetch(pdfData, { mode: 'cors' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      url = URL.createObjectURL(new Blob([await res.arrayBuffer()], { type: 'application/pdf' }));
-    }
-    if (tab) tab.location.href = url;
-    else window.open(url, '_blank', 'noopener');
-  } catch (err) {
-    console.warn('Inline PDF open failed, falling back to direct URL:', err?.message);
-    if (tab) tab.location.href = pdfData;
-    else window.open(pdfData, '_blank', 'noopener');
+// File extensions browsers CANNOT display inline (Office documents). These must
+// go through an online viewer; PDFs and images render in the browser natively.
+const OFFICE_EXTS = ['xls', 'xlsx', 'doc', 'docx', 'ppt', 'pptx', 'csv'];
+
+function fileExt(url = '', name = '') {
+  const src = name || url.split('?')[0];
+  return (src.split('.').pop() || '').toLowerCase();
+}
+
+// Open a study material in a new tab. Materials may be PDFs OR Office files
+// (a "pdf"-type content page can hold an .xlsx/.docx). PDFs render inline in the
+// browser's native viewer; Office files can't, so they open in Microsoft's
+// Office Online viewer, which renders them from a public URL. Requires the file
+// to be publicly reachable (our S3 objects are).
+function openMaterialInNewTab(url, name = '') {
+  if (!url) return;
+  const ext = fileExt(url, name);
+  if (OFFICE_EXTS.includes(ext)) {
+    const viewer = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(url)}`;
+    window.open(viewer, '_blank', 'noopener,noreferrer');
+  } else {
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
 }
 
@@ -311,22 +309,24 @@ function ContentReader({ pages, startIndex, levelId, level, onBack, onReadStateC
     setBookmarks(levelId, next);
   };
 
-  // Download the PDF with a faint diagonal "soham" watermark on every page.
-  // If the source can't be read cross-origin (S3 without CORS), fall back to a
-  // plain download of the original file so the button never silently fails.
+  // Download the material. Real PDFs get a faint diagonal "soham" watermark on
+  // every page; Office files (.xlsx/.docx/…) can't be watermarked, so they
+  // download as-is. Any failure falls back to a plain download so the button
+  // never silently fails.
   const handleDownload = async () => {
     if (downloading || !page?.pdfData) return;
+    const name = page.pdfName || page.title || 'document';
+    const plainDownload = () => {
+      const url = buildBlobUrl(page.pdfData);
+      if (url) { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
+    };
+    if (fileExt(page.pdfData, page.pdfName) !== 'pdf') { plainDownload(); return; }
     setDownloading(true);
     try {
-      await downloadWatermarkedPdf(page.pdfData, page.title || 'document.pdf', 'soham');
+      await downloadWatermarkedPdf(page.pdfData, name, 'soham');
     } catch (err) {
       console.warn('Watermarked download failed, downloading original:', err?.message);
-      const url = buildBlobUrl(page.pdfData);
-      if (url) {
-        const a = document.createElement('a');
-        a.href = url; a.download = page.title || 'document.pdf';
-        document.body.appendChild(a); a.click(); a.remove();
-      }
+      plainDownload();
     } finally {
       setDownloading(false);
     }
@@ -603,18 +603,23 @@ function MaterialCard({ page, index, levelId, level, onRead }) {
   const isLastVisited = lastRead?.idx === index;
   const isPdf        = page.type === 'pdf' && typeof page.pdfData === 'string' && page.pdfData;
 
-  // Download the PDF stamped with a faint "soham" watermark; on a cross-origin
-  // read failure, fall back to the original file so the click still works.
+  // Download the material. Real PDFs get a faint "soham" watermark; Office files
+  // download as-is. Any failure falls back to the original file.
   const handleDownload = async (e) => {
     e.stopPropagation();
     if (dl || !isPdf) return;
+    const name = page.pdfName || page.title || 'document';
+    const plainDownload = () => {
+      const url = buildBlobUrl(page.pdfData);
+      if (url) { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
+    };
+    if (fileExt(page.pdfData, page.pdfName) !== 'pdf') { plainDownload(); return; }
     setDl(true);
     try {
-      await downloadWatermarkedPdf(page.pdfData, page.title || 'document.pdf', 'soham');
+      await downloadWatermarkedPdf(page.pdfData, name, 'soham');
     } catch (err) {
       console.warn('Watermarked download failed, downloading original:', err?.message);
-      const url = buildBlobUrl(page.pdfData);
-      if (url) { const a = document.createElement('a'); a.href = url; a.download = page.title || 'document.pdf'; document.body.appendChild(a); a.click(); a.remove(); }
+      plainDownload();
     } finally { setDl(false); }
   };
 
@@ -753,13 +758,12 @@ export default function StudentContent() {
     : {};
 
   // Open the study material in a NEW browser tab so students/trainers keep the
-  // content list open. PDFs open inline in the browser's native viewer (page
-  // thumbnails, zoom, print) via openPdfInNewTab; articles still use the
-  // standalone in-app reader route.
+  // content list open. PDFs open inline in the browser's native viewer; Office
+  // files open in an online viewer; articles use the standalone reader route.
   const handleOpenReader = useCallback((idx) => {
     const page = pages[idx];
     if (page?.type === 'pdf' && typeof page.pdfData === 'string' && page.pdfData) {
-      openPdfInNewTab(page.pdfData);
+      openMaterialInNewTab(page.pdfData, page.pdfName);
       // Track progress the same way the in-app reader does.
       markRead(effectiveId, idx);
       forceUpdate(n => n + 1);
