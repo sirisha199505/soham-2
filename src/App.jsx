@@ -38,7 +38,6 @@ import StudentManagement from './pages/admin/StudentManagement';
 import ExamLevels        from './pages/admin/ExamLevels';
 import QuestionBankAdmin from './pages/admin/QuestionBankAdmin';
 import ContentManagement from './pages/admin/ContentManagement';
-import LiveMonitoring    from './pages/admin/LiveMonitoring';
 import AdminReports      from './pages/admin/AdminReports';
 import ImportExport      from './pages/admin/ImportExport';
 import SystemSettings    from './pages/admin/SystemSettings';
@@ -125,7 +124,6 @@ export default function App() {
                 <Route path="/admin/levels"        element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><ExamLevels /></ProtectedRoute>} />
                 <Route path="/admin/question-bank" element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><QuestionBankAdmin /></ProtectedRoute>} />
                 <Route path="/admin/content"       element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><ContentManagement /></ProtectedRoute>} />
-                <Route path="/admin/monitoring"    element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><LiveMonitoring /></ProtectedRoute>} />
                 <Route path="/admin/reports"       element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><AdminReports /></ProtectedRoute>} />
                 <Route path="/admin/import-export" element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><ImportExport /></ProtectedRoute>} />
                 <Route path="/admin/settings"      element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><SystemSettings /></ProtectedRoute>} />
@@ -133,7 +131,6 @@ export default function App() {
 
                 {/* Legacy aliases — admin only */}
                 <Route path="/reports"    element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><AdminReports /></ProtectedRoute>} />
-                <Route path="/monitoring" element={<ProtectedRoute requiredPermission="ADMIN_ACCESS"><LiveMonitoring /></ProtectedRoute>} />
               </Route>
 
               <Route path="*" element={<NotFound />} />

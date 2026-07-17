@@ -182,8 +182,6 @@ export const api = {
   updateFaq:  (id, data)  => request('PUT', `/api/faqs/${id}`, data),
   deleteFaq:  (id)        => request('DELETE', `/api/faqs/${id}`),
 
-  // Monitoring
-  getMonitoringSessions: () => request('GET', '/api/monitoring/sessions'),
 
   // Question Banks
   getQuestionBanks: () => request('GET', '/api/question-banks'),

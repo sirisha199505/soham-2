@@ -245,18 +245,6 @@ export default function Register() {
             </div>
           )}
 
-          {/* Student ID */}
-          {success.loginOptions?.uniqueId && (
-            <div className="rounded-xl p-3 flex items-center gap-3"
-              style={{ background: 'rgba(59,192,239,0.10)', border: '1px solid rgba(59,192,239,0.25)' }}>
-              <span className="text-sky-300 text-lg">🪪</span>
-              <div>
-                <p className="text-[10px] text-sky-400 font-semibold uppercase tracking-wider">Student ID</p>
-                <p className="text-sky-200 font-mono text-sm tracking-widest">{success.loginOptions.uniqueId}</p>
-              </div>
-            </div>
-          )}
-
           <p className="text-[11px] text-slate-500 pt-1">Save these details — use any one to sign in with your password.</p>
         </div>
 
