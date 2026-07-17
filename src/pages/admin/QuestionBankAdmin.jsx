@@ -143,7 +143,10 @@ function parseCSV(text) {
     // Free-text name of the Question Bank category this row should be filed into.
     // Blank → the row inherits the category chosen in the import dialog.
     const qbCategory    = col('qb_category')?.trim() || '';
-    const base          = { id:uid('q'), text, difficulty:diff, applicableFor, category, qbCategory };
+    // A question-level image (image_url column) is supported for EVERY type —
+    // it renders above the question in the quiz. label/hotspot also read it
+    // explicitly below (same value); the others now inherit it from here.
+    const base          = { id:uid('q'), text, difficulty:diff, applicableFor, category, qbCategory, imageUrl:col('image_url')||'' };
 
     if (type==='mcq')                         questions.push({ ...base, type:'mcq',   options:[col('opt_a'),col('opt_b'),col('opt_c'),col('opt_d')].map(t=>({text:t,imageUrl:''})), correct:Math.max(0,['A','B','C','D'].indexOf((col('correct')||'A').toUpperCase())), explanation:col('explanation')||'' });
     else if (type==='match')                  questions.push({ ...base, type:'match', pairs:[{left:col('p1_left'),leftImage:'',right:col('p1_right'),rightImage:''},{left:col('p2_left'),leftImage:'',right:col('p2_right'),rightImage:''},{left:col('p3_left'),leftImage:'',right:col('p3_right'),rightImage:''},{left:col('p4_left'),leftImage:'',right:col('p4_right'),rightImage:''}], explanation:'' });
@@ -335,7 +338,7 @@ function ImportModal({ isOpen, onClose, levelName, categories, onImport }) {
     // filtered/grouped after import; leave it blank to inherit the target category.
     // Remaining columns: 2-18 are the original layout; 19-21 carry the drag-drop
     // types. Parsing is header-aware, so column order can change freely.
-    const headers = ['type','category(robotics/chemistry/physics/mathematics)','text','difficulty','opt_a','opt_b','opt_c','opt_d','correct','explanation','image_url(img only)','p1_left','p1_right','p2_left','p2_right','p3_left','p3_right','p4_left','p4_right','applicable_for','steps(order: a|b|c)','groups(categorize: G1: a, b; G2: c, d)','hotspots(label@x,y; …  x,y are %)','qb_category(files into / creates this category)'];
+    const headers = ['type','category(robotics/chemistry/physics/mathematics)','text','difficulty','opt_a','opt_b','opt_c','opt_d','correct','explanation','image_url(optional, any type)','p1_left','p1_right','p2_left','p2_right','p3_left','p3_right','p4_left','p4_right','applicable_for','steps(order: a|b|c)','groups(categorize: G1: a, b; G2: c, d)','hotspots(label@x,y; …  x,y are %)','qb_category(files into / creates this category)'];
     const E = ''; // filler for unused columns
     // Last column (qb_category) routes each row into its own Question Bank
     // category — a new name is created automatically. Blank inherits the
