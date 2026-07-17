@@ -46,6 +46,33 @@ function buildBlobUrl(pdfData) {
   } catch { return pdfData; }
 }
 
+// Open a PDF in a new tab using the browser's NATIVE viewer. S3 serves these
+// files with a Content-Type/Content-Disposition that often makes the browser
+// DOWNLOAD them instead of displaying them; fetching the bytes and opening an
+// object URL typed as application/pdf forces inline rendering. Requires the PDF
+// host to allow cross-origin GET (S3 CORS). The tab is opened synchronously
+// (inside the click gesture) to dodge popup blockers, then pointed at the blob
+// once fetched; on a CORS/fetch failure we navigate it straight to the URL.
+async function openPdfInNewTab(pdfData) {
+  const tab = window.open('', '_blank');
+  try {
+    let url;
+    if (pdfData.startsWith('data:')) {
+      url = buildBlobUrl(pdfData);
+    } else {
+      const res = await fetch(pdfData, { mode: 'cors' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      url = URL.createObjectURL(new Blob([await res.arrayBuffer()], { type: 'application/pdf' }));
+    }
+    if (tab) tab.location.href = url;
+    else window.open(url, '_blank', 'noopener');
+  } catch (err) {
+    console.warn('Inline PDF open failed, falling back to direct URL:', err?.message);
+    if (tab) tab.location.href = pdfData;
+    else window.open(pdfData, '_blank', 'noopener');
+  }
+}
+
 function timeAgo(ts) {
   const d = Date.now() - ts;
   const m = Math.floor(d / 60000);
@@ -726,13 +753,13 @@ export default function StudentContent() {
     : {};
 
   // Open the study material in a NEW browser tab so students/trainers keep the
-  // content list open. PDFs open directly as the raw file URL, so the browser's
-  // native PDF viewer renders them (page thumbnails, zoom, print, download);
-  // articles still use the standalone in-app reader route.
+  // content list open. PDFs open inline in the browser's native viewer (page
+  // thumbnails, zoom, print) via openPdfInNewTab; articles still use the
+  // standalone in-app reader route.
   const handleOpenReader = useCallback((idx) => {
     const page = pages[idx];
-    if (page?.type === 'pdf' && typeof page.pdfData === 'string' && page.pdfData.startsWith('http')) {
-      window.open(page.pdfData, '_blank', 'noopener,noreferrer');
+    if (page?.type === 'pdf' && typeof page.pdfData === 'string' && page.pdfData) {
+      openPdfInNewTab(page.pdfData);
       // Track progress the same way the in-app reader does.
       markRead(effectiveId, idx);
       forceUpdate(n => n + 1);
