@@ -674,11 +674,22 @@ export default function StudentContent() {
     ? { background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }
     : {};
 
-  // Open the study material in a NEW browser tab (standalone reader route)
-  // instead of the in-page takeover, so students keep the content list open.
+  // Open the study material in a NEW browser tab so students/trainers keep the
+  // content list open. PDFs open in Google Docs Viewer (renders S3 PDFs reliably
+  // even when the in-app pdf.js reader is blocked by CORS); articles still use
+  // the standalone in-app reader route.
   const handleOpenReader = useCallback((idx) => {
+    const page = pages[idx];
+    if (page?.type === 'pdf' && typeof page.pdfData === 'string' && page.pdfData.startsWith('http')) {
+      const viewer = `https://docs.google.com/viewer?url=${encodeURIComponent(page.pdfData)}&embedded=true`;
+      window.open(viewer, '_blank', 'noopener,noreferrer');
+      // Track progress the same way the in-app reader does.
+      markRead(effectiveId, idx);
+      forceUpdate(n => n + 1);
+      return;
+    }
     window.open(`/content/${effectiveId}/read/${idx}`, '_blank', 'noopener,noreferrer');
-  }, [effectiveId]);
+  }, [effectiveId, pages]);
 
   const handleCloseReader = useCallback(() => {
     setReadingIdx(null);
