@@ -753,10 +753,6 @@ export default function StudentContent() {
   const pages  = allContent[effectiveId] || [];
   const level  = sortedLevels.find(l => l.id === effectiveId);
 
-  const gradStyle = level
-    ? { background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }
-    : {};
-
   // Open the study material in a NEW browser tab so students/trainers keep the
   // content list open. PDFs open inline in the browser's native viewer; Office
   // files open in an online viewer; articles use the standalone reader route.
@@ -805,7 +801,6 @@ export default function StudentContent() {
   const readList   = getReadList(effectiveId);
   const readCount  = readList.length;
   const totalCount = pages.length;
-  const overallPct = totalCount > 0 ? Math.round((readCount / totalCount) * 100) : 0;
 
   return (
     <>
@@ -846,23 +841,9 @@ export default function StudentContent() {
                     <BookMarked size={13} style={{ color: level.color.from }} />
                     {readCount}/{totalCount} read
                   </div>
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-100 bg-slate-50 text-xs font-semibold text-slate-600">
-                    <BarChart2 size={13} style={{ color: level.color.from }} />
-                    {overallPct}% complete
-                  </div>
                 </div>
               )}
             </div>
-
-            {/* Level progress bar */}
-            {totalCount > 0 && (
-              <div className="mb-5">
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-2 rounded-full transition-all duration-700"
-                    style={{ width: `${overallPct}%`, ...gradStyle }} />
-                </div>
-              </div>
-            )}
 
             {/* Level tabs */}
             <div className="flex gap-2 flex-wrap">
