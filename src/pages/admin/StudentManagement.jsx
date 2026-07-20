@@ -127,16 +127,28 @@ function StudentModal({ student, levelList, onClose, onSaved }) {
     ? levelList.map((lvl, i) => ({ id: lvl.id, label: lvl.title || `Level ${i + 1}`, idx: i }))
     : [1, 2, 3].map((n, i) => ({ id: n, label: `Level ${n}`, idx: i }));
 
+  // Where the account was registered from (village → state) and when.
+  const locationStr = [student.village, student.mandal, student.district, student.state]
+    .filter(Boolean).join(', ');
+  const registeredOn = student.createdAt
+    ? new Date(student.createdAt).toLocaleString('en-IN',
+        { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : '';
+
   // Trainers have an organization (no class); students have school + class.
   const detailFields = isCoach
     ? [
-        { label: 'Organization', value: student.schoolName },
-        { label: 'Status',       value: student.disabled ? 'Disabled' : 'Active' },
+        { label: 'Organization',  value: student.schoolName },
+        { label: 'Location',      value: locationStr },
+        { label: 'Registered on', value: registeredOn },
+        { label: 'Status',        value: student.disabled ? 'Disabled' : 'Active' },
       ]
     : [
-        { label: 'Institute',     value: student.schoolName },
+        { label: 'Institute',      value: student.schoolName },
         { label: 'Class / Course', value: student.className },
-        { label: 'Status', value: student.disabled ? 'Disabled' : 'Active' },
+        { label: 'Location',       value: locationStr },
+        { label: 'Registered on',  value: registeredOn },
+        { label: 'Status',         value: student.disabled ? 'Disabled' : 'Active' },
       ];
 
   const set = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
@@ -391,6 +403,12 @@ export default function StudentManagement() {
           uniqueId:    s.uniqueId   || s.unique_id,
           schoolName:  s.schoolName || s.school_name || '—',
           className:   s.className  || s.class_name  || '—',
+          // Registration date/time + location (shown in the details View).
+          createdAt:   s.createdAt || s.created_at || null,
+          state:       s.state    || '',
+          district:    s.district || '',
+          mandal:      s.mandal   || '',
+          village:     s.village  || '',
           // Source of truth is the backend (users.active); the old localStorage
           // overlay was keyed on the empty uniqueId and never worked for trainers.
           disabled:    s.disabled,

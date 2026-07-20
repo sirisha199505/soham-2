@@ -3,7 +3,7 @@ import {
   User, Mail, Phone, School, Briefcase, BookOpen, LogOut,
   ShieldCheck, GraduationCap, ChevronRight, KeyRound,
   CheckCircle, Hash, Settings, Eye, EyeOff, ChevronDown, ChevronUp,
-  Loader2, Pencil, X,
+  Loader2, Pencil, X, MapPin, CalendarClock,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -259,7 +259,9 @@ export default function StudentProfile() {
               {isCoach && (
                 <InfoRow icon={Briefcase} label="Organization"         value={user?.organizationName} color={roleColor} />
               )}
+              <InfoRow icon={MapPin}      label="Location"             value={[user?.village, user?.mandal, user?.district, user?.state].filter(Boolean).join(', ') || '—'} color={roleColor} />
               <InfoRow icon={ShieldCheck} label="Account Role"         value={roleLabel}              color={roleColor} />
+              <InfoRow icon={CalendarClock} label="Registered On"      value={user?.createdAt ? new Date(user.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'} color={roleColor} />
             </div>
           ) : (
             <div className="px-5 py-4 space-y-3">

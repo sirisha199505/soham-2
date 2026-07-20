@@ -1,16 +1,28 @@
 import { Outlet } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { Shield, Zap, Award, Users } from 'lucide-react';
-
-const FEATURES = [
-  { icon: <Zap size={16} />,    text: 'Real-time quiz engine with auto-save' },
-  { icon: <Shield size={16} />, text: 'Role-based access for all stakeholders' },
-  { icon: <Award size={16} />,  text: 'AI-powered performance analytics' },
-  { icon: <Users size={16} />,  text: 'School & district-level dashboards' },
-];
+import { Users, ClipboardList, Trophy } from 'lucide-react';
+import { api } from '../utils/api';
 
 export default function AuthLayout() {
   const { colors } = useTheme();
+
+  // Live platform stats shown on the branding panel (public, cached endpoint).
+  const [stats, setStats] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    api.getPlatformStats()
+      .then(s => { if (alive) setStats(s); })
+      .catch(() => { /* leave placeholders on failure — never block the login UI */ });
+    return () => { alive = false; };
+  }, []);
+
+  const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('en-IN'));
+  const liveStats = [
+    { icon: <Users size={16} />,         value: fmt(stats?.totalStudents),   label: 'Students Registered' },
+    { icon: <ClipboardList size={16} />, value: fmt(stats?.totalQuizzes),    label: 'Quizzes Attempted' },
+    { icon: <Trophy size={16} />,        value: fmt(stats?.levelsCompleted), label: 'Levels Completed' },
+  ];
 
   return (
     <div className="min-h-screen flex bg-[#0a1628]">
@@ -89,29 +101,16 @@ export default function AuthLayout() {
             </p>
           </div>
 
-          {/* Feature list */}
-          <div className="space-y-3">
-            {FEATURES.map((f, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+          {/* Live platform stats */}
+          <div className="grid grid-cols-3 gap-5">
+            {liveStats.map((s, i) => (
+              <div key={i}>
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 shrink-0"
                   style={{ background: `${colors.primary}20`, color: colors.primary }}>
-                  {f.icon}
+                  {s.icon}
                 </div>
-                <p className="text-slate-300 text-sm">{f.text}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Stats row */}
-          <div className="flex gap-6">
-            {[
-              { value: '45K+', label: 'Students' },
-              { value: '12K+', label: 'Quizzes' },
-              { value: '98%',  label: 'Uptime' },
-            ].map(stat => (
-              <div key={stat.label}>
-                <p className="text-2xl font-bold text-white" style={{ fontFamily: 'Space Grotesk' }}>{stat.value}</p>
-                <p className="text-slate-500 text-xs mt-0.5">{stat.label}</p>
+                <p className="text-2xl font-bold text-white tabular-nums" style={{ fontFamily: 'Space Grotesk' }}>{s.value}</p>
+                <p className="text-slate-400 text-xs mt-1 leading-snug">{s.label}</p>
               </div>
             ))}
           </div>
@@ -161,32 +160,15 @@ export default function AuthLayout() {
             </h1>
 
             <p className="text-slate-400 text-sm text-center leading-relaxed">
-              A comprehensive quiz platform built for robotics education — empowering students, teachers, and administrators with real-time insights.
+              A comprehensive quiz platform built for robotics education — empowering students, Trainers, and administrators with real-time insights.
             </p>
 
-            {/* Features */}
-            <div className="grid grid-cols-1 gap-2">
-              {FEATURES.map((f, i) => (
-                <div key={i} className="flex items-center gap-2.5">
-                  <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0"
-                    style={{ background: `${colors.primary}20`, color: colors.primary }}>
-                    {f.icon}
-                  </div>
-                  <p className="text-slate-300 text-xs">{f.text}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Stats */}
+            {/* Live platform stats */}
             <div className="flex justify-center gap-8 pt-1">
-              {[
-                { value: '45K+', label: 'Students' },
-                { value: '12K+', label: 'Quizzes' },
-                { value: '98%',  label: 'Uptime' },
-              ].map(stat => (
-                <div key={stat.label} className="text-center">
-                  <p className="text-xl font-bold text-white" style={{ fontFamily: 'Space Grotesk' }}>{stat.value}</p>
-                  <p className="text-slate-500 text-xs mt-0.5">{stat.label}</p>
+              {liveStats.map((s, i) => (
+                <div key={i} className="text-center">
+                  <p className="text-xl font-bold text-white tabular-nums" style={{ fontFamily: 'Space Grotesk' }}>{s.value}</p>
+                  <p className="text-slate-500 text-xs mt-0.5">{s.label}</p>
                 </div>
               ))}
             </div>

@@ -14,6 +14,8 @@ const NO_AUTH_PATHS = [
   '/api/auth/verify-reset-otp',
   '/api/auth/reset-password-token',
   '/api/registration-status',
+  '/api/public-stats',
+  '/api/locations/',
 ];
 
 function getToken() {
@@ -100,6 +102,16 @@ export const api = {
   // Auth — Innovation Coach
   registerCoach: (data) =>
     request('POST', '/api/auth/register-coach', data),
+
+  // Public platform stats for the login page (no auth)
+  getPlatformStats: () =>
+    request('GET', '/api/public-stats'),
+
+  // Cascading location lookups for the registration form (no auth)
+  getLocationStates:    ()                        => request('GET', '/api/locations/states'),
+  getLocationDistricts: (state)                   => request('GET', `/api/locations/districts?state=${encodeURIComponent(state)}`),
+  getLocationMandals:   (state, district)         => request('GET', `/api/locations/mandals?state=${encodeURIComponent(state)}&district=${encodeURIComponent(district)}`),
+  getLocationVillages:  (state, district, mandal) => request('GET', `/api/locations/villages?state=${encodeURIComponent(state)}&district=${encodeURIComponent(district)}&mandal=${encodeURIComponent(mandal)}`),
 
   // Auth — Email verification
   verifyEmail: (token) =>
