@@ -110,6 +110,97 @@ function ResetPasswordModal({ student, onClose }) {
   );
 }
 
+/* ── Light-themed cascading location editor (admin modal) ──
+   value = { state, district, mandal, village }; each selection loads the next
+   level and clears the ones below it. Village allows a free-text entry for
+   places not in the list. Mirrors the registration LocationPicker. */
+const OTHER_VILLAGE = 'Other (enter manually)';
+function LocationEditor({ value, onChange }) {
+  const [states,    setStates]    = useState([]);
+  const [districts, setDistricts] = useState([]);
+  const [mandals,   setMandals]   = useState([]);
+  const [villages,  setVillages]  = useState([]);
+  const [villageManual, setVillageManual] = useState(false);
+
+  useEffect(() => { api.getLocationStates().then(setStates).catch(() => setStates([])); }, []);
+  useEffect(() => {
+    if (!value.state) { setDistricts([]); return; }
+    api.getLocationDistricts(value.state).then(setDistricts).catch(() => setDistricts([]));
+  }, [value.state]);
+  useEffect(() => {
+    if (!value.state || !value.district) { setMandals([]); return; }
+    api.getLocationMandals(value.state, value.district).then(setMandals).catch(() => setMandals([]));
+  }, [value.state, value.district]);
+  useEffect(() => {
+    if (!value.state || !value.district || !value.mandal) { setVillages([]); return; }
+    api.getLocationVillages(value.state, value.district, value.mandal).then(setVillages).catch(() => setVillages([]));
+  }, [value.state, value.district, value.mandal]);
+
+  const set = patch => onChange({ ...value, ...patch });
+  const noVillages    = !!value.mandal && villages.length === 0;
+  const manualVillage = villageManual || noVillages;
+
+  const selCls   = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-400';
+  const inputCls = selCls;
+  const lblCls   = 'text-[10px] font-semibold text-slate-400 uppercase mb-1 block';
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={lblCls}>State</label>
+          <select className={selCls} value={value.state}
+            onChange={e => { setVillageManual(false); set({ state: e.target.value, district: '', mandal: '', village: '' }); }}>
+            <option value="">Select State</option>
+            {states.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={lblCls}>District</label>
+          <select className={selCls} value={value.district} disabled={!value.state}
+            onChange={e => { setVillageManual(false); set({ district: e.target.value, mandal: '', village: '' }); }}>
+            <option value="">{value.state ? 'Select District' : 'Select State first'}</option>
+            {districts.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={lblCls}>Mandal</label>
+          <select className={selCls} value={value.mandal} disabled={!value.district}
+            onChange={e => { setVillageManual(false); set({ mandal: e.target.value, village: '' }); }}>
+            <option value="">{value.district ? 'Select Mandal' : 'Select District first'}</option>
+            {mandals.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={lblCls}>Village (optional)</label>
+          {manualVillage ? (
+            <input className={inputCls} value={value.village}
+              onChange={e => set({ village: e.target.value })}
+              placeholder={value.mandal ? 'Type village name' : 'Select Mandal first'} disabled={!value.mandal} />
+          ) : (
+            <select className={selCls} value={value.village} disabled={!value.mandal}
+              onChange={e => {
+                if (e.target.value === OTHER_VILLAGE) { setVillageManual(true); set({ village: '' }); }
+                else set({ village: e.target.value });
+              }}>
+              <option value="">{value.mandal ? 'Select Village' : 'Select Mandal first'}</option>
+              {[...villages, OTHER_VILLAGE].map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+          )}
+          {value.mandal && (noVillages ? (
+            <p className="text-[10px] text-slate-400 mt-1">Not listed — type the village above.</p>
+          ) : manualVillage ? (
+            <button type="button" onClick={() => { setVillageManual(false); set({ village: '' }); }}
+              className="text-[10px] font-semibold text-indigo-600 mt-1 hover:underline">↩ Choose from list</button>
+          ) : null)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Detail Modal (with inline Edit) ── */
 function StudentModal({ student, levelList, onClose, onSaved }) {
   const isCoach = student.role === 'coach' || student.role === 'teacher';
@@ -121,6 +212,10 @@ function StudentModal({ student, levelList, onClose, onSaved }) {
     schoolName:  student.schoolName || '',
     className:   student.className || '',
     phoneNumber: student.phoneNumber || '',
+    state:       student.state    || '',
+    district:    student.district || '',
+    mandal:      student.mandal   || '',
+    village:     student.village  || '',
   });
 
   // Full attempt history for this student so the admin sees EVERY attempt taken
@@ -179,7 +274,14 @@ function StudentModal({ student, levelList, onClose, onSaved }) {
   const save = async () => {
     setError('');
     if (!form.name.trim()) { setError('Name is required.'); return; }
-    const payload = { name: form.name.trim(), phoneNumber: form.phoneNumber.trim() };
+    const payload = {
+      name: form.name.trim(),
+      phoneNumber: form.phoneNumber.trim(),
+      state:    form.state.trim(),
+      district: form.district.trim(),
+      mandal:   form.mandal.trim(),
+      village:  form.village.trim(),
+    };
     if (isCoach) payload.organizationName = form.schoolName.trim();
     else { payload.schoolName = form.schoolName.trim(); payload.className = form.className.trim(); }
     setSaving(true);
@@ -189,6 +291,10 @@ function StudentModal({ student, levelList, onClose, onSaved }) {
         name: payload.name,
         phoneNumber: payload.phoneNumber,
         schoolName: form.schoolName.trim(),
+        state:    payload.state,
+        district: payload.district,
+        mandal:   payload.mandal,
+        village:  payload.village,
         ...(isCoach ? {} : { className: form.className.trim() }),
       });
       setEditing(false);
@@ -242,6 +348,14 @@ function StudentModal({ student, levelList, onClose, onSaved }) {
                 <label className="text-[10px] font-semibold text-slate-400 uppercase mb-1 block">Mobile</label>
                 <input value={form.phoneNumber} onChange={set('phoneNumber')} className={inputCls} placeholder="10-digit mobile number" inputMode="numeric" maxLength={10} />
               </div>
+
+              <div className="pt-1">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase mb-2">Location</p>
+                <LocationEditor
+                  value={{ state: form.state, district: form.district, mandal: form.mandal, village: form.village }}
+                  onChange={loc => setForm(p => ({ ...p, ...loc }))} />
+              </div>
+
               <p className="text-[10px] text-slate-400">Email is not editable here.</p>
             </div>
           ) : (
