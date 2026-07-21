@@ -50,7 +50,7 @@ function SelectField({ label, icon: Icon, value, onChange, options, placeholder 
         <select
           value={value} onChange={onChange} required={required} disabled={disabled}
           className={`${inputCls} pl-11 pr-10 appearance-none ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-          style={{ ...inputStyle, ...(value ? focus : {}), color: value ? '#fff' : 'rgba(255,255,255,0.35)' }}
+          style={{ ...inputStyle, ...(value ? focus : {}), colorScheme: 'dark', color: value ? '#fff' : 'rgba(255,255,255,0.35)' }}
         >
           <option value="" disabled style={{ color: '#94a3b8', background: '#1e293b' }}>{placeholder}</option>
           {options.map(o => (
@@ -431,7 +431,7 @@ export default function Register() {
               <BookOpen size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
               <select value={studentForm.className} onChange={sS('className')} required
                 className={`${inputCls} pl-11 pr-4 appearance-none cursor-pointer`}
-                style={{ ...inputStyle, color: studentForm.className ? 'white' : 'rgba(255,255,255,0.55)' }}>
+                style={{ ...inputStyle, colorScheme: 'dark', color: studentForm.className ? 'white' : 'rgba(255,255,255,0.55)' }}>
                 {/* Placeholder needs the same explicit dark bg/colour as the real
                     options below — without it the open dropdown rendered this row as
                     near-white text on the browser's default white option background,
