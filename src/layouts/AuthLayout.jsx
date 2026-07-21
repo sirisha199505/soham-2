@@ -19,9 +19,9 @@ export default function AuthLayout() {
 
   const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('en-IN'));
   const liveStats = [
-    { icon: <Users size={16} />,         value: fmt(stats?.totalStudents),   label: 'Students Registered' },
+    { icon: <Users size={16} />,         value: fmt(stats?.totalRegistered ?? stats?.totalStudents), label: 'Total Registered' },
     { icon: <ClipboardList size={16} />, value: fmt(stats?.totalQuizzes),    label: 'Quizzes Attempted' },
-    { icon: <Trophy size={16} />,        value: fmt(stats?.levelsCompleted), label: 'Levels Completed' },
+    { icon: <Trophy size={16} />,        value: fmt(stats?.levelsCompleted), label: 'Levels Cleared' },
   ];
 
   return (
