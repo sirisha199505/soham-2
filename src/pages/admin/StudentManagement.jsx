@@ -839,7 +839,7 @@ export default function StudentManagement() {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-100">
                 {[
-                  '#', 'Name', 'Mobile', tab === 'coaches' ? 'Organization' : 'Institute',
+                  '#', 'Name', 'Created On', 'Mobile', tab === 'coaches' ? 'Organization' : 'Institute',
                   ...levelList.map(l => l.title || l.name || `Level ${l.id}`),
                   'Status', 'Actions',
                 ].map(h => (
@@ -857,6 +857,22 @@ export default function StudentManagement() {
                       <p className="font-semibold text-slate-800 text-xs">{s.name || '—'}</p>
                       <p className="text-[10px] text-slate-400">{s.email !== '—' ? s.email : '—'}</p>
                     </div>
+                  </td>
+                  {/* Created On (registration date + time) */}
+                  <td className="px-4 py-3.5 whitespace-nowrap">
+                    {s.createdAt ? (() => {
+                      const dt = new Date(s.createdAt);
+                      return (
+                        <div>
+                          <p className="text-xs font-medium text-slate-700">
+                            {dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            {dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      );
+                    })() : <span className="text-xs text-slate-300">—</span>}
                   </td>
                   {/* Mobile */}
                   <td className="px-4 py-3.5">
