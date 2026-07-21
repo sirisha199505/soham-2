@@ -222,6 +222,23 @@ export default function SystemSettings() {
         </div>
       )}
 
+      {/* ── CURRENT CONFIGURATION SUMMARY (top of page) ── */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+        <h3 className="font-bold text-slate-800 mb-4" style={{ fontFamily: 'Space Grotesk' }}>Current Configuration Summary</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label:'Default Timer',  value:`${global.quizTimerMinutes} min`,  color:'#3B82F6' },
+            { label:'Registration',   value: global.registrationOpen?'Open':'Closed', color: global.registrationOpen?'#10B981':'#EF4444' },
+            { label:'Maintenance',    value: global.maintenanceMode?'ON':'OFF', color: global.maintenanceMode?'#EF4444':'#10B981' },
+          ].map(s => (
+            <div key={s.label} className="bg-slate-50 rounded-xl p-3 text-center">
+              <p className="text-xl font-bold" style={{ color:s.color, fontFamily:'Space Grotesk' }}>{s.value}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* ── GLOBAL SETTINGS ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
@@ -260,30 +277,6 @@ export default function SystemSettings() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-        <h3 className="font-bold text-slate-800 mb-4" style={{ fontFamily:'Space Grotesk' }}>Current Configuration Summary</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label:'Default Timer',  value:`${global.quizTimerMinutes} min`,  color:'#3B82F6' },
-            { label:'Registration',   value: global.registrationOpen?'Open':'Closed', color: global.registrationOpen?'#10B981':'#EF4444' },
-            { label:'Maintenance',    value: global.maintenanceMode?'ON':'OFF', color: global.maintenanceMode?'#EF4444':'#10B981' },
-          ].map(s => (
-            <div key={s.label} className="bg-slate-50 rounded-xl p-3 text-center">
-              <p className="text-xl font-bold" style={{ color:s.color, fontFamily:'Space Grotesk' }}>{s.value}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{s.label}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Save bar */}
-      <div className="sticky bottom-4 flex justify-end">
-        <button onClick={handleSave} disabled={saving}
-          className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-indigo-600 text-white font-bold text-sm shadow-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors">
-          {saving ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>}
-          {saving ? 'Saving…' : 'Save All Settings'}
-        </button>
-      </div>
     </div>
   );
 }

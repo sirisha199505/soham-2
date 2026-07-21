@@ -123,6 +123,30 @@ function StudentModal({ student, levelList, onClose, onSaved }) {
     phoneNumber: student.phoneNumber || '',
   });
 
+  // Full attempt history for this student so the admin sees EVERY attempt taken
+  // per level — not just the single latest LevelProgress score. null = loading.
+  const [attempts, setAttempts] = useState(isCoach ? [] : null);
+
+  useEffect(() => {
+    if (isCoach) return;              // trainers don't take quizzes
+    let cancelled = false;
+    setAttempts(null);
+    api.getAttempts(student.id)
+      .then(rows => { if (!cancelled) setAttempts(Array.isArray(rows) ? rows : []); })
+      .catch(() => { if (!cancelled) setAttempts([]); });
+    return () => { cancelled = true; };
+  }, [student.id, isCoach]);
+
+  // Group attempts by level, newest first (backend orders by created_at desc).
+  const attemptsByLevel = useMemo(() => {
+    const map = {};
+    (attempts || []).forEach(a => {
+      const lid = a.levelId ?? a.level_id;
+      (map[lid] ||= []).push(a);
+    });
+    return map;
+  }, [attempts]);
+
   const levels = levelList.length > 0
     ? levelList.map((lvl, i) => ({ id: lvl.id, label: lvl.title || `Level ${i + 1}`, idx: i }))
     : [1, 2, 3].map((n, i) => ({ id: n, label: `Level ${n}`, idx: i }));
@@ -140,14 +164,12 @@ function StudentModal({ student, levelList, onClose, onSaved }) {
     ? [
         { label: 'Organization',  value: student.schoolName },
         { label: 'Location',      value: locationStr },
-        { label: 'Registered on', value: registeredOn },
         { label: 'Status',        value: student.disabled ? 'Disabled' : 'Active' },
       ]
     : [
         { label: 'Institute',      value: student.schoolName },
         { label: 'Class / Course', value: student.className },
         { label: 'Location',       value: locationStr },
-        { label: 'Registered on',  value: registeredOn },
         { label: 'Status',         value: student.disabled ? 'Disabled' : 'Active' },
       ];
 
@@ -224,6 +246,13 @@ function StudentModal({ student, levelList, onClose, onSaved }) {
             </div>
           ) : (
             <>
+              {registeredOn && (
+                <div className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-2.5">
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Account created</p>
+                  <p className="text-xs font-semibold text-slate-600">{registeredOn}</p>
+                </div>
+              )}
+
               <div className="bg-indigo-50 rounded-2xl p-4">
                 <p className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider mb-1">{isCoach ? 'Trainer Name' : 'Student Name'}</p>
                 <p className="font-bold text-slate-800 text-lg">{student.name || '—'}</p>
@@ -249,30 +278,66 @@ function StudentModal({ student, levelList, onClose, onSaved }) {
                 <p className="text-xs font-semibold text-slate-400 uppercase">Level Progress</p>
                 {levels.map(({ id, label, idx }) => {
                   const d = student.levels?.[id];
+                  const lvlAttempts = attemptsByLevel[id] || [];
                   return (
-                    <div key={id} className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg flex items-center justify-center text-white text-[10px] font-bold"
-                          style={{ background: LEVEL_COLORS[idx] || '#94a3b8' }}>
-                          {idx + 1}
-                        </div>
-                        <span className="text-sm font-medium text-slate-700">{label}</span>
-                      </div>
-                      <div className="text-right">
-                        {d?.status === 'completed' ? (
-                          <div>
-                            <div className="flex items-center justify-end gap-1 mb-0.5">
-                              <p className={`text-sm font-bold ${(d.score?.pct ?? 0) >= 50 ? 'text-green-600' : 'text-red-500'}`}>{d.score?.pct ?? 0}%</p>
-                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${(d.score?.pct ?? 0) >= 50 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                                {(d.score?.pct ?? 0) >= 50 ? '✓' : '✗'}
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-slate-400">{d.score?.correct}/{d.score?.total} correct</p>
+                    <div key={id} className="bg-slate-50 rounded-xl px-4 py-2.5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg flex items-center justify-center text-white text-[10px] font-bold"
+                            style={{ background: LEVEL_COLORS[idx] || '#94a3b8' }}>
+                            {idx + 1}
                           </div>
-                        ) : (
-                          <span className="text-xs text-slate-400">{d ? 'Unlocked' : 'Not started'}</span>
-                        )}
+                          <span className="text-sm font-medium text-slate-700">{label}</span>
+                        </div>
+                        <div className="text-right">
+                          {d?.status === 'completed' ? (
+                            <div>
+                              <div className="flex items-center justify-end gap-1 mb-0.5">
+                                <p className={`text-sm font-bold ${(d.score?.pct ?? 0) >= 50 ? 'text-green-600' : 'text-red-500'}`}>{d.score?.pct ?? 0}%</p>
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${(d.score?.pct ?? 0) >= 50 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                  {(d.score?.pct ?? 0) >= 50 ? '✓' : '✗'}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-400">{d.score?.correct}/{d.score?.total} correct</p>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">{d ? 'Unlocked' : 'Not started'}</span>
+                          )}
+                        </div>
                       </div>
+
+                      {/* All attempts taken on this level */}
+                      {!isCoach && (
+                        attempts === null ? (
+                          <p className="text-[10px] text-slate-400 pl-8">Loading attempts…</p>
+                        ) : lvlAttempts.length > 0 ? (
+                          <div className="pl-8 space-y-1 border-t border-slate-200/70 pt-2">
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase">
+                              {lvlAttempts.length} attempt{lvlAttempts.length > 1 ? 's' : ''}
+                            </p>
+                            {lvlAttempts.map((a, i) => {
+                              const pct = a.score?.pct ?? 0;
+                              const ok = pct >= 50;
+                              const when = a.date || a.createdAt || a.created_at;
+                              const whenStr = when
+                                ? new Date(when).toLocaleString('en-IN',
+                                    { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                : '—';
+                              return (
+                                <div key={a.id ?? i} className="flex items-center justify-between text-[11px]">
+                                  <span className="text-slate-500">
+                                    <span className="font-medium text-slate-400">#{lvlAttempts.length - i}</span> · {whenStr}
+                                  </span>
+                                  <span className="flex items-center gap-1.5 shrink-0">
+                                    <span className="text-slate-400">{a.score?.correct ?? 0}/{a.score?.total ?? 0}</span>
+                                    <span className={`font-bold ${ok ? 'text-green-600' : 'text-red-500'}`}>{pct}%</span>
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : null
+                      )}
                     </div>
                   );
                 })}

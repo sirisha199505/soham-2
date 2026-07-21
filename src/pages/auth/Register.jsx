@@ -406,7 +406,7 @@ export default function Register() {
         <p className="text-slate-400 text-sm">
           {tab === 'student'
             ? 'Create your student account to access Soham Quiz'
-            : 'Register as a Trainer '}
+            : 'Create your trainer account to access Soham Quiz'}
         </p>
       </div>
 

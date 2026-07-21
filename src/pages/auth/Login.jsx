@@ -110,11 +110,11 @@ export default function Login() {
     },
     coach: {
       title: 'Trainer Sign In',
-      subtitle: 'Sign in with your registered email or phone number',
-      idLabel: 'Email / Phone',
-      idPlaceholder: 'Email / Phone number',
+      subtitle: 'Use your phone number or email address',
+      idLabel: 'Phone / Email',
+      idPlaceholder: 'Phone number / Email',
       idType: 'text',
-      idIcon: Mail,
+      idIcon: Phone,
       passHint: null,
     },
     admin: {
@@ -232,7 +232,7 @@ export default function Login() {
           {loading && <Loader2 size={16} className="animate-spin" />}
           {loading
             ? (waitSec < 6 ? 'Signing in…' : `Server waking up… ${waitSec}s`)
-            : isAdmin ? 'Login as Admin' : isCoach ? 'Login as Trainer' : 'Sign In'}
+            : isAdmin ? 'Sign In as Admin' : isCoach ? 'Sign In as Trainer' : 'Sign In as Student'}
           {!loading && <ChevronRight size={16} />}
         </button>
       </form>
@@ -248,7 +248,7 @@ export default function Login() {
           <Link to={`/register?role=${isCoach ? 'trainer' : 'student'}`}
             className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-semibold transition-all hover:scale-[1.01]"
             style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${colors.primary}35`, color: colors.primary }}>
-            {isCoach ? 'Register as Trainer' : 'Create your Student Account'}
+            {isCoach ? 'Create your Trainer Account' : 'Create your Student Account'}
             <ChevronRight size={15} />
           </Link>
         </>
