@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   User, Mail, Phone, School, Briefcase, BookOpen, LogOut,
   ShieldCheck, GraduationCap, ChevronRight, KeyRound,
@@ -41,6 +41,97 @@ function EditField({ icon: Icon, label, value, onChange, placeholder, type = 'te
           className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-800 bg-white focus:outline-none focus:ring-2 focus:border-transparent placeholder:text-slate-300"
           style={{ '--tw-ring-color': `${color}30` }}
         />
+      </div>
+    </div>
+  );
+}
+
+// Cascading State → District → Mandal → Village dropdowns for the profile edit
+// form. `value` = { state, district, mandal, village }; each selection loads the
+// next level and clears the ones below it. Village allows free-text for places
+// not in the list. Mirrors the registration LocationPicker.
+const OTHER_VILLAGE = 'Other (enter manually)';
+function LocationEditor({ value, onChange, color }) {
+  const [states,    setStates]    = useState([]);
+  const [districts, setDistricts] = useState([]);
+  const [mandals,   setMandals]   = useState([]);
+  const [villages,  setVillages]  = useState([]);
+  const [villageManual, setVillageManual] = useState(false);
+
+  useEffect(() => { api.getLocationStates().then(setStates).catch(() => setStates([])); }, []);
+  useEffect(() => {
+    if (!value.state) { setDistricts([]); return; }
+    api.getLocationDistricts(value.state).then(setDistricts).catch(() => setDistricts([]));
+  }, [value.state]);
+  useEffect(() => {
+    if (!value.state || !value.district) { setMandals([]); return; }
+    api.getLocationMandals(value.state, value.district).then(setMandals).catch(() => setMandals([]));
+  }, [value.state, value.district]);
+  useEffect(() => {
+    if (!value.state || !value.district || !value.mandal) { setVillages([]); return; }
+    api.getLocationVillages(value.state, value.district, value.mandal).then(setVillages).catch(() => setVillages([]));
+  }, [value.state, value.district, value.mandal]);
+
+  const set = patch => onChange({ ...value, ...patch });
+  const noVillages    = !!value.mandal && villages.length === 0;
+  const manualVillage = villageManual || noVillages;
+
+  const selCls = 'w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-800 bg-white focus:outline-none focus:ring-2 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-400';
+  const lblCls = 'text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5';
+  const ring   = { '--tw-ring-color': `${color}30` };
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={lblCls}>State</label>
+          <select className={selCls} style={ring} value={value.state}
+            onChange={e => { setVillageManual(false); set({ state: e.target.value, district: '', mandal: '', village: '' }); }}>
+            <option value="">Select State</option>
+            {states.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={lblCls}>District</label>
+          <select className={selCls} style={ring} value={value.district} disabled={!value.state}
+            onChange={e => { setVillageManual(false); set({ district: e.target.value, mandal: '', village: '' }); }}>
+            <option value="">{value.state ? 'Select District' : 'Select State first'}</option>
+            {districts.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={lblCls}>Mandal</label>
+          <select className={selCls} style={ring} value={value.mandal} disabled={!value.district}
+            onChange={e => { setVillageManual(false); set({ mandal: e.target.value, village: '' }); }}>
+            <option value="">{value.district ? 'Select Mandal' : 'Select District first'}</option>
+            {mandals.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={lblCls}>Village (optional)</label>
+          {manualVillage ? (
+            <input className={selCls} style={ring} value={value.village}
+              onChange={e => set({ village: e.target.value })}
+              placeholder={value.mandal ? 'Type village name' : 'Select Mandal first'} disabled={!value.mandal} />
+          ) : (
+            <select className={selCls} style={ring} value={value.village} disabled={!value.mandal}
+              onChange={e => {
+                if (e.target.value === OTHER_VILLAGE) { setVillageManual(true); set({ village: '' }); }
+                else set({ village: e.target.value });
+              }}>
+              <option value="">{value.mandal ? 'Select Village' : 'Select Mandal first'}</option>
+              {[...villages, OTHER_VILLAGE].map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+          )}
+          {value.mandal && (noVillages ? (
+            <p className="text-[10px] text-slate-400 mt-1">Not listed — type the village above.</p>
+          ) : manualVillage ? (
+            <button type="button" onClick={() => { setVillageManual(false); set({ village: '' }); }}
+              className="text-[10px] font-semibold mt-1 hover:underline" style={{ color }}>↩ Choose from list</button>
+          ) : null)}
+        </div>
       </div>
     </div>
   );
@@ -115,6 +206,10 @@ export default function StudentProfile() {
       schoolName:       user?.schoolName || '',
       className:        user?.className || '',
       organizationName: user?.organizationName || '',
+      state:            user?.state    || '',
+      district:         user?.district || '',
+      mandal:           user?.mandal   || '',
+      village:          user?.village  || '',
     });
     setPMsg(null);
     setEditing(true);
@@ -134,7 +229,14 @@ export default function StudentProfile() {
     setPSaving(true);
     setPMsg(null);
     try {
-      const payload = { name: pform.name.trim(), phoneNumber: cleanPhone };
+      const payload = {
+        name: pform.name.trim(),
+        phoneNumber: cleanPhone,
+        state:    pform.state.trim(),
+        district: pform.district.trim(),
+        mandal:   pform.mandal.trim(),
+        village:  pform.village.trim(),
+      };
       if (pform.email.trim()) payload.email = pform.email.trim();
       if (isCoach) {
         payload.organizationName = pform.organizationName.trim();
@@ -276,6 +378,18 @@ export default function StudentProfile() {
               ) : (
                 <EditField icon={Briefcase} label="Organization" value={pform.organizationName} onChange={setPF('organizationName')} placeholder="Organization / institution" color={roleColor} />
               )}
+
+              {/* Location — cascading State → District → Mandal → Village */}
+              <div className="pt-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <MapPin size={13} style={{ color: roleColor }} />
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Location</span>
+                </div>
+                <LocationEditor
+                  value={{ state: pform.state, district: pform.district, mandal: pform.mandal, village: pform.village }}
+                  onChange={loc => setPform(p => ({ ...p, ...loc }))}
+                  color={roleColor} />
+              </div>
 
               {pMsg && (
                 <div className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold ${
