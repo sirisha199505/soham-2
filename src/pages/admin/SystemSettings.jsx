@@ -2,14 +2,13 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
   Settings, Save, CheckCircle, RotateCcw, Clock,
-  Eye, Shuffle, Users, Unlock,
+  Users, Unlock,
   AlertTriangle, Info, ToggleLeft, ToggleRight, Shield, Loader2,
 } from 'lucide-react';
 import { api } from '../../utils/api';
 
 const DEFAULT_GLOBAL = {
   quizTimerMinutes:       10,
-  showResultsImmediately: true,
   registrationOpen:       true,
   maintenanceMode:        false,
 };
@@ -234,16 +233,6 @@ export default function SystemSettings() {
           <NumberRow label="Default Quiz Timer" desc="Fallback timer for levels without a custom timer"
             value={global.quizTimerMinutes} onChange={v => setGlobal(p => ({ ...p, quizTimerMinutes: v }))}
             icon={<Clock size={15}/>} color="#3B82F6" min={1} max={60} suffix=" min"/>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-xl bg-purple-50 flex items-center justify-center"><Shuffle size={15} className="text-purple-500"/></div>
-            <h2 className="font-bold text-slate-800" style={{ fontFamily:'Space Grotesk' }}>Question & Result</h2>
-          </div>
-          <ToggleRow label="Show Results Immediately" desc="Students see score right after submission"
-            value={global.showResultsImmediately} onChange={v => setGlobal(p => ({ ...p, showResultsImmediately: v }))}
-            icon={<Eye size={14}/>} color="#3BC0EF"/>
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">

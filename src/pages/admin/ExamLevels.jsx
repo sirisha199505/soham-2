@@ -74,8 +74,9 @@ function AddLevelModal({ onSave, onClose, existingTitles = [] }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Time Limit (minutes)</label>
-              <input type="number" min="1" max="120" value={form.timeLimit}
-                onChange={e => setForm(p => ({ ...p, timeLimit: Number(e.target.value) }))}
+              <input type="number" min="1" max="120" step="1" value={form.timeLimit}
+                onChange={e => { const v = e.target.value; if (v === '') { setForm(p => ({ ...p, timeLimit: '' })); return; } const n = Math.floor(Number(v)); if (Number.isNaN(n)) return; setForm(p => ({ ...p, timeLimit: Math.max(1, Math.min(120, n)) })); }}
+                onBlur={() => setForm(p => ({ ...p, timeLimit: Number(p.timeLimit) >= 1 ? p.timeLimit : 1 }))}
                 className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
             </div>
             <div>
@@ -226,7 +227,9 @@ function EditModal({ levelId, settings, onSave, onClose, otherTitles = [] }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Time Limit (minutes)</label>
-              <input type="number" min="1" max="120" value={form.timeLimit} onChange={f('timeLimit')}
+              <input type="number" min="1" max="120" step="1" value={form.timeLimit}
+                onChange={e => { const v = e.target.value; if (v === '') { setForm(p => ({ ...p, timeLimit: '' })); return; } const n = Math.floor(Number(v)); if (Number.isNaN(n)) return; setForm(p => ({ ...p, timeLimit: Math.max(1, Math.min(120, n)) })); }}
+                onBlur={() => setForm(p => ({ ...p, timeLimit: Number(p.timeLimit) >= 1 ? p.timeLimit : 1 }))}
                 className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
             </div>
             <div>

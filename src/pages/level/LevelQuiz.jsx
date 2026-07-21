@@ -835,7 +835,7 @@ export default function LevelQuiz() {
   const { user }     = useAuth();
   const { getLevelStatus, markLevelComplete, levelSettings, levelSettingsLoaded, refreshLevelSettings } = useLevel();
   const { colors }   = useTheme();
-  const { showResultsImmediately } = useSettings();
+  const { quizTimerMinutes } = useSettings();
 
   const QUIZ_FALLBACK_COLORS = [
     { from: '#f59e0b', to: '#d97706' },
@@ -1284,7 +1284,11 @@ export default function LevelQuiz() {
       'Do not refresh or close the browser tab during the exam.',
       'Attempts per level are limited — check your dashboard for remaining attempts.',
     ];
-    const timeLimit = Number(levelSettings[id]?.timeLimit) || 10;
+    // Honour the level's own timer; otherwise fall back to the admin's global
+    // Default Quiz Timer (not a hardcoded 10). A non-positive/negative level value
+    // is treated as unset so it can never yield a negative timer.
+    const levelTime = Number(levelSettings[id]?.timeLimit);
+    const timeLimit = levelTime > 0 ? levelTime : quizTimerMinutes;
 
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -1380,48 +1384,6 @@ export default function LevelQuiz() {
   if (!level || !q) return null;
 
   /* ── Result screen ─────────────────────────────────────────────── */
-  // Admin disabled "Show Results Immediately": confirm the submission was saved but
-  // do NOT reveal the score, breakdown, or answer review. The attempt is still
-  // persisted (markLevelComplete / saveQuizAttempt ran above) and remains visible
-  // later via Quiz History if/when the admin permits.
-  if (result && !showResultsImmediately) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-xl max-w-md w-full p-10 text-center">
-          {saveError ? (
-            <>
-              <div className="w-16 h-16 rounded-full bg-yellow-50 flex items-center justify-center mx-auto mb-4">
-                <AlertTriangle size={32} className="text-yellow-500" />
-              </div>
-              <h2 className="text-xl font-bold text-slate-700 mb-2">Submission Not Fully Saved</h2>
-              <p className="text-slate-500 text-sm mb-6">
-                Your answers were recorded locally but we could not reach the server.
-                Please stay connected and contact your teacher if this persists.
-              </p>
-            </>
-          ) : (
-            <>
-              <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
-                <CheckCircle size={32} className="text-green-500" />
-              </div>
-              <h2 className="text-xl font-bold text-slate-700 mb-2">Exam Submitted</h2>
-              <p className="text-slate-500 text-sm mb-6">
-                Your responses have been submitted successfully. Results are not shown
-                immediately — your teacher will share them with you.
-              </p>
-            </>
-          )}
-          <div className="flex gap-3 justify-center">
-            <button onClick={() => navigate('/dashboard')}
-              className="px-6 py-3 rounded-xl bg-slate-800 text-white font-semibold text-sm">
-              Back to Dashboard
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (result) {
     const perf = result.pct >= 90 ? { text: '#d97706', bg: '#fffbeb', border: '#fde68a', label: 'Excellent!' }
       : result.pct >= 70 ? { text: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0', label: 'Good Job!' }

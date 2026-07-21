@@ -1478,10 +1478,7 @@ function LevelSection({ level, bankId, index, expanded, onToggle, onRenamed, onD
 function BankDetail({ bank, bankIndex, onBankRenamed, showToast }) {
   const [levels,       setLevels]      = useState([]);
   const [loading,      setLoading]     = useState(true);
-  const [addingLevel,  setAddingLevel] = useState(false);
-  const [newLevelName, setNewLevelName]= useState('');
   const [renamingBank, setRenamingBank]= useState(false);
-  const [saving,       setSaving]      = useState(false);
   // Accordion: only one level open at a time (null = all collapsed).
   const [openLevelId,  setOpenLevelId] = useState(null);
 
@@ -1492,19 +1489,9 @@ function BankDetail({ bank, bankIndex, onBankRenamed, showToast }) {
       .finally(() => setLoading(false));
   }, [bank.id]);
 
-  const handleAddLevel = async () => {
-    const name = newLevelName.trim() || `Level ${levels.length + 1}`;
-    setSaving(true);
-    try {
-      const newLevel = await api.createQbLevel({ bankId: bank.id, name });
-      setLevels(prev => [...prev, newLevel]);
-      setNewLevelName('');
-      setAddingLevel(false);
-      showToast?.('Level added!');
-    } catch (err) {
-      showToast?.(`Failed: ${err.message}`, 'red');
-    } finally { setSaving(false); }
-  };
+  // NOTE: Question Bank levels are NOT created here — they mirror the Exam Levels
+  // (auto-created and rename-synced server-side). The manual "Add Level" UI was
+  // removed so levels have a single source of truth: the Exam Levels page.
 
   const handleRenameBank = async (name) => {
     try {
@@ -1535,44 +1522,15 @@ function BankDetail({ bank, bankIndex, onBankRenamed, showToast }) {
             <span className="font-semibold text-slate-600">{levels.length}</span> levels
           </p>
         </div>
-        <button onClick={()=>setAddingLevel(true)}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white shadow-sm hover:opacity-90 transition-all bg-gradient-to-r ${pal2.grad}`}>
-          <Plus size={16}/>Add Level
-        </button>
       </div>
-
-      {addingLevel && (
-        <div className="bg-white rounded-2xl border-2 border-indigo-200 p-5 shadow-sm">
-          <p className="text-sm font-bold text-indigo-700 mb-3 flex items-center gap-2"><Layers size={15}/>New Level</p>
-          {saving ? (
-            <div className="flex items-center gap-2 py-2 text-sm text-slate-500"><Loader2 size={14} className="animate-spin"/>Creating…</div>
-          ) : (
-            <div className="space-y-3">
-              <input autoFocus value={newLevelName} onChange={e=>setNewLevelName(e.target.value)}
-                onKeyDown={e=>{ if(e.key==='Enter') handleAddLevel(); if(e.key==='Escape'){setAddingLevel(false);setNewLevelName('');} }}
-                placeholder={`e.g. Level ${levels.length + 1}, Advanced…`}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"/>
-              <div className="flex items-center gap-2">
-                <button onClick={handleAddLevel} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-indigo-500 to-blue-600 hover:opacity-90 transition-all">
-                  <Plus size={12}/>Add Level
-                </button>
-                <button onClick={()=>{setAddingLevel(false);setNewLevelName('');}} className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100 transition-all">Cancel</button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-16"><Loader2 size={28} className="animate-spin text-indigo-300"/></div>
-      ) : levels.length === 0 && !addingLevel ? (
+      ) : levels.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-200">
           <Layers size={36} className="text-slate-300 mx-auto mb-3"/>
           <p className="font-semibold text-slate-400">No levels yet</p>
-          <p className="text-sm text-slate-400 mt-1 mb-4">Add a level to start organising your questions</p>
-          <button onClick={()=>setAddingLevel(true)} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white" style={{background:'linear-gradient(135deg,#6366f1,#8b5cf6)'}}>
-            <Plus size={15}/>Add Level
-          </button>
+          <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto">Levels mirror your <span className="font-semibold text-slate-500">Exam Levels</span> — create a level on the Exam Levels page and it will appear here automatically.</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -1584,12 +1542,6 @@ function BankDetail({ bank, bankIndex, onBankRenamed, showToast }) {
               onDeleted={(levelId) => { setOpenLevelId(cur => cur === levelId ? null : cur); setLevels(prev => prev.filter(l => l.id !== levelId)); }}
               showToast={showToast}/>
           ))}
-          {!addingLevel && (
-            <button onClick={()=>setAddingLevel(true)}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-dashed border-slate-200 text-sm font-semibold text-slate-400 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50/30 transition-all">
-              <Plus size={15}/>Add Another Level
-            </button>
-          )}
         </div>
       )}
     </div>

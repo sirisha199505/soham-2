@@ -289,7 +289,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* ── Group indicator ── */}
-      <div className="flex items-center gap-2 -mb-2">
+      <div className="flex flex-wrap items-center gap-2">
         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
           isStudents ? 'bg-indigo-50 text-indigo-600' : 'bg-violet-50 text-violet-600'}`}>
           {isStudents ? <Users size={12} /> : <UserCheck size={12} />}

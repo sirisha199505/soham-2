@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useSettings } from '../../context/SettingsContext';
 import { api } from '../../utils/api';
 import { LEVELS } from '../../utils/levelData';
 import { getPerformanceLabel, compareLevels, levelAudienceAllows } from '../../utils/helpers';
@@ -192,6 +193,7 @@ function AttemptTrackerBar({ levels, levelSettings, attemptsByLevel }) {
 
 /* ── Level Card ─────────────────────────────────────────────────── */
 function LevelCard({ level, status, levelData, levelSettings, attemptCount }) {
+  const { quizTimerMinutes } = useSettings();
   const isLocked    = status === 'locked';
   const isCompleted = status === 'completed';
   const isUnlocked  = status === 'unlocked';
@@ -206,7 +208,8 @@ function LevelCard({ level, status, levelData, levelSettings, attemptCount }) {
   const rawAvail   = levelSettings?.[level.id]?.availableQuestions;
   const insufficientQuestions = requiredQ > 0 && rawAvail != null && Number(rawAvail) < requiredQ;
 
-  const timeLimit  = Number(levelSettings?.[level.id]?.timeLimit) || 10;
+  const lt         = Number(levelSettings?.[level.id]?.timeLimit);
+  const timeLimit  = lt > 0 ? lt : quizTimerMinutes;   // honour admin's global default, never negative
   const score      = levelData?.score;
   const lastScore  = levelData?.lastScore;
 

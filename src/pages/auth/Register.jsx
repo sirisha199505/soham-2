@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   User, School, BookOpen, Phone, Mail, Lock, Eye, EyeOff,
@@ -167,7 +167,7 @@ function PasswordField({ label, value, onChange, show, onToggle, placeholder = '
         />
         <button type="button" onClick={onToggle}
           className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors">
-          {show ? <EyeOff size={15} /> : <Eye size={15} />}
+          {show ? <Eye size={15} /> : <EyeOff size={15} />}
         </button>
       </div>
     </div>
@@ -208,6 +208,14 @@ export default function Register() {
   const [success,           setSuccess]           = useState(null);
   const [registrationClosed, setRegistrationClosed] = useState(false);
 
+  // All validation errors render in the inline banner below (no browser pop-ups /
+  // native validation bubbles). On a long form the banner sits above the fold, so
+  // scroll it into view whenever a new error appears.
+  const errorRef = useRef(null);
+  useEffect(() => {
+    if (error && errorRef.current) errorRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [error]);
+
   // Check whether new registrations are currently accepted (public endpoint).
   // Fail-open: if the check errors, the form stays available.
   useEffect(() => {
@@ -234,6 +242,8 @@ export default function Register() {
   const handleStudentSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    if (!studentForm.studentName.trim())                           { setError('Please enter your name.'); return; }
+    if (!studentForm.schoolName.trim())                            { setError('Please enter your institute name.'); return; }
     const effectiveClass = studentForm.className === 'Other' ? studentForm.customClass.trim() : studentForm.className;
     if (!effectiveClass)                                           { setError('Please select or enter your Class / Course.'); return; }
     if (!studentForm.state)                                        { setError('Please select your State.'); return; }
@@ -272,6 +282,8 @@ export default function Register() {
   const handleCoachSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    if (!coachForm.coachName.trim())                          { setError('Please enter your name.'); return; }
+    if (!coachForm.organizationName.trim())                   { setError('Please enter your organization / institution.'); return; }
     if (!coachForm.state)                                     { setError('Please select your State.'); return; }
     if (!coachForm.district)                                  { setError('Please select your District.'); return; }
     if (!coachForm.mandal.trim())                             { setError('Please select your Mandal.'); return; }
@@ -399,7 +411,7 @@ export default function Register() {
       </div>
 
       {error && (
-        <div className="flex items-start gap-3 rounded-2xl px-4 py-3.5 mb-5"
+        <div ref={errorRef} className="flex items-start gap-3 rounded-2xl px-4 py-3.5 mb-5"
           style={{ background: `${colors.error}18`, border: `1px solid ${colors.error}35` }}>
           <AlertCircle size={16} className="shrink-0 mt-0.5" style={{ color: colors.error }} />
           <p className="text-sm" style={{ color: '#fca5a5' }}>{error}</p>
@@ -408,7 +420,7 @@ export default function Register() {
 
       {/* ── STUDENT FORM ── */}
       {tab === 'student' && (
-        <form onSubmit={handleStudentSubmit} className="space-y-4">
+        <form onSubmit={handleStudentSubmit} noValidate className="space-y-4">
           <Field primaryColor={colors.primary} label="Student Name" icon={User}   value={studentForm.studentName} onChange={sS('studentName')} placeholder="Full name" />
           <Field primaryColor={colors.primary} label="Institute Name"  icon={School} value={studentForm.schoolName}  onChange={sS('schoolName')}  placeholder="Institution name" />
 
@@ -472,7 +484,7 @@ export default function Register() {
 
       {/* ── COACH FORM ── */}
       {tab === 'coach' && (
-        <form onSubmit={handleCoachSubmit} className="space-y-4">
+        <form onSubmit={handleCoachSubmit} noValidate className="space-y-4">
           <Field primaryColor={colors.primary} label="Trainer Name"               icon={User}     value={coachForm.coachName}        onChange={sC('coachName')}        placeholder="Full name" />
           <Field primaryColor={colors.primary} label="Organization / Institution" icon={Briefcase} value={coachForm.organizationName} onChange={sC('organizationName')} placeholder="Organization / Institution" />
 

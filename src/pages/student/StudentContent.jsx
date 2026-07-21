@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   BookOpen, ChevronLeft, ChevronRight, CheckCircle,
   Loader2, BookMarked, AlertCircle, Bookmark, BookmarkCheck,
-  Clock, BarChart2, ArrowLeft, FileText, Download, ExternalLink,
+  BarChart2, ArrowLeft, FileText, Download, ExternalLink,
   ZoomIn, ZoomOut,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -25,14 +25,6 @@ const FALLBACK_COLORS = [
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-function estimateReadTime(page) {
-  if (page.type === 'pdf') return `${Math.max(2, (page.pageCount || 1) * 2)} min`;
-  const words = (page.sections || []).reduce(
-    (s, sec) => s + (sec.body || '').split(/\s+/).length, 0
-  );
-  return `${Math.max(1, Math.round(words / 200))} min`;
-}
-
 function buildBlobUrl(pdfData) {
   if (!pdfData) return null;
   if (!pdfData.startsWith('data:')) return pdfData;
@@ -458,9 +450,6 @@ function ContentReader({ pages, startIndex, levelId, level, onBack, onReadStateC
 
               <div className="flex items-center gap-4 text-sm text-slate-500 pb-6 border-b border-slate-100">
                 <span className="flex items-center gap-1.5">
-                  <Clock size={13} /> {estimateReadTime(page)} read
-                </span>
-                <span className="flex items-center gap-1.5">
                   <BarChart2 size={13} /> {(page.sections || []).length} sections
                 </span>
               </div>
@@ -664,13 +653,12 @@ function MaterialCard({ page, index, levelId, level, onRead }) {
           {page.title || `Study Material ${index + 1}`}
         </h3>
 
-        {/* Meta */}
-        <div className="flex items-center gap-3 text-[11px] text-slate-400 mb-4">
-          <span className="flex items-center gap-1"><Clock size={10} /> {estimateReadTime(page)}</span>
-          {isLastVisited && lastRead && (
-            <span className="text-amber-500 font-medium">· Last read {timeAgo(lastRead.ts)}</span>
-          )}
-        </div>
+        {/* Meta — "Last read" only (auto read-time estimate removed per client) */}
+        {isLastVisited && lastRead && (
+          <div className="flex items-center gap-3 text-[11px] mb-4">
+            <span className="text-amber-500 font-medium">Last read {timeAgo(lastRead.ts)}</span>
+          </div>
+        )}
 
         {/* Read Now button */}
         <button

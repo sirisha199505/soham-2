@@ -21,7 +21,7 @@ const PALETTE = [
 const levelColors = (order) => PALETTE[(order - 1) % PALETTE.length];
 
 /* ── Section Editor ── */
-function SectionEditor({ sections, onChange }) {
+function SectionEditor({ sections, onChange, errors = [] }) {
   const add = () => onChange([...sections, { heading: '', body: '' }]);
   const remove = i => onChange(sections.filter((_, idx) => idx !== i));
   const update = (i, field, val) => {
@@ -47,13 +47,16 @@ function SectionEditor({ sections, onChange }) {
               className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
           </div>
           <div>
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Body</label>
-            <RichTextEditor
-              value={sec.body}
-              onChange={val => update(i, 'body', val)}
-              placeholder="Write section content — use the toolbar for headings, bold, lists, links…"
-              minHeight={160}
-            />
+            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Body <span className="text-red-400">*</span></label>
+            <div className={errors.includes(i) ? 'rounded-xl ring-2 ring-red-300' : ''}>
+              <RichTextEditor
+                value={sec.body}
+                onChange={val => update(i, 'body', val)}
+                placeholder="Write section content — use the toolbar for headings, bold, lists, links…"
+                minHeight={160}
+              />
+            </div>
+            {errors.includes(i) && <p className="text-[11px] text-red-500 mt-1">Body content is required.</p>}
           </div>
         </div>
       ))}
@@ -80,6 +83,11 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [saveMsg, setSaveMsg] = useState('');
+  // Indices of sections whose Body is empty (flagged on a failed save attempt).
+  const [sectionErrors, setSectionErrors] = useState([]);
+
+  // A rich-text body counts as empty when it has no text once tags/&nbsp; are stripped.
+  const isEmptyBody = (html) => !html || !String(html).replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, '').trim();
 
   const processPdf = async (file) => {
     if (!file) return;
@@ -133,7 +141,8 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
           {form.type === 'text' && (
             <div>
               <label className="text-xs font-semibold text-slate-500 uppercase block mb-2">Content Sections</label>
-              <SectionEditor sections={form.sections} onChange={secs => setForm(p => ({ ...p, sections: secs }))} />
+              <SectionEditor sections={form.sections} errors={sectionErrors}
+                onChange={secs => { setForm(p => ({ ...p, sections: secs })); setSaveMsg(''); setSectionErrors([]); }} />
             </div>
           )}
 
@@ -207,6 +216,14 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
               onClick={() => {
                 if (!form.title.trim())                        { setSaveMsg('Please add a title name.'); return; }
                 if (form.type !== 'text' && !form.pdfData)     { setSaveMsg('Please add PDF / image content.'); return; }
+                if (form.type === 'text') {
+                  const bad = form.sections.reduce((acc, s, i) => (isEmptyBody(s.body) ? [...acc, i] : acc), []);
+                  if (bad.length) {
+                    setSectionErrors(bad);
+                    setSaveMsg(`Body is required — fill section ${bad.map(i => i + 1).join(', ')}.`);
+                    return;
+                  }
+                }
                 if (uploading) return;
                 onSave(levelId, form, pageIdx);
               }}
@@ -225,7 +242,9 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
 function AddLevelModal({ onSave, onClose, saving }) {
   const [title, setTitle] = useState('');
   const [timeLimit, setTimeLimit] = useState(10);
-  const canSave = title.trim().length > 0 && !saving;
+  // Time limit must be a positive whole number of minutes (1–180). Negative/zero
+  // and out-of-range values are rejected as the user types.
+  const canSave = title.trim().length > 0 && Number(timeLimit) >= 1 && !saving;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -253,8 +272,16 @@ function AddLevelModal({ onSave, onClose, saving }) {
               type="number"
               min={1}
               max={180}
+              step={1}
               value={timeLimit}
-              onChange={e => setTimeLimit(Number(e.target.value))}
+              onChange={e => {
+                const v = e.target.value;
+                if (v === '') { setTimeLimit(''); return; }   // allow clearing to retype
+                const n = Math.floor(Number(v));
+                if (Number.isNaN(n)) return;
+                setTimeLimit(Math.max(1, Math.min(180, n)));  // clamp — no negatives/zero
+              }}
+              onBlur={() => { if (Number(timeLimit) < 1) setTimeLimit(1); }}
               className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
             />
           </div>

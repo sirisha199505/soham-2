@@ -28,10 +28,10 @@ export function SettingsProvider({ children }) {
     settingsLoaded:  loaded,
     maintenanceMode: settings?.maintenanceMode === true,
     registrationOpen: settings?.registrationOpen !== false,
-    // When the admin disables this, students must NOT see their score/answers right
-    // after submission. Default true (fail-open) so a fetch error never hides results
-    // the admin intended to show.
-    showResultsImmediately: settings?.showResultsImmediately !== false,
+    // Admin-configured global default quiz timer (minutes). Used as the fallback for
+    // any level without its own timeLimit — the student quiz honours THIS value so it
+    // can't diverge from what the admin sees. Falls back to 10 if unset/invalid.
+    quizTimerMinutes: Number(settings?.quizTimerMinutes) > 0 ? Number(settings.quizTimerMinutes) : 10,
     refreshSettings,
   };
 
