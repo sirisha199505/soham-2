@@ -646,14 +646,14 @@ function MaterialCard({ page, index, levelId, level, onRead }) {
   return (
     <div
       onClick={() => onRead(index)}
-      className={`group relative bg-white rounded-2xl border shadow-sm overflow-hidden cursor-pointer
+      className={`group relative bg-white rounded-2xl border shadow-sm overflow-hidden cursor-pointer h-full flex flex-col
         hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200
         ${isRead ? 'border-green-100' : 'border-slate-100'}`}
     >
       {/* Gradient accent line */}
       <div className="h-[3px]" style={gradStyle} />
 
-      <div className="p-5">
+      <div className="p-5 flex-1 flex flex-col">
         {/* Index + status row */}
         <div className="flex items-center justify-between mb-3">
           <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
@@ -687,34 +687,38 @@ function MaterialCard({ page, index, levelId, level, onRead }) {
           </div>
         )}
 
-        {/* Read Now button */}
-        <button
-          onClick={e => { e.stopPropagation(); onRead(index); }}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[0.98]"
-          style={gradStyle}>
-          {isRead ? <CheckCircle size={14} /> : isVideo ? <ExternalLink size={14} /> : <BookOpen size={14} />}
-          {isVideo ? 'Watch Video' : 'Read Now'}
-        </button>
-
-        {/* Open the video directly in a new tab — video pages only */}
-        {isVideo && (
-          <a href={page.pdfData} target="_blank" rel="noreferrer noopener"
-            onClick={e => e.stopPropagation()}
-            className="w-full mt-2 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">
-            <ExternalLink size={13} /> Open in new tab
-          </a>
-        )}
-
-        {/* Download (watermarked) — PDFs only */}
-        {isPdf && (
+        {/* Action buttons — pinned to the bottom (mt-auto) so the primary button
+            lines up across every card regardless of the meta/"Last read" line above */}
+        <div className="mt-auto">
+          {/* Read Now button */}
           <button
-            onClick={handleDownload}
-            disabled={dl}
-            className="w-full mt-2 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-50">
-            {dl ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-            {dl ? 'Preparing…' : 'Download'}
+            onClick={e => { e.stopPropagation(); onRead(index); }}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[0.98]"
+            style={gradStyle}>
+            {isRead ? <CheckCircle size={14} /> : isVideo ? <ExternalLink size={14} /> : <BookOpen size={14} />}
+            {isVideo ? 'Watch Video' : 'Read Now'}
           </button>
-        )}
+
+          {/* Open the video directly in a new tab — video pages only */}
+          {isVideo && (
+            <a href={page.pdfData} target="_blank" rel="noreferrer noopener"
+              onClick={e => e.stopPropagation()}
+              className="w-full mt-2 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">
+              <ExternalLink size={13} /> Open in new tab
+            </a>
+          )}
+
+          {/* Download (watermarked) — PDFs only */}
+          {isPdf && (
+            <button
+              onClick={handleDownload}
+              disabled={dl}
+              className="w-full mt-2 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-50">
+              {dl ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+              {dl ? 'Preparing…' : 'Download'}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
