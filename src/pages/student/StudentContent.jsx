@@ -760,12 +760,18 @@ export default function StudentContent() {
   const level = topics.find(t => t.id === effectiveId);
   const pages = level?.pages || [];
 
-  // PDFs open in a new browser tab (native viewer); text & video open in the
-  // in-app reader (video shows an embedded player plus an "open in new tab" link).
+  // PDFs and videos open in a NEW browser tab (PDF → native viewer; video → the
+  // YouTube/link URL). Text articles open in the in-app reader.
   const handleOpenReader = useCallback((idx) => {
     const page = pages[idx];
     if (page?.type === 'pdf' && typeof page.pdfData === 'string' && page.pdfData) {
       openMaterialInNewTab(page.pdfData, page.pdfName);
+      markRead(effectiveId, idx);
+      forceUpdate(n => n + 1);
+      return;
+    }
+    if (page?.type === 'video' && typeof page.pdfData === 'string' && page.pdfData) {
+      window.open(page.pdfData, '_blank', 'noopener,noreferrer');
       markRead(effectiveId, idx);
       forceUpdate(n => n + 1);
       return;
