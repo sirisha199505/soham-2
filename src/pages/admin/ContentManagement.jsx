@@ -340,40 +340,8 @@ function AddLevelModal({ onSave, onClose, saving }) {
   );
 }
 
-/* ── Delete Level Confirm Modal ── */
-function DeleteLevelModal({ levelTitle, pageCount, onConfirm, onClose, saving }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
-        <div className="p-6 text-center space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center mx-auto">
-            <AlertTriangle size={22} className="text-red-500" />
-          </div>
-          <h3 className="font-bold text-slate-800 text-lg" style={{ fontFamily: 'Space Grotesk' }}>Delete Level?</h3>
-          <p className="text-sm text-slate-500">
-            This will permanently delete <span className="font-semibold text-slate-700">"{levelTitle}"</span>
-            {pageCount > 0 && <> and its <span className="font-semibold text-slate-700">{pageCount} content page{pageCount !== 1 ? 's' : ''}</span></>}.
-            This action cannot be undone.
-          </p>
-        </div>
-        <div className="px-6 pb-6 flex gap-3">
-          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button
-            onClick={onConfirm}
-            disabled={saving}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 disabled:opacity-50 transition-colors">
-            {saving ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-            Delete
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ── Level Section ── */
-function LevelSection({ levelId, levelTitle, levelOrder, pages, expanded, onToggle, onEdit, onDelete, onAdd, onDeleteLevel }) {
+function LevelSection({ levelId, levelTitle, levelOrder, pages, expanded, onToggle, onEdit, onDelete, onAdd }) {
   const colors = levelColors(levelOrder);
 
   return (
@@ -393,11 +361,9 @@ function LevelSection({ levelId, levelTitle, levelOrder, pages, expanded, onTogg
             style={{ background: `linear-gradient(135deg, ${colors.from}, ${colors.to})` }}>
             <Plus size={12} /> Add
           </button>
-          <button onClick={() => onDeleteLevel(levelId, levelTitle, pages.length)}
-            className="p-2 rounded-xl hover:bg-red-50 text-slate-300 hover:text-red-500 transition-colors"
-            title="Delete level">
-            <Trash2 size={15} />
-          </button>
+          {/* NOTE: no "delete level" here on purpose — deleting an EXAM LEVEL
+              (which cascades to its Question Bank + questions) is done only on the
+              Exam Levels page. The Content page manages content pages only. */}
           <button onClick={onToggle} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors">
             {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
@@ -449,7 +415,7 @@ function LevelSection({ levelId, levelTitle, levelOrder, pages, expanded, onTogg
 /* ── MAIN ── */
 export default function ContentManagement() {
   const { user } = useAuth();
-  const { levelSettings, levelSettingsLoaded, createLevel, deleteLevel } = useLevel();
+  const { levelSettings, levelSettingsLoaded, createLevel } = useLevel();
   const [content, setContent] = useState({});
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
@@ -532,21 +498,6 @@ export default function ContentManagement() {
     }
   };
 
-  const handleDeleteLevel = async () => {
-    if (!modal?.levelId) return;
-    setSaving(true);
-    try {
-      await deleteLevel(modal.levelId);
-      setContent(prev => { const next = { ...prev }; delete next[modal.levelId]; return next; });
-      setModal(null);
-      showToast('Level deleted');
-    } catch (err) {
-      showToast(err.message || 'Failed to delete level');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (loading) return (
     <div className="min-h-full flex items-center justify-center">
       <Loader2 size={28} className="animate-spin text-indigo-400" />
@@ -597,8 +548,6 @@ export default function ContentManagement() {
             onAdd={levelId => setModal({ type: 'add', levelId })}
             onEdit={(levelId, page, pageIdx) => setModal({ type: 'edit', levelId, page, pageIdx })}
             onDelete={handleDelete}
-            onDeleteLevel={(levelId, levelTitle, pageCount) =>
-              setModal({ type: 'deleteLevel', levelId, levelTitle, pageCount })}
           />
         ))}
         {sortedLevels.length === 0 && (
@@ -614,15 +563,6 @@ export default function ContentManagement() {
       {modal?.type === 'edit' && <PageModal levelId={modal.levelId} page={modal.page} pageIdx={modal.pageIdx}   onSave={handleSave} onClose={() => setModal(null)} />}
       {modal?.type === 'addLevel' && (
         <AddLevelModal saving={saving} onSave={handleAddLevel} onClose={() => setModal(null)} />
-      )}
-      {modal?.type === 'deleteLevel' && (
-        <DeleteLevelModal
-          levelTitle={modal.levelTitle}
-          pageCount={modal.pageCount}
-          saving={saving}
-          onConfirm={handleDeleteLevel}
-          onClose={() => setModal(null)}
-        />
       )}
     </div>
   );
