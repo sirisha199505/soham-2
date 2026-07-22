@@ -181,6 +181,14 @@ export const api = {
   getContent:  (levelId) => request('GET', `/api/content/${levelId}`),
   saveContent: (levelId, pages) => request('PUT', `/api/content/${levelId}`, pages),
 
+  // Standalone content topics — independent of exam levels & question banks.
+  // Add/delete here never affects any exam level or question bank.
+  getContentTopics:   ()          => request('GET',    '/api/content-topics'),
+  createContentTopic: (title)     => request('POST',   '/api/content-topics', { title }),
+  saveContentTopic:   (id, pages) => request('PUT',    `/api/content-topics/${id}`, pages),
+  renameContentTopic: (id, title) => request('PATCH',  `/api/content-topics/${id}`, { title }),
+  deleteContentTopic: (id)        => request('DELETE', `/api/content-topics/${id}`),
+
   // Settings
   getSettings:  () => request('GET', '/api/settings'),
   saveSettings: (settings) => request('PUT', '/api/settings', settings),

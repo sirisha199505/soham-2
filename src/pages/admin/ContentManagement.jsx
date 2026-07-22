@@ -5,9 +5,8 @@ import {
   BookOpen, ChevronDown, ChevronUp, Info, Upload, Eye, Loader2,
   AlertTriangle, Video,
 } from 'lucide-react';
-import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
-import { compareLevels, isYouTubeUrl, youtubeEmbedUrl } from '../../utils/helpers';
+import { isYouTubeUrl, youtubeEmbedUrl } from '../../utils/helpers';
 import RichTextEditor from '../../components/ui/RichTextEditor';
 
 const PALETTE = [
@@ -277,8 +276,47 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
   );
 }
 
-/* ── Delete Level Confirm Modal ── */
-function DeleteLevelModal({ levelTitle, pageCount, onConfirm, onClose, saving }) {
+/* ── Add Content Level Modal (title only — NOT an exam level) ── */
+function AddTopicModal({ onSave, onClose, saving }) {
+  const [title, setTitle] = useState('');
+  const canSave = title.trim().length > 0 && !saving;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Add Content Level</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={16} /></button>
+        </div>
+        <div className="p-6 space-y-3">
+          <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Title <span className="text-red-400">*</span></label>
+          <input
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && canSave && onSave(title.trim())}
+            placeholder="e.g. Introduction to Robotics"
+            autoFocus
+            className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+          />
+          <p className="text-[11px] text-slate-400">
+            This is a content-only section. It is <span className="font-semibold">not</span> an exam level and creates no question bank.
+          </p>
+        </div>
+        <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button onClick={() => canSave && onSave(title.trim())} disabled={!canSave}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+            Add
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Delete Content Level Confirm Modal ── */
+function DeleteTopicModal({ title, pageCount, onConfirm, onClose, saving }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
@@ -287,19 +325,15 @@ function DeleteLevelModal({ levelTitle, pageCount, onConfirm, onClose, saving })
           <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center mx-auto">
             <AlertTriangle size={22} className="text-red-500" />
           </div>
-          <h3 className="font-bold text-slate-800 text-lg" style={{ fontFamily: 'Space Grotesk' }}>Delete "{levelTitle}"?</h3>
+          <h3 className="font-bold text-slate-800 text-lg" style={{ fontFamily: 'Space Grotesk' }}>Delete "{title}"?</h3>
           <p className="text-sm text-slate-500">
-            This permanently deletes the <span className="font-semibold text-slate-700">exam level</span>,
-            its <span className="font-semibold text-slate-700">question bank</span> (all its questions),
-            {pageCount > 0 && <> and its <span className="font-semibold text-slate-700">{pageCount} content page{pageCount !== 1 ? 's' : ''}</span></>}.
-            This cannot be undone.
+            This removes this content level{pageCount > 0 && <> and its <span className="font-semibold text-slate-700">{pageCount} page{pageCount !== 1 ? 's' : ''}</span></>}.
+            {' '}It does <span className="font-semibold text-slate-700">not</span> affect any exam level or question bank.
           </p>
         </div>
         <div className="px-6 pb-6 flex gap-3">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button
-            onClick={onConfirm}
-            disabled={saving}
+          <button onClick={onConfirm} disabled={saving}
             className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 disabled:opacity-50 transition-colors">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
             Delete
@@ -310,9 +344,10 @@ function DeleteLevelModal({ levelTitle, pageCount, onConfirm, onClose, saving })
   );
 }
 
-/* ── Level Section ── */
-function LevelSection({ levelId, levelTitle, levelOrder, pages, expanded, onToggle, onEdit, onDelete, onAdd, onDeleteLevel }) {
-  const colors = levelColors(levelOrder);
+/* ── Content Topic Section ── */
+function TopicSection({ topic, order, expanded, onToggle, onEdit, onDeletePage, onAddPage, onDeleteTopic }) {
+  const colors = levelColors(order);
+  const pages = topic.pages || [];
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -321,19 +356,22 @@ function LevelSection({ levelId, levelTitle, levelOrder, pages, expanded, onTogg
         style={{ background: `linear-gradient(135deg, ${colors.from}15, ${colors.to}08)`, borderBottom: `1px solid ${colors.from}20` }}>
         <div className="flex items-center gap-3">
           <div>
-            <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>{levelTitle || `Level ${levelId}`}</h3>
+            <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>{topic.title}</h3>
             <p className="text-xs text-slate-500">{pages.length} content</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => onAdd(levelId)}
+          <button onClick={() => onAddPage(topic.id)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white"
             style={{ background: `linear-gradient(135deg, ${colors.from}, ${colors.to})` }}>
             <Plus size={12} /> Add
           </button>
-          {/* NOTE: no "delete level" here on purpose — deleting an EXAM LEVEL
-              (which cascades to its Question Bank + questions) is done only on the
-              Exam Levels page. The Content page manages content pages only. */}
+          {/* Delete this content level — content only; never touches exam levels/QB. */}
+          <button onClick={() => onDeleteTopic(topic)}
+            className="p-2 rounded-xl hover:bg-red-50 text-slate-300 hover:text-red-500 transition-colors"
+            title="Delete content level">
+            <Trash2 size={15} />
+          </button>
           <button onClick={onToggle} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors">
             {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
@@ -347,7 +385,7 @@ function LevelSection({ levelId, levelTitle, levelOrder, pages, expanded, onTogg
             <div className="flex flex-col items-center py-8 text-center">
               <FileText size={28} className="text-slate-200 mb-2" />
               <p className="text-sm text-slate-400">No content yet</p>
-              <p className="text-xs text-slate-300 mt-0.5">Students will go directly to the quiz</p>
+              <p className="text-xs text-slate-300 mt-0.5">Click "Add" to create a page for students to read</p>
             </div>
           ) : pages.map((pg, i) => (
             <div key={i} className="flex items-start gap-3 bg-slate-50 rounded-xl p-4">
@@ -367,10 +405,10 @@ function LevelSection({ levelId, levelTitle, levelOrder, pages, expanded, onTogg
                 )}
               </div>
               <div className="flex gap-1 shrink-0">
-                <button onClick={() => onEdit(levelId, pg, i)} className="p-1.5 rounded-lg text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
+                <button onClick={() => onEdit(topic.id, pg, i)} className="p-1.5 rounded-lg text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
                   <Edit2 size={13} />
                 </button>
-                <button onClick={() => onDelete(levelId, i)} className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
+                <button onClick={() => onDeletePage(topic.id, i)} className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
                   <Trash2 size={13} />
                 </button>
               </div>
@@ -385,44 +423,33 @@ function LevelSection({ levelId, levelTitle, levelOrder, pages, expanded, onTogg
 /* ── MAIN ── */
 export default function ContentManagement() {
   const { user } = useAuth();
-  const { levelSettings, levelSettingsLoaded, createLevel } = useLevel();
-  const [content, setContent] = useState({});
+  const [topics, setTopics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState('');
   const [saving, setSaving] = useState(false);
-  // Accordion: only one level open at a time. `undefined` = not yet initialised
-  // (defaults to the first level once levels load); `null` = all collapsed.
-  const [openLevelId, setOpenLevelId] = useState(undefined);
+  // Accordion: only one topic open at a time.
+  const [openId, setOpenId] = useState(null);
 
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(''), 2500); };
 
-  // Sorted levels from LevelContext
-  const sortedLevels = Object.values(levelSettings)
-    .sort(compareLevels);
-
-  // Open the first level by default, once levels are available.
   useEffect(() => {
-    if (openLevelId === undefined && sortedLevels.length) setOpenLevelId(sortedLevels[0].id);
-  }, [openLevelId, sortedLevels.length]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!user?.id || !levelSettingsLoaded) return;
-    if (sortedLevels.length === 0) { setLoading(false); return; }
+    if (!user?.id) return;
     setLoading(true);
-    Promise.all(sortedLevels.map(l => api.getContent(l.id)))
-      .then(results => {
-        const map = {};
-        sortedLevels.forEach((l, i) => { map[l.id] = results[i] || []; });
-        setContent(map);
+    api.getContentTopics()
+      .then(data => {
+        const list = Array.isArray(data) ? data : [];
+        setTopics(list);
+        setOpenId(cur => cur ?? (list[0]?.id ?? null));
       })
-      .catch(err => console.error('Failed to load content:', err))
+      .catch(err => console.error('Failed to load content topics:', err))
       .finally(() => setLoading(false));
-  }, [user?.id, levelSettingsLoaded, sortedLevels.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
-  const persistLevel = async (levelId, pages) => {
+  // Persist a topic's pages to the backend (content only — never touches exam/QB).
+  const persistTopic = async (topicId, pages) => {
     try {
-      await api.saveContent(levelId, pages);
+      await api.saveContentTopic(topicId, pages);
       return true;
     } catch (err) {
       console.error('Failed to save content:', err);
@@ -431,38 +458,61 @@ export default function ContentManagement() {
     }
   };
 
-  const handleSave = async (levelId, form, pageIdx) => {
-    const next = { ...content };
-    if (pageIdx !== null && pageIdx !== undefined && pageIdx >= 0) {
-      const pages = [...(next[levelId] || [])];
-      pages[pageIdx] = { ...pages[pageIdx], ...form };
-      next[levelId] = pages;
-    } else {
-      next[levelId] = [...(next[levelId] || []), { page: (next[levelId]?.length || 0) + 1, ...form }];
-    }
-    setContent(next);
-    const saved = await persistLevel(levelId, next[levelId]);
+  const handleSavePage = async (topicId, form, pageIdx) => {
+    let nextPages;
+    setTopics(prev => prev.map(t => {
+      if (t.id !== topicId) return t;
+      const pages = [...(t.pages || [])];
+      if (pageIdx !== null && pageIdx !== undefined && pageIdx >= 0) {
+        pages[pageIdx] = { ...pages[pageIdx], ...form };
+      } else {
+        pages.push({ page: pages.length + 1, ...form });
+      }
+      nextPages = pages;
+      return { ...t, pages };
+    }));
+    const saved = await persistTopic(topicId, nextPages || []);
     setModal(null);
     if (saved) showToast('Content page saved');
   };
 
-  const handleDelete = async (levelId, idx) => {
-    const next = { ...content };
-    next[levelId] = next[levelId].filter((_, i) => i !== idx);
-    setContent(next);
-    const saved = await persistLevel(levelId, next[levelId]);
+  const handleDeletePage = async (topicId, idx) => {
+    let nextPages;
+    setTopics(prev => prev.map(t => {
+      if (t.id !== topicId) return t;
+      nextPages = (t.pages || []).filter((_, i) => i !== idx);
+      return { ...t, pages: nextPages };
+    }));
+    const saved = await persistTopic(topicId, nextPages || []);
     if (saved) showToast('Page deleted');
   };
 
-  const handleAddLevel = async (data) => {
+  const handleAddTopic = async (title) => {
     setSaving(true);
     try {
-      const newLevel = await createLevel(data);
-      setContent(prev => ({ ...prev, [newLevel.id]: [] }));
+      const created = await api.createContentTopic(title);
+      setTopics(prev => [...prev, { ...created, pages: created.pages || [] }]);
+      setOpenId(created.id);
       setModal(null);
-      showToast(`Level "${newLevel.title}" added`);
+      showToast(`"${created.title}" added`);
     } catch (err) {
-      showToast(err.message || 'Failed to add level');
+      showToast(err.message || 'Failed to add content level');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteTopic = async () => {
+    const t = modal?.topic;
+    if (!t) return;
+    setSaving(true);
+    try {
+      await api.deleteContentTopic(t.id);
+      setTopics(prev => prev.filter(x => x.id !== t.id));
+      setModal(null);
+      showToast('Content level deleted');
+    } catch (err) {
+      showToast(err.message || 'Failed to delete content level');
     } finally {
       setSaving(false);
     }
@@ -487,10 +537,10 @@ export default function ContentManagement() {
       <div className="sticky top-0 z-30 -mt-6 py-4 bg-slate-50/95 backdrop-blur-sm border-b border-slate-100 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Content Management</h1>
-          <p className="text-sm text-slate-400 mt-0.5">Manage study material for each exam level</p>
+          <p className="text-sm text-slate-400 mt-0.5">Standalone study material — independent of exam levels &amp; question banks</p>
         </div>
         <button
-          onClick={() => setModal({ type: 'addLevel' })}
+          onClick={() => setModal({ type: 'addTopic' })}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors shadow-sm">
           <Plus size={15} /> Add Level
         </button>
@@ -500,39 +550,42 @@ export default function ContentManagement() {
       <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
         <Info size={14} className="text-blue-500 shrink-0" />
         <p className="text-xs text-blue-700">
-          Students read content pages before taking the quiz for each level. Edit or delete pages here — changes are reflected immediately for students. If all pages for a level are deleted, students go directly to the quiz.
+          Add content levels and pages here for students to read anytime. Adding or deleting here does <span className="font-semibold">not</span> affect any exam level or question bank.
         </p>
       </div>
 
-      {/* Level sections */}
+      {/* Topic sections */}
       <div className="space-y-4">
-        {sortedLevels.map((lvl, idx) => (
-          <LevelSection
-            key={lvl.id}
-            levelId={lvl.id}
-            levelTitle={lvl.title || `Level ${lvl.id}`}
-            levelOrder={idx + 1}
-            pages={content[lvl.id] || []}
-            expanded={openLevelId === lvl.id}
-            onToggle={() => setOpenLevelId(cur => cur === lvl.id ? null : lvl.id)}
-            onAdd={levelId => setModal({ type: 'add', levelId })}
-            onEdit={(levelId, page, pageIdx) => setModal({ type: 'edit', levelId, page, pageIdx })}
-            onDelete={handleDelete}
+        {topics.map((topic, idx) => (
+          <TopicSection
+            key={topic.id}
+            topic={topic}
+            order={idx + 1}
+            expanded={openId === topic.id}
+            onToggle={() => setOpenId(cur => cur === topic.id ? null : topic.id)}
+            onAddPage={topicId => setModal({ type: 'add', topicId })}
+            onEdit={(topicId, page, pageIdx) => setModal({ type: 'edit', topicId, page, pageIdx })}
+            onDeletePage={handleDeletePage}
+            onDeleteTopic={topic => setModal({ type: 'deleteTopic', topic })}
           />
         ))}
-        {sortedLevels.length === 0 && (
+        {topics.length === 0 && (
           <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-200">
             <BookOpen size={32} className="text-slate-200 mx-auto mb-3" />
-            <p className="text-sm font-semibold text-slate-400">No levels configured yet</p>
-            <p className="text-xs text-slate-300 mt-1">Click "Add Level" above to create your first level</p>
+            <p className="text-sm font-semibold text-slate-400">No content levels yet</p>
+            <p className="text-xs text-slate-300 mt-1">Click "Add Level" above to create your first content level</p>
           </div>
         )}
       </div>
 
-      {modal?.type === 'add'  && <PageModal levelId={modal.levelId} page={null}       pageIdx={null}           onSave={handleSave} onClose={() => setModal(null)} />}
-      {modal?.type === 'edit' && <PageModal levelId={modal.levelId} page={modal.page} pageIdx={modal.pageIdx}   onSave={handleSave} onClose={() => setModal(null)} />}
-      {modal?.type === 'addLevel' && (
-        <AddLevelModal saving={saving} onSave={handleAddLevel} onClose={() => setModal(null)} />
+      {modal?.type === 'add'  && <PageModal levelId={modal.topicId} page={null}       pageIdx={null}         onSave={handleSavePage} onClose={() => setModal(null)} />}
+      {modal?.type === 'edit' && <PageModal levelId={modal.topicId} page={modal.page} pageIdx={modal.pageIdx} onSave={handleSavePage} onClose={() => setModal(null)} />}
+      {modal?.type === 'addTopic' && (
+        <AddTopicModal saving={saving} onSave={handleAddTopic} onClose={() => setModal(null)} />
+      )}
+      {modal?.type === 'deleteTopic' && (
+        <DeleteTopicModal title={modal.topic.title} pageCount={(modal.topic.pages || []).length}
+          saving={saving} onConfirm={handleDeleteTopic} onClose={() => setModal(null)} />
       )}
     </div>
   );
