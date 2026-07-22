@@ -21,7 +21,14 @@ export default function Navbar({ onMenuClick }) {
   const [showProfile, setShowProfile] = useState(false);
   const profileRef = useRef(null);
 
-  const handleLogout = () => { logout(); navigate('/login'); };
+  // Send admins back to the dedicated Admin Login (/admin/login); students and
+  // trainers go to the public login. Capture the role BEFORE logout clears user.
+  const handleLogout = () => {
+    const role = user?.role;
+    const isAdmin = role && role !== 'student' && role !== 'coach' && role !== 'teacher';
+    logout();
+    navigate(isAdmin ? '/admin/login' : '/login', { replace: true });
+  };
 
   const roleBadge = ROLE_BADGE_STYLE[user?.role] || ROLE_BADGE_STYLE.student;
 
