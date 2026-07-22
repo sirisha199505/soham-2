@@ -1,6 +1,7 @@
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ShieldCheck, GraduationCap, Briefcase, Info } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, GraduationCap, Briefcase, Info, Phone, Mail } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { ADMIN_CONTACT_PHONE, ADMIN_CONTACT_EMAIL } from '../../utils/constants';
 
 // Password resets are handled by the Administrator (students/trainers can no
 // longer self-reset). This page just tells them to contact the admin.
@@ -32,7 +33,7 @@ export default function ForgotPassword() {
         <RoleIcon size={13} /> {roleLabel} account
       </p>
 
-      {/* Contact-admin message (message only) */}
+      {/* Contact-admin message + how to reach them */}
       <div className="mt-6 rounded-2xl p-5"
         style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)' }}>
         <div className="flex items-start gap-3">
@@ -40,6 +41,30 @@ export default function ForgotPassword() {
           <p className="text-sm text-slate-200 leading-relaxed">
             Please contact the Administrator to reset your password.
           </p>
+        </div>
+
+        {/* Admin contact details */}
+        <div className="mt-4 pt-4 space-y-2.5" style={{ borderTop: '1px solid rgba(255,255,255,0.10)' }}>
+          <a href={`tel:${ADMIN_CONTACT_PHONE.replace(/\s+/g, '')}`}
+            className="flex items-center gap-3 group">
+            <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+              style={{ background: `${colors.primary}20` }}>
+              <Phone size={14} style={{ color: colors.primary }} />
+            </span>
+            <span className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">
+              {ADMIN_CONTACT_PHONE}
+            </span>
+          </a>
+          <a href={`mailto:${ADMIN_CONTACT_EMAIL}`}
+            className="flex items-center gap-3 group">
+            <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+              style={{ background: `${colors.primary}20` }}>
+              <Mail size={14} style={{ color: colors.primary }} />
+            </span>
+            <span className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors break-all">
+              {ADMIN_CONTACT_EMAIL}
+            </span>
+          </a>
         </div>
       </div>
     </div>

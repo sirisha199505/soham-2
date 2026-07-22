@@ -262,8 +262,6 @@ function ContentReader({ pages, startIndex, levelId, level, onBack, onReadStateC
   const page       = pages[currentIdx];
   const total      = pages.length;
   const readList   = getReadList(levelId);
-  const readCount  = readList.length;
-  const overallPct = total > 0 ? Math.round((readCount / total) * 100) : 0;
   const isBookmarked = bookmarks.includes(currentIdx);
 
   const gradStyle = level
@@ -384,36 +382,6 @@ function ContentReader({ pages, startIndex, levelId, level, onBack, onReadStateC
               {currentIdx + 1} / {total}
             </span>
           </div>
-        </div>
-
-        {/* Progress bar row */}
-        <div className="px-4 md:px-6 pb-2.5">
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-              <div className="h-1.5 rounded-full transition-all duration-500"
-                style={{ width: `${((currentIdx + 1) / total) * 100}%`, ...gradStyle }} />
-            </div>
-            <span className="text-[10px] font-bold text-slate-400 shrink-0 tabular-nums">
-              {overallPct}% complete
-            </span>
-          </div>
-          {/* Dot indicators */}
-          {total <= 16 && (
-            <div className="flex items-center gap-1 mt-1.5">
-              {pages.map((_, i) => (
-                <button key={i} onClick={() => goTo(i)}
-                  className="rounded-full transition-all duration-200 hover:scale-125"
-                  style={{
-                    width: i === currentIdx ? 18 : 5,
-                    height: 5,
-                    background: readList.includes(i)
-                      ? (i === currentIdx ? level?.color?.from || '#4F46E5' : '#86efac')
-                      : (i === currentIdx ? level?.color?.from || '#4F46E5' : '#e2e8f0'),
-                  }}
-                />
-              ))}
-            </div>
-          )}
         </div>
       </header>
 
