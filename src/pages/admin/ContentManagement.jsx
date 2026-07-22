@@ -277,62 +277,32 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
   );
 }
 
-/* ── Add Level Modal ── */
-function AddLevelModal({ onSave, onClose, saving }) {
-  const [title, setTitle] = useState('');
-  const [timeLimit, setTimeLimit] = useState(10);
-  // Time limit must be a positive whole number of minutes (1–180). Negative/zero
-  // and out-of-range values are rejected as the user types.
-  const canSave = title.trim().length > 0 && Number(timeLimit) >= 1 && !saving;
-
+/* ── Delete Level Confirm Modal ── */
+function DeleteLevelModal({ levelTitle, pageCount, onConfirm, onClose, saving }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h3 className="font-bold text-slate-800" style={{ fontFamily: 'Space Grotesk' }}>Add New Level</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"><X size={16} /></button>
-        </div>
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Level Title <span className="text-red-400">*</span></label>
-            <input
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && canSave && onSave({ title: title.trim(), timeLimit })}
-              placeholder="e.g. Advanced Robotics"
-              autoFocus
-              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
-            />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="p-6 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center mx-auto">
+            <AlertTriangle size={22} className="text-red-500" />
           </div>
-          <div>
-            <label className="text-xs font-semibold text-slate-500 uppercase block mb-1.5">Time Limit (minutes)</label>
-            <input
-              type="number"
-              min={1}
-              max={180}
-              step={1}
-              value={timeLimit}
-              onChange={e => {
-                const v = e.target.value;
-                if (v === '') { setTimeLimit(''); return; }   // allow clearing to retype
-                const n = Math.floor(Number(v));
-                if (Number.isNaN(n)) return;
-                setTimeLimit(Math.max(1, Math.min(180, n)));  // clamp — no negatives/zero
-              }}
-              onBlur={() => { if (Number(timeLimit) < 1) setTimeLimit(1); }}
-              className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
-            />
-          </div>
+          <h3 className="font-bold text-slate-800 text-lg" style={{ fontFamily: 'Space Grotesk' }}>Delete "{levelTitle}"?</h3>
+          <p className="text-sm text-slate-500">
+            This permanently deletes the <span className="font-semibold text-slate-700">exam level</span>,
+            its <span className="font-semibold text-slate-700">question bank</span> (all its questions),
+            {pageCount > 0 && <> and its <span className="font-semibold text-slate-700">{pageCount} content page{pageCount !== 1 ? 's' : ''}</span></>}.
+            This cannot be undone.
+          </p>
         </div>
-        <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+        <div className="px-6 pb-6 flex gap-3">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
           <button
-            onClick={() => canSave && onSave({ title: title.trim(), timeLimit })}
-            disabled={!canSave}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-            {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-            Add Level
+            onClick={onConfirm}
+            disabled={saving}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 disabled:opacity-50 transition-colors">
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+            Delete
           </button>
         </div>
       </div>
@@ -341,7 +311,7 @@ function AddLevelModal({ onSave, onClose, saving }) {
 }
 
 /* ── Level Section ── */
-function LevelSection({ levelId, levelTitle, levelOrder, pages, expanded, onToggle, onEdit, onDelete, onAdd }) {
+function LevelSection({ levelId, levelTitle, levelOrder, pages, expanded, onToggle, onEdit, onDelete, onAdd, onDeleteLevel }) {
   const colors = levelColors(levelOrder);
 
   return (
