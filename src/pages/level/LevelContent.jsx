@@ -8,6 +8,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { LEVELS } from '../../utils/levelData';
 import { downloadLevelContentAsPDF } from '../../utils/pdfExport';
 import { api } from '../../utils/api';
+import { youtubeEmbedUrl } from '../../utils/helpers';
 import DOMPurify from 'dompurify';
 
 export default function LevelContent() {
@@ -213,8 +214,33 @@ export default function LevelContent() {
           </div>
         </div>
 
-        {/* PDF content */}
-        {current.type === 'pdf' && pdfBlobUrl ? (
+        {/* Video content — embedded player + open-in-new-tab link */}
+        {current.type === 'video' ? (
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            {youtubeEmbedUrl(current.pdfData) ? (
+              <div className="bg-black aspect-video">
+                <iframe src={youtubeEmbedUrl(current.pdfData)} title={current.title || 'Video'}
+                  className="w-full h-full border-0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen />
+              </div>
+            ) : (
+              <div className="p-8 text-center">
+                <ExternalLink size={28} className="mx-auto text-slate-300 mb-3" />
+                <p className="text-sm text-slate-500">This video opens on an external site.</p>
+              </div>
+            )}
+            {current.pdfData && (
+              <div className="px-5 py-4 border-t border-slate-100">
+                <a href={current.pdfData} target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-2 text-sm font-bold px-4 py-2.5 rounded-xl text-white transition-colors"
+                  style={{ background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }}>
+                  <ExternalLink size={14} /> Open video in new tab
+                </a>
+              </div>
+            )}
+          </div>
+        ) : current.type === 'pdf' && pdfBlobUrl ? (
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
             {/* PDF toolbar */}
             <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50">

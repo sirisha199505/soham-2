@@ -3,7 +3,7 @@ import { scrollToTop } from '../../utils/scroll';
 import {
   Users, Search, RefreshCw, CheckCircle,
   ChevronDown, Eye, EyeOff, Unlock, UserX, UserCheck,
-  X, AlertTriangle, Zap, Lock, KeyRound, Loader2, Edit2, Save,
+  X, AlertTriangle, Zap, Lock, KeyRound, Loader2, Edit2, Save, MapPin,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
@@ -196,6 +196,72 @@ function LocationEditor({ value, onChange }) {
               className="text-[10px] font-semibold text-indigo-600 mt-1 hover:underline">↩ Choose from list</button>
           ) : null)}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Cascading location FILTER for the user list ──
+   value = { state, district, mandal, village }; each dropdown loads the next
+   level from the location API and clears the ones below it. Every level is
+   optional and combines with the text/level filters. */
+function LocationFilter({ value, onChange }) {
+  const [states,    setStates]    = useState([]);
+  const [districts, setDistricts] = useState([]);
+  const [mandals,   setMandals]   = useState([]);
+  const [villages,  setVillages]  = useState([]);
+
+  useEffect(() => { api.getLocationStates().then(setStates).catch(() => setStates([])); }, []);
+  useEffect(() => {
+    if (!value.state) { setDistricts([]); return; }
+    api.getLocationDistricts(value.state).then(setDistricts).catch(() => setDistricts([]));
+  }, [value.state]);
+  useEffect(() => {
+    if (!value.state || !value.district) { setMandals([]); return; }
+    api.getLocationMandals(value.state, value.district).then(setMandals).catch(() => setMandals([]));
+  }, [value.state, value.district]);
+  useEffect(() => {
+    if (!value.state || !value.district || !value.mandal) { setVillages([]); return; }
+    api.getLocationVillages(value.state, value.district, value.mandal).then(setVillages).catch(() => setVillages([]));
+  }, [value.state, value.district, value.mandal]);
+
+  const selCls = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-400';
+  const hasAny = value.state || value.district || value.mandal || value.village;
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+          <MapPin size={12} /> Filter by location
+        </p>
+        {hasAny && (
+          <button type="button" onClick={() => onChange({ state: '', district: '', mandal: '', village: '' })}
+            className="text-[11px] font-semibold text-indigo-600 hover:underline">
+            ✕ Clear
+          </button>
+        )}
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <select className={selCls} value={value.state}
+          onChange={e => onChange({ state: e.target.value, district: '', mandal: '', village: '' })}>
+          <option value="">All States</option>
+          {states.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select className={selCls} value={value.district} disabled={!value.state}
+          onChange={e => onChange({ ...value, district: e.target.value, mandal: '', village: '' })}>
+          <option value="">{value.state ? 'All Districts' : 'State first'}</option>
+          {districts.map(d => <option key={d} value={d}>{d}</option>)}
+        </select>
+        <select className={selCls} value={value.mandal} disabled={!value.district}
+          onChange={e => onChange({ ...value, mandal: e.target.value, village: '' })}>
+          <option value="">{value.district ? 'All Mandals' : 'District first'}</option>
+          {mandals.map(m => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <select className={selCls} value={value.village} disabled={!value.mandal}
+          onChange={e => onChange({ ...value, village: e.target.value })}>
+          <option value="">{value.mandal ? 'All Villages' : 'Mandal first'}</option>
+          {villages.map(v => <option key={v} value={v}>{v}</option>)}
+        </select>
       </div>
     </div>
   );
@@ -541,6 +607,8 @@ export default function StudentManagement() {
   const [levelList, setLevelList] = useState([]);
   const [search,    setSearch]    = useState('');
   const [filter,    setFilter]    = useState('all');
+  // Optional cascading location filter (State → District → Mandal → Village).
+  const [locFilter, setLocFilter] = useState({ state: '', district: '', mandal: '', village: '' });
   const [page,      setPage]      = useState(1);
   const [tab,       setTab]       = useState('students'); // 'students' | 'coaches'
   const [viewStudent, setViewStudent] = useState(null);
@@ -630,6 +698,9 @@ export default function StudentManagement() {
     // to digits for phone matching so "98765 43210" or "+91 98765" still match.
     const q       = search.trim().toLowerCase();
     const qDigits = q.replace(/\D/g, '');
+    // Case-insensitive equality for the location filters (values come from the same
+    // location dataset used at registration, but normalise defensively).
+    const eq = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
     return data.filter(s => {
       const matchTab    = tab === 'coaches' ? s.role === 'coach' : s.role !== 'coach';
       const matchSearch = !q ||
@@ -643,9 +714,15 @@ export default function StudentManagement() {
         : filter === 'disabled' ? s.disabled
         : lf                    ? s.levels[lf.levelId]?.status === 'completed'
         : true;
-      return matchTab && matchSearch && matchFilter;
+      // Each location level is optional and ANDs with the others.
+      const matchLoc =
+        (!locFilter.state    || eq(s.state,    locFilter.state))    &&
+        (!locFilter.district || eq(s.district, locFilter.district)) &&
+        (!locFilter.mandal   || eq(s.mandal,   locFilter.mandal))   &&
+        (!locFilter.village  || eq(s.village,  locFilter.village));
+      return matchTab && matchSearch && matchFilter && matchLoc;
     });
-  }, [data, search, filter, tab, filterOptions]);
+  }, [data, search, filter, tab, filterOptions, locFilter]);
 
   const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -776,6 +853,9 @@ export default function StudentManagement() {
           ))}
         </div>
       </div>
+
+      {/* Cascading location filter — optional, combines with the text/level filters */}
+      <LocationFilter value={locFilter} onChange={next => { setLocFilter(next); setPage(1); }} />
 
       {/* Bulk Actions bar — visible whenever a level filter is active */}
       {filterOptions.some(f => f.id === filter && f.levelId != null) && filtered.length > 0 && (

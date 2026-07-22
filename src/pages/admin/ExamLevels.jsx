@@ -295,7 +295,7 @@ function LevelCard({ levelId, isFirst, settings, stats, onEdit, onDelete }) {
   const color = levelColor(s.order || levelId);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden h-full flex flex-col">
       <div className="relative p-5 pb-4 overflow-hidden"
         style={{ background: `linear-gradient(135deg, ${color.from}, ${color.to})` }}>
         <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-10 blur-[40px] bg-white" />
@@ -307,7 +307,9 @@ function LevelCard({ levelId, isFirst, settings, stats, onEdit, onDelete }) {
             <h3 className="text-xl font-bold text-white truncate" style={{ fontFamily: 'Space Grotesk' }}>
               {s.title || `Level ${levelId}`}
             </h3>
-            <p className="text-white/80 text-sm mt-0.5">{s.subtitle || ''}</p>
+            {/* Always reserve the subtitle line (nbsp when empty) so cards with and
+                without a subtitle keep identical header heights */}
+            <p className="text-white/80 text-sm mt-0.5 line-clamp-1 min-h-[1.25rem]">{s.subtitle || ' '}</p>
           </div>
           <div className="flex flex-col items-end gap-1.5 shrink-0 ml-2">
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${s.active ? 'bg-white/20 text-white' : 'bg-black/20 text-white/60'}`}>
@@ -327,7 +329,7 @@ function LevelCard({ levelId, isFirst, settings, stats, onEdit, onDelete }) {
         </div>
       </div>
 
-      <div className="p-5 space-y-4">
+      <div className="p-5 space-y-4 flex-1 flex flex-col">
         {s.description && (
           <p className="text-sm text-slate-500 leading-relaxed line-clamp-2">{s.description}</p>
         )}
@@ -358,8 +360,8 @@ function LevelCard({ levelId, isFirst, settings, stats, onEdit, onDelete }) {
           return (
             <div className={`rounded-xl px-3 py-2.5 border text-xs ${ok ? 'bg-emerald-50 border-emerald-100' : 'bg-amber-50 border-amber-100'}`}>
               <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold text-slate-600 flex items-center gap-1.5"><Layers size={12} /> Question Bank Level</span>
-                <span className={`font-bold ${mapped ? 'text-slate-700' : 'text-amber-600'}`}>{mapped || 'Not mapped'}</span>
+                <span className="font-semibold text-slate-600 flex items-center gap-1.5 shrink-0"><Layers size={12} /> Question Bank Level</span>
+                <span title={mapped || 'Not mapped'} className={`font-bold truncate min-w-0 text-right ${mapped ? 'text-slate-700' : 'text-amber-600'}`}>{mapped || 'Not mapped'}</span>
               </div>
               <div className="flex items-center justify-between gap-2 mt-1">
                 <span className="text-slate-500">Questions available</span>
@@ -376,7 +378,7 @@ function LevelCard({ levelId, isFirst, settings, stats, onEdit, onDelete }) {
           );
         })()}
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 mt-auto pt-1">
           <button onClick={() => onEdit(levelId)}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:border-indigo-200 hover:text-indigo-600 transition-all">
             <Edit2 size={13} /> Edit Settings

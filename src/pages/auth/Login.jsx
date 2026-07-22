@@ -6,6 +6,14 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { PASSWORD_MIN } from '../../utils/helpers';
+
+// Shared style for an inline field-level error, rendered directly under its field.
+const errCls = 'text-[11px] text-rose-400 pl-1';
+// Loose email shape check for LOGIN only — we must not lock out an existing user
+// over a strict TLD rule (that stricter check lives in registration). Just make
+// sure it looks like an address so an obviously-wrong identifier is caught.
+const looksLikeEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
 export default function Login() {
   const { login } = useAuth();
@@ -27,6 +35,8 @@ export default function Login() {
     return 'student';
   }); // 'student' | 'coach' | 'admin'
   const [form,     setForm]    = useState({ identifier: '', password: '' });
+  // Per-field validation errors, shown directly beneath each field.
+  const [fieldErrors, setFieldErrors] = useState({});
   const [showPass, setShowPass] = useState(false);
   const [loading,  setLoading] = useState(false);
   const [waitSec,  setWaitSec] = useState(0);
@@ -45,8 +55,43 @@ export default function Login() {
     setTab(t);
     setForm({ identifier: '', password: '' });
     setError('');
+    setFieldErrors({});
     setSessionConflict(false);
     setShowPass(false);
+  };
+
+  const clearErr = (k) => setFieldErrors(p => (p[k] ? { ...p, [k]: undefined } : p));
+
+  // The identifier accepts a phone OR an email. While the value is purely numeric
+  // it's a phone, so cap it at 10 digits as the user types; once a non-digit (an
+  // email) appears, leave it untouched so email addresses aren't truncated.
+  const onIdentifierChange = (raw) => {
+    const compact = raw.replace(/\s/g, '');
+    const next = /^\d*$/.test(compact) ? compact.slice(0, 10) : raw;
+    setForm(p => ({ ...p, identifier: next }));
+    clearErr('identifier');
+  };
+
+  // Validate the two fields. Student/Trainer accept phone OR email; a purely
+  // numeric identifier is a phone and must be EXACTLY 10 digits. Password only
+  // enforces the minimum here so existing longer passwords are never blocked.
+  const validate = () => {
+    const errs = {};
+    const id = form.identifier.replace(/\s/g, '');
+    if (!id) {
+      errs.identifier = tab === 'admin' ? 'Please enter your email address.' : 'Please enter your phone number or email.';
+    } else if (tab === 'admin') {
+      if (!looksLikeEmail(id)) errs.identifier = 'Enter a valid email address, e.g. name@gmail.com.';
+    } else if (/^\d+$/.test(id)) {
+      if (id.length !== 10) errs.identifier = 'Enter a valid 10-digit mobile number.';
+    } else if (!looksLikeEmail(id)) {
+      errs.identifier = 'Enter a valid phone number (10 digits) or email address.';
+    }
+    if (!form.password) errs.password = 'Please enter your password.';
+    else if (form.password.length < PASSWORD_MIN) errs.password = `Password must be at least ${PASSWORD_MIN} characters.`;
+
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
   };
 
   const doLogin = async (force = false) => {
@@ -81,7 +126,7 @@ export default function Login() {
     }
   };
 
-  const handleSubmit = (e) => { e.preventDefault(); doLogin(false); };
+  const handleSubmit = (e) => { e.preventDefault(); if (validate()) doLogin(false); };
 
   const inputCls = `w-full rounded-xl py-3 text-sm text-white placeholder:text-white/30 transition-all duration-200 focus:outline-none`;
   const inputStyle = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)' };
@@ -96,7 +141,6 @@ export default function Login() {
 
   const isAdmin = tab === 'admin';
   const isCoach = tab === 'coach';
-  const isStudent = tab === 'student';
 
   const tabConfig = {
     student: {
@@ -180,7 +224,7 @@ export default function Login() {
       )}
 
       {/* Email / password form */}
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
         <div className="space-y-1.5">
           <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">{cfg.idLabel}<span className="text-rose-400 ml-0.5">*</span></label>
           <div className="relative">
@@ -188,16 +232,13 @@ export default function Login() {
             <input
               type={cfg.idType} placeholder={cfg.idPlaceholder}
               value={form.identifier}
-              onChange={e => setForm(p => ({ ...p, identifier: e.target.value }))}
+              onChange={e => onIdentifierChange(e.target.value)}
               required autoComplete={isAdmin ? 'email' : 'off'}
               className={`${inputCls} pl-11 pr-4`}
-              style={{ ...inputStyle, ...(form.identifier ? inputFocus : {}) }}
+              style={{ ...inputStyle, ...(fieldErrors.identifier ? { borderColor: 'rgba(239,68,68,0.6)' } : (form.identifier ? inputFocus : {})) }}
             />
           </div>
-          {isStudent && (
-            <p className="text-[11px] text-slate-600 pl-1">
-            </p>
-          )}
+          {fieldErrors.identifier && <p className={errCls}>{fieldErrors.identifier}</p>}
         </div>
 
         <div className="space-y-1.5">
@@ -215,15 +256,17 @@ export default function Login() {
             <input
               type={showPass ? 'text' : 'password'} placeholder="••••••••"
               value={form.password}
-              onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+              onChange={e => { setForm(p => ({ ...p, password: e.target.value })); clearErr('password'); }}
               required autoComplete={isAdmin || isCoach ? 'current-password' : 'off'}
-              className={`${inputCls} pl-11 pr-12`} style={inputStyle}
+              className={`${inputCls} pl-11 pr-12`}
+              style={{ ...inputStyle, ...(fieldErrors.password ? { borderColor: 'rgba(239,68,68,0.6)' } : {}) }}
             />
             <button type="button" onClick={() => setShowPass(p => !p)}
               className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors">
               {showPass ? <Eye size={15} /> : <EyeOff size={15} />}
             </button>
           </div>
+          {fieldErrors.password && <p className={errCls}>{fieldErrors.password}</p>}
         </div>
 
         <button type="submit" disabled={loading}

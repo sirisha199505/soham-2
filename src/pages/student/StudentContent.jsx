@@ -10,7 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { LEVELS } from '../../utils/levelData';
 import { api } from '../../utils/api';
-import { compareLevels } from '../../utils/helpers';
+import { compareLevels, youtubeEmbedUrl } from '../../utils/helpers';
 import { downloadWatermarkedPdf } from '../../utils/pdfWatermark';
 import DOMPurify from 'dompurify';
 
@@ -420,8 +420,66 @@ function ContentReader({ pages, startIndex, levelId, level, onBack, onReadStateC
       {/* ── Reading area ──────────────────────────────────────────── */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto bg-white">
 
+        {/* ── Video reader (embedded YouTube + open-in-new-tab link) ── */}
+        {page.type === 'video' && (
+          <div className="max-w-[860px] mx-auto px-4 md:px-8 py-10 pb-24">
+            <div className="mb-6">
+              <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full text-white" style={gradStyle}>
+                {level?.title}
+              </span>
+              <h1 className="text-2xl md:text-3xl font-bold text-slate-900 leading-snug mt-3"
+                style={{ fontFamily: 'Space Grotesk' }}>
+                {page.title || `Study Material ${currentIdx + 1}`}
+              </h1>
+            </div>
+
+            {youtubeEmbedUrl(page.pdfData) ? (
+              <div className="rounded-2xl overflow-hidden border border-slate-200 bg-black aspect-video shadow-sm">
+                <iframe src={youtubeEmbedUrl(page.pdfData)} title={page.title || 'Video'}
+                  className="w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen />
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center">
+                <ExternalLink size={28} className="mx-auto text-slate-300 mb-3" />
+                <p className="text-sm text-slate-500">This video opens on an external site.</p>
+              </div>
+            )}
+
+            {/* Open-in-new-tab link (requested behaviour) */}
+            {page.pdfData && (
+              <a href={page.pdfData} target="_blank" rel="noreferrer noopener"
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
+                style={gradStyle}>
+                <ExternalLink size={15} /> Open video in new tab
+              </a>
+            )}
+
+            {/* Bottom navigation */}
+            <div className="mt-14 pt-8 border-t border-slate-100 flex items-center justify-between gap-4">
+              <button onClick={() => goTo(currentIdx - 1)} disabled={currentIdx === 0}
+                className="flex items-center gap-2 px-5 py-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 disabled:opacity-30 hover:bg-slate-50 transition-all disabled:cursor-not-allowed">
+                <ChevronLeft size={16} /> Previous
+              </button>
+              <div className="flex-1 text-center"><p className="text-xs text-slate-400">{currentIdx + 1} of {total}</p></div>
+              {currentIdx < total - 1 ? (
+                <button onClick={() => goTo(currentIdx + 1)}
+                  className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90" style={gradStyle}>
+                  Next <ChevronRight size={16} />
+                </button>
+              ) : (
+                <button onClick={onBack}
+                  className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90" style={gradStyle}>
+                  <CheckCircle size={15} /> Done
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ── Article reader ── */}
-        {page.type !== 'pdf' && (
+        {page.type !== 'pdf' && page.type !== 'video' && (
           <div className="max-w-[720px] mx-auto px-4 md:px-8 py-10 pb-24">
 
             {/* Article hero */}
@@ -591,6 +649,7 @@ function MaterialCard({ page, index, levelId, level, onRead }) {
   const isBookmarked = bookmarks.includes(index);
   const isLastVisited = lastRead?.idx === index;
   const isPdf        = page.type === 'pdf' && typeof page.pdfData === 'string' && page.pdfData;
+  const isVideo      = page.type === 'video' && typeof page.pdfData === 'string' && page.pdfData;
 
   // Download the material. Real PDFs get a faint "soham" watermark; Office files
   // download as-is. Any failure falls back to the original file.
@@ -665,9 +724,18 @@ function MaterialCard({ page, index, levelId, level, onRead }) {
           onClick={e => { e.stopPropagation(); onRead(index); }}
           className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[0.98]"
           style={gradStyle}>
-          {isRead ? <CheckCircle size={14} /> : <BookOpen size={14} />}
-          Read Now
+          {isRead ? <CheckCircle size={14} /> : isVideo ? <ExternalLink size={14} /> : <BookOpen size={14} />}
+          {isVideo ? 'Watch Video' : 'Read Now'}
         </button>
+
+        {/* Open the video directly in a new tab — video pages only */}
+        {isVideo && (
+          <a href={page.pdfData} target="_blank" rel="noreferrer noopener"
+            onClick={e => e.stopPropagation()}
+            className="w-full mt-2 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">
+            <ExternalLink size={13} /> Open in new tab
+          </a>
+        )}
 
         {/* Download (watermarked) — PDFs only */}
         {isPdf && (

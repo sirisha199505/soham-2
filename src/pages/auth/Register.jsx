@@ -6,20 +6,25 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { isValidEmail, validatePassword, PASSWORD_MAX } from '../../utils/helpers';
+import { isValidEmail, validateRegistrationPassword, REG_PASSWORD_MAX } from '../../utils/helpers';
 import { api } from '../../utils/api';
 
 const CLASS_OPTIONS = ['VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'Other'];
-const EMAIL_ERROR = 'Enter a valid email address (the part before @ must contain a letter, e.g. name@gmail.com).';
+const EMAIL_ERROR = 'Enter a valid email address with a proper domain, e.g. name@gmail.com.';
+
+// Shared style for an inline field-level error message, rendered directly under
+// the field it belongs to (keeps placement/styling identical across every field).
+const errCls = 'text-[11px] text-rose-400 pl-1';
 
 const inputCls = `w-full rounded-xl py-3 text-sm text-white placeholder:text-white/30 transition-all duration-200 focus:outline-none`;
 const inputStyle = { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)' };
 
 // Defined outside Register — stable identity prevents input focus loss on re-render
-function Field({ label, icon: Icon, value, onChange, type = 'text', placeholder, required = true, hint, primaryColor, maxLength, inputMode }) {
+function Field({ label, icon: Icon, value, onChange, type = 'text', placeholder, required = true, hint, primaryColor, maxLength, inputMode, error }) {
   const focus = { borderColor: `${primaryColor}60`, boxShadow: `0 0 0 3px ${primaryColor}18` };
+  const border = error ? { borderColor: 'rgba(239,68,68,0.6)' } : (value ? focus : {});
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5" data-has-error={error ? 'true' : undefined}>
       <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
         {label}{required && <span className="text-rose-400 ml-0.5">*</span>}
       </label>
@@ -29,19 +34,20 @@ function Field({ label, icon: Icon, value, onChange, type = 'text', placeholder,
           type={type} placeholder={placeholder} value={value} onChange={onChange} required={required}
           maxLength={maxLength} inputMode={inputMode}
           className={`${inputCls} pl-11 pr-4`}
-          style={{ ...inputStyle, ...(value ? focus : {}) }}
+          style={{ ...inputStyle, ...border }}
         />
       </div>
-      {hint && <p className="text-[11px] text-slate-600 pl-1">{hint}</p>}
+      {error ? <p className={errCls}>{error}</p> : hint && <p className="text-[11px] text-slate-600 pl-1">{hint}</p>}
     </div>
   );
 }
 
 // Dropdown field (State / District) — matches the Field look.
-function SelectField({ label, icon: Icon, value, onChange, options, placeholder = 'Select…', required = true, disabled = false, primaryColor }) {
+function SelectField({ label, icon: Icon, value, onChange, options, placeholder = 'Select…', required = true, disabled = false, primaryColor, error }) {
   const focus = { borderColor: `${primaryColor}60`, boxShadow: `0 0 0 3px ${primaryColor}18` };
+  const border = error ? { borderColor: 'rgba(239,68,68,0.6)' } : (value ? focus : {});
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5" data-has-error={error ? 'true' : undefined}>
       <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
         {label}{required && <span className="text-rose-400 ml-0.5">*</span>}
       </label>
@@ -50,7 +56,7 @@ function SelectField({ label, icon: Icon, value, onChange, options, placeholder 
         <select
           value={value} onChange={onChange} required={required} disabled={disabled}
           className={`${inputCls} pl-11 pr-10 appearance-none ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-          style={{ ...inputStyle, ...(value ? focus : {}), colorScheme: 'dark', color: value ? '#fff' : 'rgba(255,255,255,0.35)' }}
+          style={{ ...inputStyle, ...border, colorScheme: 'dark', color: value ? '#fff' : 'rgba(255,255,255,0.35)' }}
         >
           <option value="" disabled style={{ color: '#94a3b8', background: '#1e293b' }}>{placeholder}</option>
           {options.map(o => (
@@ -60,6 +66,7 @@ function SelectField({ label, icon: Icon, value, onChange, options, placeholder 
         {/* Dropdown chevron (native arrow is hidden by appearance-none) */}
         <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
       </div>
+      {error && <p className={errCls}>{error}</p>}
     </div>
   );
 }
@@ -71,7 +78,7 @@ const OTHER_VILLAGE = 'Other (enter manually)';
 // Cascading State → District → Mandal → Village dropdowns, fed by the backend
 // location API. `value` = { state, district, mandal, village }; each selection
 // loads the next level and clears the ones below it.
-function LocationPicker({ value, onChange, primaryColor }) {
+function LocationPicker({ value, onChange, primaryColor, errors = {} }) {
   const [states,    setStates]    = useState([]);
   const [districts, setDistricts] = useState([]);
   const [mandals,   setMandals]   = useState([]);
@@ -103,16 +110,16 @@ function LocationPicker({ value, onChange, primaryColor }) {
   return (
     <>
       <div className="grid grid-cols-2 gap-3">
-        <SelectField primaryColor={primaryColor} label="State" icon={MapPin}
+        <SelectField primaryColor={primaryColor} label="State" icon={MapPin} error={errors.state}
           value={value.state} options={states} placeholder="Select State"
           onChange={e => { setVillageManual(false); set({ state: e.target.value, district: '', mandal: '', village: '' }); }} />
-        <SelectField primaryColor={primaryColor} label="District" icon={MapPin}
+        <SelectField primaryColor={primaryColor} label="District" icon={MapPin} error={errors.district}
           value={value.district} options={districts} disabled={!value.state}
           placeholder={value.state ? 'Select District' : 'Select State first'}
           onChange={e => { setVillageManual(false); set({ district: e.target.value, mandal: '', village: '' }); }} />
       </div>
       <div className="grid grid-cols-2 gap-3">
-        <SelectField primaryColor={primaryColor} label="Mandal" icon={MapPin}
+        <SelectField primaryColor={primaryColor} label="Mandal" icon={MapPin} error={errors.mandal}
           value={value.mandal} options={mandals} disabled={!value.district}
           placeholder={value.district ? 'Select Mandal' : 'Select District first'}
           onChange={e => { setVillageManual(false); set({ mandal: e.target.value, village: '' }); }} />
@@ -149,11 +156,11 @@ function LocationPicker({ value, onChange, primaryColor }) {
   );
 }
 
-function PasswordField({ label, value, onChange, show, onToggle, placeholder = 'Min. 6 characters', required = true, primaryColor, mismatch, maxLength }) {
+function PasswordField({ label, value, onChange, show, onToggle, placeholder = '6–8 characters', required = true, primaryColor, mismatch, maxLength, error, hint }) {
   const focus  = { borderColor: `${primaryColor}60`, boxShadow: `0 0 0 3px ${primaryColor}18` };
-  const border = mismatch ? { borderColor: 'rgba(239,68,68,0.6)' } : (value ? focus : {});
+  const border = (error || mismatch) ? { borderColor: 'rgba(239,68,68,0.6)' } : (value ? focus : {});
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5" data-has-error={error ? 'true' : undefined}>
       <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
         {label}{required && <span className="text-rose-400 ml-0.5">*</span>}
       </label>
@@ -170,6 +177,7 @@ function PasswordField({ label, value, onChange, show, onToggle, placeholder = '
           {show ? <Eye size={15} /> : <EyeOff size={15} />}
         </button>
       </div>
+      {error ? <p className={errCls}>{error}</p> : hint && <p className="text-[11px] text-slate-600 pl-1">{hint}</p>}
     </div>
   );
 }
@@ -205,16 +213,27 @@ export default function Register() {
   const [loading,           setLoading]           = useState(false);
   const [waitSec,           setWaitSec]           = useState(0);
   const [error,             setError]             = useState('');
+  // Per-field validation errors, rendered directly beneath each field (keyed by
+  // form field name, e.g. { className, state, phoneNumber, password }).
+  const [fieldErrors,       setFieldErrors]       = useState({});
   const [success,           setSuccess]           = useState(null);
   const [registrationClosed, setRegistrationClosed] = useState(false);
 
-  // All validation errors render in the inline banner below (no browser pop-ups /
-  // native validation bubbles). On a long form the banner sits above the fold, so
-  // scroll it into view whenever a new error appears.
+  // Field-level validation errors render directly under each field (see
+  // fieldErrors). The top banner is reserved for server/submit errors (e.g.
+  // "phone already registered"); scroll it into view whenever one appears.
   const errorRef = useRef(null);
   useEffect(() => {
     if (error && errorRef.current) errorRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [error]);
+
+  // Bring the first field with an error into view (validation or a server
+  // duplicate-email/phone error), so the inline message is never left off-screen.
+  useEffect(() => {
+    if (Object.keys(fieldErrors).length === 0) return;
+    const el = document.querySelector('[data-has-error="true"]');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [fieldErrors]);
 
   // Check whether new registrations are currently accepted (public endpoint).
   // Fail-open: if the check errors, the form stays available.
@@ -230,32 +249,60 @@ export default function Register() {
     return () => clearInterval(id);
   }, [loading]);
 
-  const sS = (k) => (e) => setStudentForm(p => ({ ...p, [k]: e.target.value }));
-  const sC = (k) => (e) => setCoachForm(p => ({ ...p, [k]: e.target.value }));
+  // Clear a single field's error as soon as the user edits it (and clear the
+  // location group whenever any location field changes).
+  const clearErr = (...keys) => setFieldErrors(p => {
+    if (!keys.some(k => p[k])) return p;
+    const n = { ...p };
+    keys.forEach(k => delete n[k]);
+    return n;
+  });
+
+  // Route a server-side submit error to the field it's about (duplicate email /
+  // phone) so it renders under that field; anything else falls back to the banner.
+  const applyServerError = (err) => {
+    const msg = err?.message || 'Registration failed. Please try again.';
+    const low = msg.toLowerCase();
+    if (low.includes('email') && (low.includes('already') || low.includes('in use'))) {
+      setFieldErrors(p => ({ ...p, email: msg }));
+    } else if ((low.includes('mobile') || low.includes('phone')) && (low.includes('already') || low.includes('in use'))) {
+      setFieldErrors(p => ({ ...p, phoneNumber: msg }));
+    } else {
+      setError(msg);
+    }
+  };
+
+  const sS = (k) => (e) => { setStudentForm(p => ({ ...p, [k]: e.target.value })); clearErr(k); };
+  const sC = (k) => (e) => { setCoachForm(p => ({ ...p, [k]: e.target.value })); clearErr(k); };
 
   // Phone: digits only, no leading zero, capped at 10 (Indian mobile numbers
   // are 10 digits and never start with 0).
   const sanitizePhone = (v) => v.replace(/\D/g, '').replace(/^0+/, '').slice(0, 10);
-  const sSPhone = (e) => setStudentForm(p => ({ ...p, phoneNumber: sanitizePhone(e.target.value) }));
-  const sCPhone = (e) => setCoachForm(p => ({ ...p, phoneNumber: sanitizePhone(e.target.value) }));
+  const sSPhone = (e) => { setStudentForm(p => ({ ...p, phoneNumber: sanitizePhone(e.target.value) })); clearErr('phoneNumber'); };
+  const sCPhone = (e) => { setCoachForm(p => ({ ...p, phoneNumber: sanitizePhone(e.target.value) })); clearErr('phoneNumber'); };
 
   const handleStudentSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!studentForm.studentName.trim())                           { setError('Please enter your name.'); return; }
-    if (!studentForm.schoolName.trim())                            { setError('Please enter your institute name.'); return; }
+    const errs = {};
     const effectiveClass = studentForm.className === 'Other' ? studentForm.customClass.trim() : studentForm.className;
-    if (!effectiveClass)                                           { setError('Please select or enter your Class / Course.'); return; }
-    if (!studentForm.state)                                        { setError('Please select your State.'); return; }
-    if (!studentForm.district)                                     { setError('Please select your District.'); return; }
-    if (!studentForm.mandal.trim())                                { setError('Please select your Mandal.'); return; }
     const cleanPhone = studentForm.phoneNumber.replace(/\D/g, '');
-    if (cleanPhone.length !== 10 || cleanPhone.startsWith('0'))    { setError('Enter a valid 10-digit mobile number (no leading 0).'); return; }
     const studentEmail = studentForm.email.trim();
-    if (studentEmail && !isValidEmail(studentEmail))               { setError(EMAIL_ERROR); return; }
-    const studentPwErr = validatePassword(studentForm.password);
-    if (studentPwErr)                                              { setError(studentPwErr); return; }
-    if (studentForm.password !== studentForm.confirmPassword)      { setError('Passwords do not match.'); return; }
+
+    if (!studentForm.studentName.trim())                         errs.studentName = 'Please enter your name.';
+    if (!studentForm.schoolName.trim())                          errs.schoolName  = 'Please enter your institute name.';
+    if (!effectiveClass)                                         errs.className   = 'Please select or enter your Class / Course.';
+    if (!studentForm.state)                                      errs.state       = 'Please select your State.';
+    if (!studentForm.district)                                   errs.district    = 'Please select your District.';
+    if (!studentForm.mandal.trim())                              errs.mandal      = 'Please select your Mandal.';
+    if (cleanPhone.length !== 10 || cleanPhone.startsWith('0'))  errs.phoneNumber = 'Enter a valid 10-digit mobile number (no leading 0).';
+    if (studentEmail && !isValidEmail(studentEmail))             errs.email       = EMAIL_ERROR;
+    const studentPwErr = validateRegistrationPassword(studentForm.password);
+    if (studentPwErr)                                            errs.password    = studentPwErr;
+    if (studentForm.password !== studentForm.confirmPassword)    errs.confirmPassword = 'Passwords do not match.';
+
+    setFieldErrors(errs);
+    if (Object.keys(errs).length) return;
 
     setLoading(true);
     try {
@@ -273,7 +320,7 @@ export default function Register() {
       });
       setSuccess(result);
     } catch (err) {
-      setError(err.message);
+      applyServerError(err);
     } finally {
       setLoading(false);
     }
@@ -282,17 +329,22 @@ export default function Register() {
   const handleCoachSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!coachForm.coachName.trim())                          { setError('Please enter your name.'); return; }
-    if (!coachForm.organizationName.trim())                   { setError('Please enter your organization / institution.'); return; }
-    if (!coachForm.state)                                     { setError('Please select your State.'); return; }
-    if (!coachForm.district)                                  { setError('Please select your District.'); return; }
-    if (!coachForm.mandal.trim())                             { setError('Please select your Mandal.'); return; }
+    const errs = {};
     const cleanPhone = coachForm.phoneNumber.replace(/\D/g, '');
-    if (cleanPhone.length !== 10 || cleanPhone.startsWith('0')) { setError('Enter a valid 10-digit mobile number (no leading 0).'); return; }
-    if (!isValidEmail(coachForm.email.trim()))                { setError(EMAIL_ERROR); return; }
-    const coachPwErr = validatePassword(coachForm.password);
-    if (coachPwErr)                                           { setError(coachPwErr); return; }
-    if (coachForm.password !== coachForm.confirmPassword)     { setError('Passwords do not match.'); return; }
+
+    if (!coachForm.coachName.trim())                            errs.coachName        = 'Please enter your name.';
+    if (!coachForm.organizationName.trim())                     errs.organizationName = 'Please enter your organization / institution.';
+    if (!coachForm.state)                                       errs.state            = 'Please select your State.';
+    if (!coachForm.district)                                    errs.district         = 'Please select your District.';
+    if (!coachForm.mandal.trim())                               errs.mandal           = 'Please select your Mandal.';
+    if (cleanPhone.length !== 10 || cleanPhone.startsWith('0')) errs.phoneNumber      = 'Enter a valid 10-digit mobile number (no leading 0).';
+    if (!isValidEmail(coachForm.email.trim()))                  errs.email            = EMAIL_ERROR;
+    const coachPwErr = validateRegistrationPassword(coachForm.password);
+    if (coachPwErr)                                             errs.password         = coachPwErr;
+    if (coachForm.password !== coachForm.confirmPassword)       errs.confirmPassword  = 'Passwords do not match.';
+
+    setFieldErrors(errs);
+    if (Object.keys(errs).length) return;
 
     setLoading(true);
     try {
@@ -309,7 +361,7 @@ export default function Register() {
       });
       setSuccess(result);
     } catch (err) {
-      setError(err.message);
+      applyServerError(err);
     } finally {
       setLoading(false);
     }
@@ -421,17 +473,17 @@ export default function Register() {
       {/* ── STUDENT FORM ── */}
       {tab === 'student' && (
         <form onSubmit={handleStudentSubmit} noValidate className="space-y-4">
-          <Field primaryColor={colors.primary} label="Student Name" icon={User}   value={studentForm.studentName} onChange={sS('studentName')} placeholder="Full name" />
-          <Field primaryColor={colors.primary} label="Institute Name"  icon={School} value={studentForm.schoolName}  onChange={sS('schoolName')}  placeholder="Institution name" />
+          <Field primaryColor={colors.primary} label="Student Name" icon={User}   value={studentForm.studentName} onChange={sS('studentName')} placeholder="Full name" error={fieldErrors.studentName} />
+          <Field primaryColor={colors.primary} label="Institute Name"  icon={School} value={studentForm.schoolName}  onChange={sS('schoolName')}  placeholder="Institution name" error={fieldErrors.schoolName} />
 
           {/*Class / Course */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5" data-has-error={fieldErrors.className ? 'true' : undefined}>
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Class / Course<span className="text-rose-400 ml-0.5">*</span></label>
             <div className="relative">
               <BookOpen size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
               <select value={studentForm.className} onChange={sS('className')} required
                 className={`${inputCls} pl-11 pr-4 appearance-none cursor-pointer`}
-                style={{ ...inputStyle, colorScheme: 'dark', color: studentForm.className ? 'white' : 'rgba(255,255,255,0.55)' }}>
+                style={{ ...inputStyle, ...(fieldErrors.className ? { borderColor: 'rgba(239,68,68,0.6)' } : {}), colorScheme: 'dark', color: studentForm.className ? 'white' : 'rgba(255,255,255,0.55)' }}>
                 {/* Placeholder needs the same explicit dark bg/colour as the real
                     options below — without it the open dropdown rendered this row as
                     near-white text on the browser's default white option background,
@@ -447,27 +499,29 @@ export default function Register() {
               <div className="relative mt-2">
                 <BookOpen size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
                 <input type="text" placeholder="e.g. B.Tech 1st Year, Diploma…"
-                  value={studentForm.customClass} onChange={sS('customClass')} required
+                  value={studentForm.customClass}
+                  onChange={(e) => { setStudentForm(p => ({ ...p, customClass: e.target.value })); clearErr('className'); }}
+                  required
                   className={`${inputCls} pl-11 pr-4`}
                   style={{ ...inputStyle, ...(studentForm.customClass ? inputFocus : {}) }} />
               </div>
             )}
+            {fieldErrors.className && <p className={errCls}>{fieldErrors.className}</p>}
           </div>
 
           {/* Location — cascading State → District → Mandal → Village dropdowns */}
-          <LocationPicker primaryColor={colors.primary}
+          <LocationPicker primaryColor={colors.primary} errors={fieldErrors}
             value={{ state: studentForm.state, district: studentForm.district, mandal: studentForm.mandal, village: studentForm.village }}
-            onChange={loc => setStudentForm(p => ({ ...p, ...loc }))} />
+            onChange={loc => { setStudentForm(p => ({ ...p, ...loc })); clearErr('state', 'district', 'mandal'); }} />
 
-          <Field primaryColor={colors.primary} label="Phone Number" icon={Phone} value={studentForm.phoneNumber} onChange={sSPhone} placeholder="10-digit mobile number" type="tel" maxLength={10} inputMode="numeric" />
-          <Field primaryColor={colors.primary} label="Email ID (Optional)" icon={Mail} value={studentForm.email} onChange={sS('email')} placeholder="your@email.com" type="email" required={false}
-             />
+          <Field primaryColor={colors.primary} label="Phone Number" icon={Phone} value={studentForm.phoneNumber} onChange={sSPhone} placeholder="10-digit mobile number" type="tel" maxLength={10} inputMode="numeric" error={fieldErrors.phoneNumber} />
+          <Field primaryColor={colors.primary} label="Email ID (Optional)" icon={Mail} value={studentForm.email} onChange={sS('email')} placeholder="your@email.com" type="email" required={false} error={fieldErrors.email} />
 
-          <PasswordField primaryColor={colors.primary} maxLength={PASSWORD_MAX}
-            label="Password" value={studentForm.password} onChange={sS('password')}
+          <PasswordField primaryColor={colors.primary} maxLength={REG_PASSWORD_MAX} hint="6–8 characters"
+            label="Password" value={studentForm.password} onChange={sS('password')} error={fieldErrors.password}
             show={showStudentPass} onToggle={() => setShowStudentPass(p => !p)} />
-          <PasswordField primaryColor={colors.primary} maxLength={PASSWORD_MAX}
-            label="Confirm Password" value={studentForm.confirmPassword} onChange={sS('confirmPassword')}
+          <PasswordField primaryColor={colors.primary} maxLength={REG_PASSWORD_MAX}
+            label="Confirm Password" value={studentForm.confirmPassword} onChange={sS('confirmPassword')} error={fieldErrors.confirmPassword}
             show={showStudentConf} onToggle={() => setShowStudentConf(p => !p)}
             placeholder="Re-enter password"
             mismatch={studentForm.confirmPassword && studentForm.password !== studentForm.confirmPassword} />
@@ -485,23 +539,22 @@ export default function Register() {
       {/* ── COACH FORM ── */}
       {tab === 'coach' && (
         <form onSubmit={handleCoachSubmit} noValidate className="space-y-4">
-          <Field primaryColor={colors.primary} label="Trainer Name"               icon={User}     value={coachForm.coachName}        onChange={sC('coachName')}        placeholder="Full name" />
-          <Field primaryColor={colors.primary} label="Organization / Institution" icon={Briefcase} value={coachForm.organizationName} onChange={sC('organizationName')} placeholder="Organization / Institution" />
+          <Field primaryColor={colors.primary} label="Trainer Name"               icon={User}     value={coachForm.coachName}        onChange={sC('coachName')}        placeholder="Full name" error={fieldErrors.coachName} />
+          <Field primaryColor={colors.primary} label="Organization / Institution" icon={Briefcase} value={coachForm.organizationName} onChange={sC('organizationName')} placeholder="Organization / Institution" error={fieldErrors.organizationName} />
 
           {/* Location — cascading State → District → Mandal → Village dropdowns */}
-          <LocationPicker primaryColor={colors.primary}
+          <LocationPicker primaryColor={colors.primary} errors={fieldErrors}
             value={{ state: coachForm.state, district: coachForm.district, mandal: coachForm.mandal, village: coachForm.village }}
-            onChange={loc => setCoachForm(p => ({ ...p, ...loc }))} />
+            onChange={loc => { setCoachForm(p => ({ ...p, ...loc })); clearErr('state', 'district', 'mandal'); }} />
 
-          <Field primaryColor={colors.primary} label="Phone Number"               icon={Phone}    value={coachForm.phoneNumber}      onChange={sCPhone}                placeholder="10-digit mobile number" type="tel" maxLength={10} inputMode="numeric" />
-          <Field primaryColor={colors.primary} label="Email ID"                   icon={Mail}     value={coachForm.email}            onChange={sC('email')}            placeholder="trainer@email.com" type="email"
-             />
+          <Field primaryColor={colors.primary} label="Phone Number"               icon={Phone}    value={coachForm.phoneNumber}      onChange={sCPhone}                placeholder="10-digit mobile number" type="tel" maxLength={10} inputMode="numeric" error={fieldErrors.phoneNumber} />
+          <Field primaryColor={colors.primary} label="Email ID"                   icon={Mail}     value={coachForm.email}            onChange={sC('email')}            placeholder="trainer@email.com" type="email" error={fieldErrors.email} />
 
-          <PasswordField primaryColor={colors.primary} maxLength={PASSWORD_MAX}
-            label="Password" value={coachForm.password} onChange={sC('password')}
+          <PasswordField primaryColor={colors.primary} maxLength={REG_PASSWORD_MAX} hint="6–8 characters"
+            label="Password" value={coachForm.password} onChange={sC('password')} error={fieldErrors.password}
             show={showCoachPass} onToggle={() => setShowCoachPass(p => !p)} />
-          <PasswordField primaryColor={colors.primary} maxLength={PASSWORD_MAX}
-            label="Confirm Password" value={coachForm.confirmPassword} onChange={sC('confirmPassword')}
+          <PasswordField primaryColor={colors.primary} maxLength={REG_PASSWORD_MAX}
+            label="Confirm Password" value={coachForm.confirmPassword} onChange={sC('confirmPassword')} error={fieldErrors.confirmPassword}
             show={showCoachConf} onToggle={() => setShowCoachConf(p => !p)}
             placeholder="Re-enter password"
             mismatch={coachForm.confirmPassword && coachForm.password !== coachForm.confirmPassword} />

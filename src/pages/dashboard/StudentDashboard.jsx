@@ -233,42 +233,44 @@ function LevelCard({ level, status, levelData, levelSettings, attemptCount }) {
 
   return (
     <div
-      className="bg-white rounded-2xl border shadow-sm overflow-hidden transition-all duration-300"
+      className="bg-white rounded-2xl border shadow-sm overflow-hidden transition-all duration-300 h-full flex flex-col"
       style={{ borderColor: isCompleted ? `${level.color.from}40` : '#f1f5f9', opacity: isLocked ? 0.75 : 1 }}
     >
-      {/* Header */}
+      {/* Header — fixed height so cards with 1- vs 2-line titles line up */}
       <div className="relative p-5 pb-4 overflow-hidden" style={{ background: headerGradient }}>
         <div className="absolute top-0 right-0 w-28 h-28 rounded-full opacity-10 blur-[40px] bg-white" />
         <div className="relative z-10 flex items-start justify-between">
-          <div>
+          <div className="min-w-0">
             <p className="text-white/70 text-xs font-semibold uppercase tracking-wider mb-0.5">
               {isLocked ? 'Locked' : isCompleted ? 'Completed' : 'Ready'}
             </p>
-            <h3 className="text-xl font-bold text-white" style={{ fontFamily: 'Space Grotesk' }}>
+            <h3 className="text-xl font-bold text-white line-clamp-2 min-h-[3.5rem]" style={{ fontFamily: 'Space Grotesk' }}>
               {level.title}
             </h3>
-            <p className="text-white/80 text-sm font-medium mt-0.5">{level.subtitle}</p>
+            {/* Reserve a line for the subtitle even when empty so every header is the same height */}
+            <p className="text-white/80 text-sm font-medium mt-0.5 line-clamp-1 min-h-[1.25rem]">{level.subtitle || ' '}</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
             <StatusIcon size={18} className="text-white" />
           </div>
         </div>
 
-        {/* Attempt badge on header */}
-        {!isLocked && (
-          <div className="relative z-10 mt-3">
+        {/* Attempt badge on header — min-height reserves the row so locked cards
+            (no badge) keep the same header height as unlocked ones */}
+        <div className="relative z-10 mt-3 min-h-[24px]">
+          {!isLocked && (
             <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full"
               style={{ background: 'rgba(255,255,255,0.18)', color: 'white' }}>
               <Target size={10} />
               {remaining === 0 ? 'No attempts left' : `${remaining} of ${attemptLimit} attempts left`}
             </span>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* Card body */}
-      <div className="p-5 space-y-4">
-        <p className="text-sm text-slate-500 leading-relaxed">{level.description}</p>
+      {/* Card body — flex column so the CTA can be pinned to the bottom of every card */}
+      <div className="p-5 space-y-4 flex-1 flex flex-col">
+        <p className="text-sm text-slate-500 leading-relaxed line-clamp-2 min-h-[2.5rem]">{level.description}</p>
 
         {/* Meta pills */}
         <div className="grid grid-cols-2 gap-2">
@@ -333,7 +335,9 @@ function LevelCard({ level, status, levelData, levelSettings, attemptCount }) {
         )}
 
 
-        {/* CTA */}
+        {/* CTA — pinned to the bottom (mt-auto) so the action buttons line up
+            across every card regardless of description / score height above */}
+        <div className="mt-auto space-y-2 pt-1">
         {isLocked && (
           <div className="space-y-2">
             <div className="flex items-center gap-2 w-full py-3 rounded-xl text-slate-400 text-sm font-semibold bg-slate-50 border border-slate-200 justify-center cursor-not-allowed select-none">
@@ -398,6 +402,7 @@ function LevelCard({ level, status, levelData, levelSettings, attemptCount }) {
             <Lock size={14} /> No Attempts Remaining
           </div>
         )}
+        </div>
       </div>
     </div>
   );

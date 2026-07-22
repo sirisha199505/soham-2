@@ -3,11 +3,11 @@ import { useAuth } from '../../context/AuthContext';
 import {
   FileText, Plus, Edit2, Trash2, X, Save, CheckCircle,
   BookOpen, ChevronDown, ChevronUp, Info, Upload, Eye, Loader2,
-  AlertTriangle,
+  AlertTriangle, Video,
 } from 'lucide-react';
 import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
-import { compareLevels } from '../../utils/helpers';
+import { compareLevels, isYouTubeUrl, youtubeEmbedUrl } from '../../utils/helpers';
 import RichTextEditor from '../../components/ui/RichTextEditor';
 
 const PALETTE = [
@@ -128,7 +128,7 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
           <div>
             <label className="text-xs font-semibold text-slate-500 uppercase block mb-2">Content Type</label>
             <div className="flex rounded-xl border border-slate-200 overflow-hidden">
-              {[{ key: 'text', label: '📝 Text Content' }, { key: 'pdf', label: '📄 Upload PDF' }].map(tab => (
+              {[{ key: 'text', label: '📝 Text Content' }, { key: 'pdf', label: '📄 Upload PDF' }, { key: 'video', label: '🎬 Video Link' }].map(tab => (
                 <button key={tab.key} onClick={() => setForm(p => ({ ...p, type: tab.key }))}
                   className={`flex-1 py-2.5 text-sm font-semibold transition-all ${form.type === tab.key ? 'bg-indigo-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>
                   {tab.label}
@@ -207,6 +207,39 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
               )}
             </div>
           )}
+
+          {/* Video link — the URL is stored in pdfData (reuses the existing
+              column; content_type 'video' distinguishes it). Students see an
+              embedded player plus a link that opens in a new tab. */}
+          {form.type === 'video' && (
+            <div>
+              <label className="text-xs font-semibold text-slate-500 uppercase block mb-2">
+                YouTube Video Link <span className="text-red-400">*</span>
+              </label>
+              <div className="relative">
+                <Video size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-red-500 pointer-events-none" />
+                <input value={form.pdfData}
+                  onChange={e => { setForm(p => ({ ...p, pdfData: e.target.value, pdfName: 'Video' })); setSaveMsg(''); }}
+                  placeholder="https://www.youtube.com/watch?v=…"
+                  className="w-full pl-9 pr-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400" />
+              </div>
+              {form.pdfData?.trim() && !isYouTubeUrl(form.pdfData) && (
+                <p className="text-[11px] text-amber-600 mt-1.5 flex items-center gap-1">
+                  <AlertTriangle size={11} /> Not a recognised YouTube link — it will be saved as a clickable link (no inline player).
+                </p>
+              )}
+              {youtubeEmbedUrl(form.pdfData) && (
+                <div className="mt-3 rounded-xl overflow-hidden border border-slate-200 bg-black aspect-video">
+                  <iframe src={youtubeEmbedUrl(form.pdfData)} title="Video preview"
+                    className="w-full h-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen />
+                </div>
+              )}
+              <p className="text-[11px] text-slate-400 mt-2">
+                Students & trainers will see this video embedded on the content page, with a link to open it in a new tab.
+              </p>
+            </div>
+          )}
         </div>
         <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3">
           <p className="text-xs font-medium text-red-500">{saveMsg}</p>
@@ -215,7 +248,12 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
             <button
               onClick={() => {
                 if (!form.title.trim())                        { setSaveMsg('Please add a title name.'); return; }
-                if (form.type !== 'text' && !form.pdfData)     { setSaveMsg('Please add PDF / image content.'); return; }
+                if (form.type === 'pdf' && !form.pdfData)      { setSaveMsg('Please add PDF / image content.'); return; }
+                if (form.type === 'video') {
+                  const u = (form.pdfData || '').trim();
+                  if (!u)                          { setSaveMsg('Please add a YouTube video link.'); return; }
+                  if (!/^https?:\/\//i.test(u))    { setSaveMsg('Enter a valid link starting with http:// or https://'); return; }
+                }
                 if (form.type === 'text') {
                   const bad = form.sections.reduce((acc, s, i) => (isEmptyBody(s.body) ? [...acc, i] : acc), []);
                   if (bad.length) {
@@ -225,7 +263,8 @@ function PageModal({ levelId, page, pageIdx, onSave, onClose }) {
                   }
                 }
                 if (uploading) return;
-                onSave(levelId, form, pageIdx);
+                const clean = form.type === 'video' ? { ...form, pdfData: form.pdfData.trim() } : form;
+                onSave(levelId, clean, pageIdx);
               }}
               disabled={uploading}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
@@ -378,10 +417,18 @@ function LevelSection({ levelId, levelTitle, levelOrder, pages, expanded, onTogg
             <div key={i} className="flex items-start gap-3 bg-slate-50 rounded-xl p-4">
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-slate-800 text-sm">{pg.title}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{pg.sections?.length || 0} section{pg.sections?.length !== 1 ? 's' : ''}</p>
-                {pg.sections?.slice(0, 2).map((s, si) => (
-                  <p key={si} className="text-xs text-slate-400 truncate mt-0.5">· {s.heading}</p>
-                ))}
+                {pg.type === 'video' ? (
+                  <p className="text-xs text-slate-400 mt-0.5 truncate">🎬 Video link · <span className="text-indigo-500">{pg.pdfData}</span></p>
+                ) : pg.type === 'pdf' ? (
+                  <p className="text-xs text-slate-400 mt-0.5 truncate">📄 {pg.pdfName || 'PDF / file'}</p>
+                ) : (
+                  <>
+                    <p className="text-xs text-slate-400 mt-0.5">{pg.sections?.length || 0} section{pg.sections?.length !== 1 ? 's' : ''}</p>
+                    {pg.sections?.slice(0, 2).map((s, si) => (
+                      <p key={si} className="text-xs text-slate-400 truncate mt-0.5">· {s.heading}</p>
+                    ))}
+                  </>
+                )}
               </div>
               <div className="flex gap-1 shrink-0">
                 <button onClick={() => onEdit(levelId, pg, i)} className="p-1.5 rounded-lg text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors">

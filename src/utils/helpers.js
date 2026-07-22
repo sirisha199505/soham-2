@@ -53,15 +53,35 @@ export const capitalize = (str) =>
 export const generateId = () =>
   Math.random().toString(36).slice(2, 10);
 
-// An email is accepted only when it is well-formed AND the local part (before
-// the @) contains at least one letter. This rejects all-numeric addresses like
-// 123344454@gmail.com while still accepting admin@gmail.com or admin123@gmail.com.
+// Whitelist of accepted top-level domains. An email's final domain label must be
+// one of these, so common typos / partial TLDs like "name@gmail.co" are rejected
+// while proper domains (.com, .org, .net, .edu, the Indian .in family, etc.) pass.
+// Add entries here if a legitimate TLD is ever reported as rejected.
+export const ALLOWED_TLDS = new Set([
+  // Generic
+  'com', 'org', 'net', 'edu', 'gov', 'mil', 'int', 'info', 'biz', 'name',
+  'pro', 'mobi', 'aero', 'coop', 'museum', 'io', 'ai', 'app', 'dev', 'tech',
+  'online', 'site', 'store', 'xyz', 'live', 'me', 'tv', 'cc', 'email', 'cloud',
+  'digital', 'world', 'group', 'company', 'academy', 'institute', 'education',
+  'school', 'college', 'ac', 'edu',
+  // Country codes (India first, then other common ones)
+  'in', 'us', 'uk', 'ca', 'au', 'nz', 'sg', 'ae', 'de', 'fr', 'jp', 'cn',
+  'za', 'my', 'ph', 'id', 'lk', 'bd', 'np', 'pk',
+]);
+
+// An email is accepted only when it is well-formed, the local part (before the @)
+// contains at least one letter, AND the final domain label is a recognised TLD.
+// This rejects all-numeric addresses like 123344454@gmail.com and partial TLDs
+// like name@gmail.co, while accepting admin@gmail.com / admin123@school.edu.in.
 export const isValidEmail = (email) => {
   if (!email) return false;
   const value = String(email).trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return false;
-  const local = value.slice(0, value.indexOf('@'));
-  return /[a-zA-Z]/.test(local);
+  const at = value.indexOf('@');
+  const local = value.slice(0, at);
+  if (!/[a-zA-Z]/.test(local)) return false;
+  const tld = value.slice(at + 1).split('.').pop().toLowerCase();
+  return ALLOWED_TLDS.has(tld);
 };
 
 // Password length policy — keep in sync with the backend (users.rb / session.rb).
@@ -75,6 +95,18 @@ export const validatePassword = (pw) => {
   const len = String(pw ?? '').length;
   if (len < PASSWORD_MIN) return `Password must be at least ${PASSWORD_MIN} characters.`;
   if (len > PASSWORD_MAX) return `Password must be ${PASSWORD_MAX} characters or fewer.`;
+  return null;
+};
+
+// Registration password policy — a NEW password set at sign-up must be 6-8
+// characters. Login only enforces the minimum (see PASSWORD_MIN) so existing
+// users with longer passwords are never locked out.
+export const REG_PASSWORD_MIN = 6;
+export const REG_PASSWORD_MAX = 8;
+export const validateRegistrationPassword = (pw) => {
+  const len = String(pw ?? '').length;
+  if (len < REG_PASSWORD_MIN) return `Password must be at least ${REG_PASSWORD_MIN} characters.`;
+  if (len > REG_PASSWORD_MAX) return `Password must be ${REG_PASSWORD_MAX} characters or fewer.`;
   return null;
 };
 
@@ -195,6 +227,29 @@ export const isHotspotAllCorrect = (extras, answer) => {
   const hs = extras?.hotspots;
   return Array.isArray(hs) && hs.length > 0 &&
     hs.every((_, i) => isHotspotSpotCorrect(answer, i));
+};
+
+// ── YouTube helpers (content video pages) ────────────────────────────────────
+// Extract the 11-char video id from the common YouTube URL shapes (watch?v=,
+// youtu.be/, embed/, shorts/, live/). Returns null when it isn't a YouTube link.
+export const youtubeId = (url) => {
+  if (!url) return null;
+  const s = String(url).trim();
+  const patterns = [
+    /youtube\.com\/watch\?[^#]*\bv=([\w-]{11})/,
+    /youtu\.be\/([\w-]{11})/,
+    /youtube\.com\/embed\/([\w-]{11})/,
+    /youtube\.com\/shorts\/([\w-]{11})/,
+    /youtube\.com\/live\/([\w-]{11})/,
+  ];
+  for (const p of patterns) { const m = s.match(p); if (m) return m[1]; }
+  return null;
+};
+export const isYouTubeUrl = (url) => !!youtubeId(url);
+// Privacy-friendly embed URL for an <iframe>, or null if not a YouTube link.
+export const youtubeEmbedUrl = (url) => {
+  const id = youtubeId(url);
+  return id ? `https://www.youtube-nocookie.com/embed/${id}` : null;
 };
 
 export const debounce = (fn, delay = 300) => {
