@@ -10,7 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { LEVELS } from '../../utils/levelData';
 import { api } from '../../utils/api';
-import { compareLevels, youtubeEmbedUrl } from '../../utils/helpers';
+import { youtubeEmbedUrl } from '../../utils/helpers';
 import { downloadWatermarkedPdf } from '../../utils/pdfWatermark';
 import DOMPurify from 'dompurify';
 
