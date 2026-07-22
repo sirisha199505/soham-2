@@ -728,72 +728,49 @@ function MaterialCard({ page, index, levelId, level, onRead }) {
 // Main page
 // ══════════════════════════════════════════════════════════════════════════
 export default function StudentContent() {
-  const { user }   = useAuth();
-  const { levelSettings, levelSettingsLoaded } = useLevel();
+  const { user } = useAuth();
 
-  const sortedLevels = useMemo(() =>
-    Object.values(levelSettings)
-      .filter(dbLevel => dbLevel?.active !== false)   // inactive levels are hidden entirely
-      .sort(compareLevels)
-      .map((dbLevel, idx) => {
-        const staticLevel = LEVELS.find(l => l.id === dbLevel.id);
-        if (staticLevel) return staticLevel;
-        return {
-          id:       dbLevel.id,
-          title:    dbLevel.title    || `Level ${dbLevel.id}`,
-          subtitle: dbLevel.subtitle || '',
-          color:    FALLBACK_COLORS[idx % FALLBACK_COLORS.length],
-        };
-      }),
-  [levelSettings]);
-
-  const [allContent,    setAllContent]    = useState({});
-  const [loading,       setLoading]       = useState(true);
-  const [activeLevelId, setActiveLevelId] = useState(null);
-  const [readingIdx,    setReadingIdx]    = useState(null); // null = card list
+  const [topics,     setTopics]     = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [activeId,   setActiveId]   = useState(null);
+  const [readingIdx, setReadingIdx] = useState(null); // null = card list
   const [, forceUpdate] = useState(0);
 
+  // Load standalone content topics (independent of exam levels / question banks).
   useEffect(() => {
-    if (sortedLevels.length > 0 && activeLevelId === null) {
-      // Resume from last saved position if available
-      const firstLevel = sortedLevels[0];
-      setActiveLevelId(firstLevel.id);
-    }
-  }, [sortedLevels.length]); // eslint-disable-line
-
-  useEffect(() => {
-    if (!user?.id || !levelSettingsLoaded || sortedLevels.length === 0) {
-      if (levelSettingsLoaded) setLoading(false);
-      return;
-    }
+    if (!user?.id) return;
     setLoading(true);
-    Promise.all(sortedLevels.map(l => api.getContent(l.id)))
-      .then(results => {
-        const map = {};
-        sortedLevels.forEach((l, i) => { map[l.id] = results[i] || []; });
-        setAllContent(map);
+    api.getContentTopics()
+      .then(data => {
+        const list = (Array.isArray(data) ? data : []).map((t, idx) => ({
+          id:       t.id,
+          title:    t.title,
+          subtitle: '',
+          color:    FALLBACK_COLORS[idx % FALLBACK_COLORS.length],
+          pages:    Array.isArray(t.pages) ? t.pages : [],
+        }));
+        setTopics(list);
+        setActiveId(cur => cur ?? (list[0]?.id ?? null));
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [user?.id, levelSettingsLoaded, sortedLevels.length]); // eslint-disable-line
+  }, [user?.id]);
 
-  const effectiveId = activeLevelId ?? sortedLevels[0]?.id;
-  const pages  = allContent[effectiveId] || [];
-  const level  = sortedLevels.find(l => l.id === effectiveId);
+  const effectiveId = activeId ?? topics[0]?.id;
+  const level = topics.find(t => t.id === effectiveId);
+  const pages = level?.pages || [];
 
-  // Open the study material in a NEW browser tab so students/trainers keep the
-  // content list open. PDFs open inline in the browser's native viewer; Office
-  // files open in an online viewer; articles use the standalone reader route.
+  // PDFs open in a new browser tab (native viewer); text & video open in the
+  // in-app reader (video shows an embedded player plus an "open in new tab" link).
   const handleOpenReader = useCallback((idx) => {
     const page = pages[idx];
     if (page?.type === 'pdf' && typeof page.pdfData === 'string' && page.pdfData) {
       openMaterialInNewTab(page.pdfData, page.pdfName);
-      // Track progress the same way the in-app reader does.
       markRead(effectiveId, idx);
       forceUpdate(n => n + 1);
       return;
     }
-    window.open(`/content/${effectiveId}/read/${idx}`, '_blank', 'noopener,noreferrer');
+    setReadingIdx(idx);
   }, [effectiveId, pages]);
 
   const handleCloseReader = useCallback(() => {
@@ -802,7 +779,7 @@ export default function StudentContent() {
   }, []);
 
   // ── Loading ──
-  if (loading || !levelSettingsLoaded) {
+  if (loading) {
     return (
       <div className="min-h-full flex items-center justify-center bg-white">
         <div className="flex flex-col items-center gap-3">
@@ -813,19 +790,19 @@ export default function StudentContent() {
     );
   }
 
-  if (sortedLevels.length === 0) {
+  if (topics.length === 0) {
     return (
       <div className="min-h-full bg-white flex items-center justify-center p-6">
         <div className="text-center max-w-sm">
           <BookOpen size={40} className="mx-auto text-slate-200 mb-4" />
-          <p className="font-semibold text-slate-600">No levels available</p>
-          <p className="text-slate-400 text-sm mt-1">Check back after your administrator configures exam levels.</p>
+          <p className="font-semibold text-slate-600">No content available yet</p>
+          <p className="text-slate-400 text-sm mt-1">Check back once your administrator adds study material.</p>
         </div>
       </div>
     );
   }
 
-  // Level stats
+  // Stats for the active topic
   const readList   = getReadList(effectiveId);
   const readCount  = readList.length;
   const totalCount = pages.length;
@@ -858,11 +835,11 @@ export default function StudentContent() {
                   Study Content
                 </h1>
                 <p className="text-sm text-slate-400 mt-0.5">
-                  Select a lesson to start reading
+                  Select a topic to start reading
                 </p>
               </div>
 
-              {/* Level stats pills */}
+              {/* Read stats pill */}
               {level && (
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-100 bg-slate-50 text-xs font-semibold text-slate-600">
@@ -873,28 +850,28 @@ export default function StudentContent() {
               )}
             </div>
 
-            {/* Level tabs */}
+            {/* Topic tabs */}
             <div className="flex gap-2 flex-wrap">
-              {sortedLevels.map(l => {
-                const isActive  = l.id === effectiveId;
-                const lRead     = getReadList(l.id).length;
-                const lTotal    = (allContent[l.id] || []).length;
+              {topics.map(t => {
+                const isActive = t.id === effectiveId;
+                const tRead    = getReadList(t.id).length;
+                const tTotal   = (t.pages || []).length;
                 return (
-                  <button key={l.id}
-                    onClick={() => { setActiveLevelId(l.id); setReadingIdx(null); }}
+                  <button key={t.id}
+                    onClick={() => { setActiveId(t.id); setReadingIdx(null); }}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition-all"
                     style={isActive ? {
-                      background: `linear-gradient(135deg, ${l.color.from}, ${l.color.to})`,
+                      background: `linear-gradient(135deg, ${t.color.from}, ${t.color.to})`,
                       color: '#fff', border: 'none',
-                      boxShadow: `0 4px 12px ${l.color.from}35`,
+                      boxShadow: `0 4px 12px ${t.color.from}35`,
                     } : { background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0' }}>
-                    {l.title}
-                    {lTotal > 0 && (
+                    {t.title}
+                    {tTotal > 0 && (
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
                         style={isActive
                           ? { background: 'rgba(255,255,255,0.25)', color: '#fff' }
                           : { background: '#e2e8f0', color: '#94a3b8' }}>
-                        {lRead}/{lTotal}
+                        {tRead}/{tTotal}
                       </span>
                     )}
                   </button>
@@ -910,7 +887,7 @@ export default function StudentContent() {
             <div className="bg-white rounded-2xl border border-slate-100 py-24 text-center">
               <BookOpen size={36} className="mx-auto text-slate-200 mb-3" />
               <p className="font-semibold text-slate-600">No materials yet</p>
-              <p className="text-slate-400 text-sm mt-1">Your instructor hasn't added content for this level.</p>
+              <p className="text-slate-400 text-sm mt-1">Your administrator hasn't added pages to this topic.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
