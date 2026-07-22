@@ -1,7 +1,7 @@
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ShieldCheck, GraduationCap, Briefcase, Info, Phone, Mail } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, GraduationCap, Briefcase, Info, MessageCircle } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
-import { ADMIN_CONTACT_PHONE, ADMIN_CONTACT_EMAIL } from '../../utils/constants';
+import { ADMIN_CONTACT_PHONE } from '../../utils/constants';
 
 // Password resets are handled by the Administrator (students/trainers can no
 // longer self-reset). This page just tells them to contact the admin.
@@ -11,6 +11,10 @@ export default function ForgotPassword() {
   const role = params.get('role') === 'trainer' ? 'trainer' : 'student';
   const RoleIcon = role === 'trainer' ? Briefcase : GraduationCap;
   const roleLabel = role === 'trainer' ? 'Trainer' : 'Student';
+  // WhatsApp click-to-chat needs the number as digits only (country code, no +/spaces).
+  const waNumber = ADMIN_CONTACT_PHONE.replace(/\D/g, '');
+  const nameLabel = role === 'trainer' ? 'trainer name' : 'student name';
+  const orgLabel  = role === 'trainer' ? 'organization name' : 'institute name';
 
   return (
     <div className="fade-in-up">
@@ -43,28 +47,27 @@ export default function ForgotPassword() {
           </p>
         </div>
 
-        {/* Admin contact details */}
-        <div className="mt-4 pt-4 space-y-2.5" style={{ borderTop: '1px solid rgba(255,255,255,0.10)' }}>
-          <a href={`tel:${ADMIN_CONTACT_PHONE.replace(/\s+/g, '')}`}
+        {/* WhatsApp contact + what to send */}
+        <div className="mt-4 pt-4 space-y-3" style={{ borderTop: '1px solid rgba(255,255,255,0.10)' }}>
+          <a href={`https://wa.me/${waNumber}`} target="_blank" rel="noreferrer"
             className="flex items-center gap-3 group">
             <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
               style={{ background: `${colors.primary}20` }}>
-              <Phone size={14} style={{ color: colors.primary }} />
+              <MessageCircle size={15} style={{ color: colors.primary }} />
             </span>
-            <span className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">
-              {ADMIN_CONTACT_PHONE}
-            </span>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">WhatsApp</p>
+              <span className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">
+                {ADMIN_CONTACT_PHONE}
+              </span>
+            </div>
           </a>
-          <a href={`mailto:${ADMIN_CONTACT_EMAIL}`}
-            className="flex items-center gap-3 group">
-            <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-              style={{ background: `${colors.primary}20` }}>
-              <Mail size={14} style={{ color: colors.primary }} />
-            </span>
-            <span className="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors break-all">
-              {ADMIN_CONTACT_EMAIL}
-            </span>
-          </a>
+          <p className="text-[13px] text-slate-300 leading-relaxed">
+            Send your <span className="font-semibold text-white">{nameLabel}</span>,{' '}
+            <span className="font-semibold text-white">phone number</span> and{' '}
+            <span className="font-semibold text-white">{orgLabel}</span> to this WhatsApp number,
+            and the Administrator will reset your password.
+          </p>
         </div>
       </div>
     </div>
