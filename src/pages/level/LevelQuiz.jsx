@@ -1001,18 +1001,27 @@ export default function LevelQuiz() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [quizInProgress]);
 
-  // Anti-cheat guard: warn (auto-submit / stay) only when the student actually
-  // switches away from the exam — to another tab, another window, or minimises.
-  // We no longer block copy or pre-empt new-tab attempts (too many false hits).
+  // Anti-cheat guard: warn (auto-submit / stay) when the student switches away
+  // from the exam, and — as a BEFORE warning — when the cursor moves up out of
+  // the page toward the browser's "+" / tab bar. We no longer block copy or the
+  // Ctrl+T / right-click shortcuts (too many false hits).
   useEffect(() => {
     if (!quizInProgress) return;
     const onVisibility = () => { if (document.hidden) setShowTabWarning(true); };
     const onBlur       = () => setShowTabWarning(true);
+    // Exit-intent: the "+" new-tab button and tab bar sit ABOVE the page. When
+    // the cursor leaves the viewport through the top edge, the student is
+    // heading for a new tab — warn BEFORE they get there.
+    const onMouseOut = (e) => {
+      if (!e.relatedTarget && !e.toElement && e.clientY <= 0) setShowTabWarning(true);
+    };
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('blur', onBlur);
+    document.addEventListener('mouseout', onMouseOut);
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('blur', onBlur);
+      document.removeEventListener('mouseout', onMouseOut);
     };
   }, [quizInProgress]);
 
