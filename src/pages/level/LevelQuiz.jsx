@@ -884,6 +884,7 @@ export default function LevelQuiz() {
   const [showReview,           setShowReview]           = useState(false);
   const [insufficientWarning,  setInsufficientWarning]  = useState('');
   const [showBackWarning,      setShowBackWarning]      = useState(false);
+  const [showTabWarning,       setShowTabWarning]       = useState(false);
   const [noAttemptsError,      setNoAttemptsError]      = useState(null);
   const [insufficientError,    setInsufficientError]    = useState(null);
 
@@ -998,6 +999,26 @@ export default function LevelQuiz() {
     const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
+  }, [quizInProgress]);
+
+  // Anti-cheat guard: warn (auto-submit / stay) when the student switches to
+  // another tab/window or tries to copy the question. Copying is blocked and
+  // both actions raise the same warning modal.
+  useEffect(() => {
+    if (!quizInProgress) return;
+    const onVisibility = () => { if (document.hidden) setShowTabWarning(true); };
+    const onBlur       = () => setShowTabWarning(true);
+    const onCopy       = (e) => { e.preventDefault(); setShowTabWarning(true); };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('blur', onBlur);
+    document.addEventListener('copy', onCopy);
+    document.addEventListener('cut', onCopy);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('blur', onBlur);
+      document.removeEventListener('copy', onCopy);
+      document.removeEventListener('cut', onCopy);
+    };
   }, [quizInProgress]);
 
   // Initialize timer from API-backed levelSettings once questions finish loading
@@ -1552,6 +1573,32 @@ export default function LevelQuiz() {
                 onClick={() => { setShowBackWarning(false); doSubmit(true); }}
                 className="flex-1 py-3 rounded-xl bg-red-50 border border-red-200 text-red-600 font-semibold text-sm hover:bg-red-100 transition-all">
                 Leave Anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTabWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl p-8 shadow-2xl max-w-sm mx-4">
+            <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle size={28} className="text-amber-500" />
+            </div>
+            <h2 className="text-xl font-bold text-slate-800 text-center mb-2">Stay on the Exam</h2>
+            <p className="text-slate-500 text-sm text-center mb-6">
+              Switching tabs or copying question content is not allowed during the exam. If you continue, your quiz will be submitted automatically with your answers so far — and you cannot restart this exam.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowTabWarning(false)}
+                className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-all">
+                Stay in Exam
+              </button>
+              <button
+                onClick={() => { setShowTabWarning(false); doSubmit(true); }}
+                className="flex-1 py-3 rounded-xl bg-red-50 border border-red-200 text-red-600 font-semibold text-sm hover:bg-red-100 transition-all">
+                Submit Now
               </button>
             </div>
           </div>
