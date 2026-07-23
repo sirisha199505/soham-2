@@ -1027,6 +1027,12 @@ export default function LevelQuiz() {
     const onAuxClick = (e) => {
       if (e.button === 1 || e.ctrlKey || e.metaKey) { e.preventDefault(); setShowTabWarning(true); }
     };
+    // Exit-intent: the browser's "+" / tab bar / address bar sit ABOVE the page.
+    // When the cursor leaves the viewport through the top edge, the student is
+    // heading for a new tab — warn BEFORE they get there.
+    const onMouseOut = (e) => {
+      if (!e.relatedTarget && !e.toElement && e.clientY <= 0) setShowTabWarning(true);
+    };
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('blur', onBlur);
     document.addEventListener('copy', onCopy);
@@ -1034,6 +1040,7 @@ export default function LevelQuiz() {
     document.addEventListener('contextmenu', onContext);
     window.addEventListener('keydown', onKeyDown, true);
     document.addEventListener('auxclick', onAuxClick, true);
+    document.addEventListener('mouseout', onMouseOut);
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('blur', onBlur);
@@ -1042,6 +1049,7 @@ export default function LevelQuiz() {
       document.removeEventListener('contextmenu', onContext);
       window.removeEventListener('keydown', onKeyDown, true);
       document.removeEventListener('auxclick', onAuxClick, true);
+      document.removeEventListener('mouseout', onMouseOut);
     };
   }, [quizInProgress]);
 
