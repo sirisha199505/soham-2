@@ -302,9 +302,6 @@ function LevelCard({ level, status, levelData, levelSettings, attemptCount }) {
               <Trophy size={20} style={{ color: scoreColor.text }} className="shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700">
-                    Best Score
-                  </span>
                   <p className="text-lg font-bold leading-none" style={{ color: scoreColor.text, fontFamily: 'Space Grotesk' }}>
                     {scorePct}%
                   </p>
