@@ -25,4 +25,8 @@ backend/.env
 *.njsproj
 *.sln
 *.sw?
+
+# Environment files — never commit; set these in the deploy dashboard instead
 .env
+.env.*
+!.env.example

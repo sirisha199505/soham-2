@@ -718,9 +718,15 @@ function MaterialCard({ page, index, levelId, level, onRead, displayNo }) {
       <div className="p-5 flex-1 flex flex-col">
         {/* Index + status row */}
         <div className="flex items-center justify-between mb-3">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-            {String(displayNo ?? index + 1).padStart(2, '0')}
-          </span>
+          <div className="flex items-center gap-2">
+            {/* Document icon — same for every study material file */}
+            <span className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
+              <FileText size={18} className="text-blue-500" />
+            </span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              {String(displayNo ?? index + 1).padStart(2, '0')}
+            </span>
+          </div>
           <div className="flex items-center gap-1.5">
             {isBookmarked && (
               <span className="w-5 h-5 flex items-center justify-center text-amber-400">
