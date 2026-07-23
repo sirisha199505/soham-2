@@ -609,15 +609,30 @@ function ContentReader({ pages, startIndex, levelId, level, onBack, onReadStateC
 // ══════════════════════════════════════════════════════════════════════════
 function VideoLesson({ page, index, levelId, onWatched }) {
   const embed  = youtubeEmbedUrl(page.pdfData);
+  const vid    = youtubeId(page.pdfData);
+  const thumb  = vid ? `https://img.youtube.com/vi/${vid}/hqdefault.jpg` : null;
   const isRead = getReadList(levelId).includes(index);
-  const [open, setOpen] = useState(true); // player expanded; X collapses it
+  const [open, setOpen] = useState(false); // modal player closed until clicked
 
-  // Mark the lesson as "read" the first time the player is loaded/interacted with.
+  // Mark the lesson as "read" the first time it's watched.
   const markWatched = () => {
-    if (getReadList(levelId).includes(index)) return;
-    markRead(levelId, index);
-    onWatched?.();
+    if (!getReadList(levelId).includes(index)) {
+      markRead(levelId, index);
+      onWatched?.();
+    }
   };
+
+  const play = () => { markWatched(); setOpen(true); };
+
+  // Lock body scroll + close on Escape while the modal is open.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
+  }, [open]);
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -631,29 +646,22 @@ function VideoLesson({ page, index, levelId, onWatched }) {
           {page.title || `Video ${index + 1}`}
         </h3>
         {isRead && <CheckCircle size={15} className="text-green-500 shrink-0" />}
-        {/* Close (X) collapses the player and stops playback; reopen with the play button */}
-        {open ? (
-          <button onClick={() => setOpen(false)} title="Close video"
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors shrink-0">
-            <X size={16} />
-          </button>
-        ) : (
-          <button onClick={() => setOpen(true)} title="Play video"
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-indigo-500 hover:bg-indigo-50 transition-colors shrink-0">
-            <PlayCircle size={17} />
-          </button>
-        )}
       </div>
 
-      {/* Inline player — unmounted when closed so the video stops */}
-      {open && (embed ? (
-        <div className="aspect-video bg-black" onClick={markWatched}>
-          <iframe src={embed} title={page.title || 'Video'}
-            className="w-full h-full"
-            onLoad={markWatched}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen />
-        </div>
+      {/* Clickable poster — opens the modal player */}
+      {embed ? (
+        <button onClick={play}
+          className="relative w-full aspect-video bg-slate-900 group block overflow-hidden">
+          {thumb && (
+            <img src={thumb} alt="" loading="lazy"
+              className="w-full h-full object-cover opacity-80 group-hover:opacity-70 transition-opacity" />
+          )}
+          <span className="absolute inset-0 flex items-center justify-center">
+            <span className="w-16 h-16 rounded-full bg-white/95 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+              <Play size={26} className="text-slate-900 ml-1" fill="currentColor" />
+            </span>
+          </span>
+        </button>
       ) : (
         <div className="aspect-video bg-slate-50 flex flex-col items-center justify-center gap-3 text-center px-6">
           <ExternalLink size={26} className="text-slate-300" />
@@ -665,7 +673,27 @@ function VideoLesson({ page, index, levelId, onWatched }) {
             </a>
           )}
         </div>
-      ))}
+      )}
+
+      {/* ── Modal player ── */}
+      {open && embed && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 md:p-8"
+          onClick={() => setOpen(false)}>
+          {/* Close (X) — top-right of the screen */}
+          <button onClick={() => setOpen(false)} title="Close (Esc)"
+            className="absolute top-4 right-4 md:top-6 md:right-6 w-10 h-10 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors">
+            <X size={26} />
+          </button>
+          <div className="w-full max-w-5xl" onClick={e => e.stopPropagation()}>
+            <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-2xl">
+              <iframe src={`${embed}?autoplay=1&rel=0`} title={page.title || 'Video'}
+                className="w-full h-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -832,11 +860,6 @@ export default function StudentContent() {
     );
   }
 
-  // Stats for the active topic
-  const readList   = getReadList(effectiveId);
-  const readCount  = readList.length;
-  const totalCount = pages.length;
-
   return (
     <>
       {/* ── Reader (full-screen takeover) ─────────────────────────── */}
@@ -869,15 +892,6 @@ export default function StudentContent() {
                 </p>
               </div>
 
-              {/* Read stats pill */}
-              {level && (
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-100 bg-slate-50 text-xs font-semibold text-slate-600">
-                    <BookMarked size={13} style={{ color: level.color.from }} />
-                    {readCount}/{totalCount} read
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Topic tabs */}
@@ -927,7 +941,7 @@ export default function StudentContent() {
                       style={{ fontFamily: 'Space Grotesk' }}>
                       <PlayCircle size={18} className="text-indigo-500" /> Videos
                     </h2>
-                    <div className="space-y-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {videos.map(({ page, i }) => (
                         <VideoLesson
                           key={i}
