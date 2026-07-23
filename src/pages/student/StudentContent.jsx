@@ -752,13 +752,6 @@ function MaterialCard({ page, index, levelId, level, onRead }) {
           {page.title || `Study Material ${index + 1}`}
         </h3>
 
-        {/* Meta — "Last read" only (auto read-time estimate removed per client) */}
-        {isLastVisited && lastRead && (
-          <div className="flex items-center gap-3 text-[11px] mb-4">
-            <span className="text-amber-500 font-medium">Last read {timeAgo(lastRead.ts)}</span>
-          </div>
-        )}
-
         {/* Action buttons — pinned to the bottom (mt-auto) so the primary button
             lines up across every card regardless of the meta/"Last read" line above */}
         <div className="mt-auto">
