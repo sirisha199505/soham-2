@@ -4,7 +4,6 @@ import {
   Calendar, Target, BookOpen, ArrowRight, Filter, RefreshCw, RotateCcw,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useLevel } from '../../context/LevelContext';
 import { api } from '../../utils/api';
 import { CATEGORY_META } from '../../utils/questionBank';
 import {
@@ -164,13 +163,12 @@ function QuestionReview({ q, answer, index }) {
 const LEVEL_PALETTE = ['#3BC0EF', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#6366f1', '#14b8a6'];
 function lvlColor(id) { return LEVEL_PALETTE[(Number(id) - 1) % LEVEL_PALETTE.length] || '#4F46E5'; }
 
-function AttemptCard({ attempt, attemptLimit, usedCount }) {
+function AttemptCard({ attempt }) {
   const [open, setOpen] = useState(false);
   const badge     = levelBadge(attempt.levelTitle, attempt.levelId);
   const colNum    = parseInt(String(badge).replace(/\D/g, ''), 10) || Number(attempt.levelId) || 1;
   const col       = lvlColor(colNum);
   const date      = attempt.date ? new Date(attempt.date) : null;
-  const remaining = Math.max(0, (attemptLimit ?? 3) - (usedCount ?? 0));
 
   return (
     <div className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
@@ -188,15 +186,6 @@ function AttemptCard({ attempt, attemptLimit, usedCount }) {
               {attempt.attemptNum && (
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
                   Attempt #{attempt.attemptNum}
-                </span>
-              )}
-              {remaining > 0 ? (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 flex items-center gap-1">
-                  <RotateCcw size={9}/> {remaining} left
-                </span>
-              ) : (
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-400">
-                  No retakes
                 </span>
               )}
             </div>
@@ -264,7 +253,6 @@ function AttemptCard({ attempt, attemptLimit, usedCount }) {
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function QuizHistory() {
   const { user }                   = useAuth();
-  const { levelSettings }          = useLevel();
   const [attempts,  setAttempts]   = useState([]);
   const [loading,   setLoading]    = useState(true);
   const [error,     setError]      = useState(null);
@@ -285,17 +273,7 @@ export default function QuizHistory() {
       });
   };
 
-  useEffect(load, [user?.id]);  
-
-  // Total attempts used per level (for computing remaining)
-  const attemptsCountByLevel = useMemo(() => {
-    const map = {};
-    attempts.forEach(a => {
-      const k = String(a.levelId);
-      map[k] = (map[k] || 0) + 1;
-    });
-    return map;
-  }, [attempts]);
+  useEffect(load, [user?.id]);
 
   // Assign sequential attempt number per level (chronological order)
   const attemptsWithNumbers = useMemo(() => {
@@ -490,8 +468,6 @@ export default function QuizHistory() {
             <AttemptCard
               key={attempt.id ?? attempt.date}
               attempt={attempt}
-              attemptLimit={levelSettings[attempt.levelId]?.attemptLimit ?? 3}
-              usedCount={attemptsCountByLevel[String(attempt.levelId)] ?? 0}
             />
           ))
         )}
