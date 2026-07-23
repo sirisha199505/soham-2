@@ -1001,55 +1001,18 @@ export default function LevelQuiz() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [quizInProgress]);
 
-  // Anti-cheat guard: warn (auto-submit / stay) when the student switches to
-  // another tab/window, copies the question, or *attempts* to open a new
-  // tab/window (Ctrl/Cmd+T/N, right-click → "Open in new tab"). Copying and the
-  // shortcuts/context-menu are blocked where the browser allows, and every
-  // action raises the same warning modal — shown BEFORE the tab is left.
+  // Anti-cheat guard: warn (auto-submit / stay) only when the student actually
+  // switches away from the exam — to another tab, another window, or minimises.
+  // We no longer block copy or pre-empt new-tab attempts (too many false hits).
   useEffect(() => {
     if (!quizInProgress) return;
     const onVisibility = () => { if (document.hidden) setShowTabWarning(true); };
     const onBlur       = () => setShowTabWarning(true);
-    const onCopy       = (e) => { e.preventDefault(); setShowTabWarning(true); };
-    const onContext    = (e) => { e.preventDefault(); setShowTabWarning(true); };
-    // Catch new-tab / new-window shortcuts on keydown, before the action fires.
-    const onKeyDown = (e) => {
-      const key = (e.key || '').toLowerCase();
-      const combo = e.ctrlKey || e.metaKey;
-      // Ctrl/Cmd+T (new tab), +N (new window), +Shift+N (incognito),
-      // +Shift+T (reopen closed tab). Ctrl-click a link also opens a new tab.
-      if ((combo && ['t', 'n'].includes(key)) || (combo && (e.button === 1))) {
-        e.preventDefault();
-        setShowTabWarning(true);
-      }
-    };
-    // Ctrl/Cmd + click (middle-click) on a link opens a new tab.
-    const onAuxClick = (e) => {
-      if (e.button === 1 || e.ctrlKey || e.metaKey) { e.preventDefault(); setShowTabWarning(true); }
-    };
-    // Exit-intent: the browser's "+" / tab bar / address bar sit ABOVE the page.
-    // When the cursor leaves the viewport through the top edge, the student is
-    // heading for a new tab — warn BEFORE they get there.
-    const onMouseOut = (e) => {
-      if (!e.relatedTarget && !e.toElement && e.clientY <= 0) setShowTabWarning(true);
-    };
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('blur', onBlur);
-    document.addEventListener('copy', onCopy);
-    document.addEventListener('cut', onCopy);
-    document.addEventListener('contextmenu', onContext);
-    window.addEventListener('keydown', onKeyDown, true);
-    document.addEventListener('auxclick', onAuxClick, true);
-    document.addEventListener('mouseout', onMouseOut);
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('blur', onBlur);
-      document.removeEventListener('copy', onCopy);
-      document.removeEventListener('cut', onCopy);
-      document.removeEventListener('contextmenu', onContext);
-      window.removeEventListener('keydown', onKeyDown, true);
-      document.removeEventListener('auxclick', onAuxClick, true);
-      document.removeEventListener('mouseout', onMouseOut);
     };
   }, [quizInProgress]);
 
