@@ -4,13 +4,13 @@ import {
   BookOpen, ChevronLeft, ChevronRight, CheckCircle,
   Loader2, BookMarked, AlertCircle, Bookmark, BookmarkCheck,
   BarChart2, ArrowLeft, FileText, Download, ExternalLink,
-  ZoomIn, ZoomOut,
+  ZoomIn, ZoomOut, PlayCircle, X, Play,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLevel } from '../../context/LevelContext';
 import { LEVELS } from '../../utils/levelData';
 import { api } from '../../utils/api';
-import { youtubeEmbedUrl } from '../../utils/helpers';
+import { youtubeEmbedUrl, youtubeId } from '../../utils/helpers';
 import { downloadWatermarkedPdf } from '../../utils/pdfWatermark';
 import DOMPurify from 'dompurify';
 
@@ -605,39 +605,83 @@ function ContentReader({ pages, startIndex, levelId, level, onBack, onReadStateC
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// Video Lesson — embedded YouTube player, played inline (no new tab)
+// ══════════════════════════════════════════════════════════════════════════
+function VideoLesson({ page, index, levelId, onWatched }) {
+  const embed  = youtubeEmbedUrl(page.pdfData);
+  const isRead = getReadList(levelId).includes(index);
+  const [open, setOpen] = useState(true); // player expanded; X collapses it
+
+  // Mark the lesson as "read" the first time the player is loaded/interacted with.
+  const markWatched = () => {
+    if (getReadList(levelId).includes(index)) return;
+    markRead(levelId, index);
+    onWatched?.();
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      {/* Header row */}
+      <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100">
+        <span className="text-[11px] font-bold text-slate-400 tabular-nums">
+          {String(index + 1).padStart(2, '0')}
+        </span>
+        <h3 className="flex-1 font-bold text-slate-800 text-[15px] leading-snug truncate"
+          style={{ fontFamily: 'Space Grotesk' }}>
+          {page.title || `Video ${index + 1}`}
+        </h3>
+        {isRead && <CheckCircle size={15} className="text-green-500 shrink-0" />}
+        {/* Close (X) collapses the player and stops playback; reopen with the play button */}
+        {open ? (
+          <button onClick={() => setOpen(false)} title="Close video"
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors shrink-0">
+            <X size={16} />
+          </button>
+        ) : (
+          <button onClick={() => setOpen(true)} title="Play video"
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-indigo-500 hover:bg-indigo-50 transition-colors shrink-0">
+            <PlayCircle size={17} />
+          </button>
+        )}
+      </div>
+
+      {/* Inline player — unmounted when closed so the video stops */}
+      {open && (embed ? (
+        <div className="aspect-video bg-black" onClick={markWatched}>
+          <iframe src={embed} title={page.title || 'Video'}
+            className="w-full h-full"
+            onLoad={markWatched}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen />
+        </div>
+      ) : (
+        <div className="aspect-video bg-slate-50 flex flex-col items-center justify-center gap-3 text-center px-6">
+          <ExternalLink size={26} className="text-slate-300" />
+          <p className="text-sm text-slate-500">This video opens on an external site.</p>
+          {page.pdfData && (
+            <a href={page.pdfData} target="_blank" rel="noreferrer noopener" onClick={markWatched}
+              className="text-sm font-semibold text-indigo-600 hover:underline">
+              Open video
+            </a>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // Material Card — clean LMS style
 // ══════════════════════════════════════════════════════════════════════════
 function MaterialCard({ page, index, levelId, level, onRead }) {
   const readList   = getReadList(levelId);
   const lastRead   = getLastRead(levelId);
   const bookmarks  = getBookmarks(levelId);
-  const [dl, setDl] = useState(false);
 
   const isRead       = readList.includes(index);
   const isBookmarked = bookmarks.includes(index);
   const isLastVisited = lastRead?.idx === index;
-  const isPdf        = page.type === 'pdf' && typeof page.pdfData === 'string' && page.pdfData;
   const isVideo      = page.type === 'video' && typeof page.pdfData === 'string' && page.pdfData;
-
-  // Download the material. Real PDFs get a faint "soham" watermark; Office files
-  // download as-is. Any failure falls back to the original file.
-  const handleDownload = async (e) => {
-    e.stopPropagation();
-    if (dl || !isPdf) return;
-    const name = page.pdfName || page.title || 'document';
-    const plainDownload = () => {
-      const url = buildBlobUrl(page.pdfData);
-      if (url) { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
-    };
-    if (fileExt(page.pdfData, page.pdfName) !== 'pdf') { plainDownload(); return; }
-    setDl(true);
-    try {
-      await downloadWatermarkedPdf(page.pdfData, name, 'soham');
-    } catch (err) {
-      console.warn('Watermarked download failed, downloading original:', err?.message);
-      plainDownload();
-    } finally { setDl(false); }
-  };
 
   const gradStyle = level
     ? { background: `linear-gradient(135deg, ${level.color.from}, ${level.color.to})` }
@@ -698,26 +742,6 @@ function MaterialCard({ page, index, levelId, level, onRead }) {
             {isRead ? <CheckCircle size={14} /> : isVideo ? <ExternalLink size={14} /> : <BookOpen size={14} />}
             {isVideo ? 'Watch Video' : 'Read Now'}
           </button>
-
-          {/* Open the video directly in a new tab — video pages only */}
-          {isVideo && (
-            <a href={page.pdfData} target="_blank" rel="noreferrer noopener"
-              onClick={e => e.stopPropagation()}
-              className="w-full mt-2 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">
-              <ExternalLink size={13} /> Open in new tab
-            </a>
-          )}
-
-          {/* Download (watermarked) — PDFs only */}
-          {isPdf && (
-            <button
-              onClick={handleDownload}
-              disabled={dl}
-              className="w-full mt-2 flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors disabled:opacity-50">
-              {dl ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
-              {dl ? 'Preparing…' : 'Download'}
-            </button>
-          )}
         </div>
       </div>
     </div>
@@ -860,8 +884,6 @@ export default function StudentContent() {
             <div className="flex gap-2 flex-wrap">
               {topics.map(t => {
                 const isActive = t.id === effectiveId;
-                const tRead    = getReadList(t.id).length;
-                const tTotal   = (t.pages || []).length;
                 return (
                   <button key={t.id}
                     onClick={() => { setActiveId(t.id); setReadingIdx(null); }}
@@ -872,14 +894,6 @@ export default function StudentContent() {
                       boxShadow: `0 4px 12px ${t.color.from}35`,
                     } : { background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0' }}>
                     {t.title}
-                    {tTotal > 0 && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-                        style={isActive
-                          ? { background: 'rgba(255,255,255,0.25)', color: '#fff' }
-                          : { background: '#e2e8f0', color: '#94a3b8' }}>
-                        {tRead}/{tTotal}
-                      </span>
-                    )}
                   </button>
                 );
               })}
@@ -895,21 +909,63 @@ export default function StudentContent() {
               <p className="font-semibold text-slate-600">No materials yet</p>
               <p className="text-slate-400 text-sm mt-1">Your administrator hasn't added pages to this topic.</p>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {pages.map((page, i) => (
-                <MaterialCard
-                  key={i}
-                  page={page}
-                  index={i}
-                  levelId={effectiveId}
-                  level={level}
-                  totalCards={pages.length}
-                  onRead={handleOpenReader}
-                />
-              ))}
-            </div>
-          )}
+          ) : (() => {
+            // Split the topic's pages into two stacked sections: Videos (embedded
+            // lessons, played inline) and Study Material (text / PDF cards). Keep
+            // each page's ORIGINAL index so read tracking and the reader still
+            // line up after filtering.
+            const withIdx   = pages.map((page, i) => ({ page, i }));
+            const videos    = withIdx.filter(({ page }) => page.type === 'video');
+            const materials = withIdx.filter(({ page }) => page.type !== 'video');
+
+            return (
+              <div className="space-y-10">
+                {/* ── Videos section ── */}
+                {videos.length > 0 && (
+                  <section>
+                    <h2 className="flex items-center gap-2 text-base font-bold text-slate-800 mb-4"
+                      style={{ fontFamily: 'Space Grotesk' }}>
+                      <PlayCircle size={18} className="text-indigo-500" /> Videos
+                    </h2>
+                    <div className="space-y-5">
+                      {videos.map(({ page, i }) => (
+                        <VideoLesson
+                          key={i}
+                          page={page}
+                          index={i}
+                          levelId={effectiveId}
+                          onWatched={() => forceUpdate(n => n + 1)}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* ── Study Material section ── */}
+                {materials.length > 0 && (
+                  <section>
+                    <h2 className="flex items-center gap-2 text-base font-bold text-slate-800 mb-4"
+                      style={{ fontFamily: 'Space Grotesk' }}>
+                      <FileText size={18} className="text-indigo-500" /> Study Material
+                    </h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {materials.map(({ page, i }) => (
+                        <MaterialCard
+                          key={i}
+                          page={page}
+                          index={i}
+                          levelId={effectiveId}
+                          level={level}
+                          totalCards={pages.length}
+                          onRead={handleOpenReader}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
     </>
