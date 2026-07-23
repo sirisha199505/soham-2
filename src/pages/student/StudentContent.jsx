@@ -63,16 +63,6 @@ function openMaterialInNewTab(url, name = '') {
   }
 }
 
-function timeAgo(ts) {
-  const d = Date.now() - ts;
-  const m = Math.floor(d / 60000);
-  if (m < 1)  return 'just now';
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}
-
 // ── localStorage helpers ──────────────────────────────────────────────────
 const ls = {
   get: (k, def) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; } },
@@ -607,7 +597,7 @@ function ContentReader({ pages, startIndex, levelId, level, onBack, onReadStateC
 // ══════════════════════════════════════════════════════════════════════════
 // Video Lesson — embedded YouTube player, played inline (no new tab)
 // ══════════════════════════════════════════════════════════════════════════
-function VideoLesson({ page, index, levelId, onWatched }) {
+function VideoLesson({ page, index, levelId, onWatched, displayNo }) {
   const embed  = youtubeEmbedUrl(page.pdfData);
   const vid    = youtubeId(page.pdfData);
   const thumb  = vid ? `https://img.youtube.com/vi/${vid}/hqdefault.jpg` : null;
@@ -639,11 +629,11 @@ function VideoLesson({ page, index, levelId, onWatched }) {
       {/* Header row */}
       <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100">
         <span className="text-[11px] font-bold text-slate-400 tabular-nums">
-          {String(index + 1).padStart(2, '0')}
+          {String(displayNo ?? index + 1).padStart(2, '0')}
         </span>
         <h3 className="flex-1 font-bold text-slate-800 text-[15px] leading-snug truncate"
           style={{ fontFamily: 'Space Grotesk' }}>
-          {page.title || `Video ${index + 1}`}
+          {page.title || `Video ${displayNo ?? index + 1}`}
         </h3>
         {isRead && <CheckCircle size={15} className="text-green-500 shrink-0" />}
       </div>
@@ -701,7 +691,7 @@ function VideoLesson({ page, index, levelId, onWatched }) {
 // ══════════════════════════════════════════════════════════════════════════
 // Material Card — clean LMS style
 // ══════════════════════════════════════════════════════════════════════════
-function MaterialCard({ page, index, levelId, level, onRead }) {
+function MaterialCard({ page, index, levelId, level, onRead, displayNo }) {
   const readList   = getReadList(levelId);
   const lastRead   = getLastRead(levelId);
   const bookmarks  = getBookmarks(levelId);
@@ -729,7 +719,7 @@ function MaterialCard({ page, index, levelId, level, onRead }) {
         {/* Index + status row */}
         <div className="flex items-center justify-between mb-3">
           <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-            {String(index + 1).padStart(2, '0')}
+            {String(displayNo ?? index + 1).padStart(2, '0')}
           </span>
           <div className="flex items-center gap-1.5">
             {isBookmarked && (
@@ -749,7 +739,7 @@ function MaterialCard({ page, index, levelId, level, onRead }) {
         {/* Title */}
         <h3 className="font-bold text-slate-800 text-[15px] leading-snug mb-3 line-clamp-2 min-h-[40px]"
           style={{ fontFamily: 'Space Grotesk' }}>
-          {page.title || `Study Material ${index + 1}`}
+          {page.title || `Study Material ${displayNo ?? index + 1}`}
         </h3>
 
         {/* Action buttons — pinned to the bottom (mt-auto) so the primary button
@@ -935,11 +925,12 @@ export default function StudentContent() {
                       <PlayCircle size={18} className="text-indigo-500" /> Videos
                     </h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {videos.map(({ page, i }) => (
+                      {videos.map(({ page, i }, pos) => (
                         <VideoLesson
                           key={i}
                           page={page}
                           index={i}
+                          displayNo={pos + 1}
                           levelId={effectiveId}
                           onWatched={() => forceUpdate(n => n + 1)}
                         />
@@ -956,11 +947,12 @@ export default function StudentContent() {
                       <FileText size={18} className="text-indigo-500" /> Study Material
                     </h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {materials.map(({ page, i }) => (
+                      {materials.map(({ page, i }, pos) => (
                         <MaterialCard
                           key={i}
                           page={page}
                           index={i}
+                          displayNo={pos + 1}
                           levelId={effectiveId}
                           level={level}
                           totalCards={pages.length}
